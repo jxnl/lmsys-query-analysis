@@ -30,7 +30,7 @@ class ClusterSummarizer:
         """
         self.model = model
 
-        # Initialize instructor client with provider
+        # Initialize instructor client with full model string
         if api_key:
             self.client = instructor.from_provider(model, api_key=api_key)
         else:
@@ -82,9 +82,8 @@ Analyze these queries and provide:
 Be specific and descriptive. Focus on what makes this cluster unique."""
 
         try:
-            # Call LLM with structured output
+            # Call LLM with structured output - instructor handles model internally
             response = self.client.chat.completions.create(
-                model=self.model,
                 response_model=ClusterSummaryResponse,
                 messages=[
                     {"role": "user", "content": prompt}

@@ -2,6 +2,7 @@
 from datetime import datetime
 from typing import Optional
 from sqlmodel import SQLModel, Field, Relationship, Column, JSON
+from sqlalchemy import UniqueConstraint, ForeignKey
 
 
 class Query(SQLModel, table=True):
@@ -40,10 +41,25 @@ class ClusteringRun(SQLModel, table=True):
 class QueryCluster(SQLModel, table=True):
     """Table mapping queries to clusters per run."""
     __tablename__ = "query_clusters"
+    __table_args__ = (
+        UniqueConstraint("run_id", "query_id", name="uq_querycluster_run_query"),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    run_id: str = Field(foreign_key="clustering_runs.run_id", index=True)
-    query_id: int = Field(foreign_key="queries.id", index=True)
+    run_id: str = Field(
+        index=True,
+        sa_column=Column(
+            "run_id",
+            ForeignKey("clustering_runs.run_id", ondelete="CASCADE"),
+        ),
+    )
+    query_id: int = Field(
+        index=True,
+        sa_column=Column(
+            "query_id",
+            ForeignKey("queries.id", ondelete="CASCADE"),
+        ),
+    )
     cluster_id: int = Field(index=True)
     confidence_score: Optional[float] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -56,9 +72,18 @@ class QueryCluster(SQLModel, table=True):
 class ClusterSummary(SQLModel, table=True):
     """Table storing generated summaries/analysis for clusters."""
     __tablename__ = "cluster_summaries"
+    __table_args__ = (
+        UniqueConstraint("run_id", "cluster_id", name="uq_clustersummary_run_cluster"),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    run_id: str = Field(foreign_key="clustering_runs.run_id", index=True)
+    run_id: str = Field(
+        index=True,
+        sa_column=Column(
+            "run_id",
+            ForeignKey("clustering_runs.run_id", ondelete="CASCADE"),
+        ),
+    )
     cluster_id: int = Field(index=True)
     title: Optional[str] = None  # LLM-generated short title
     description: Optional[str] = None  # LLM-generated description

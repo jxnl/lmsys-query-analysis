@@ -1,13 +1,24 @@
 """Main CLI entry point for LMSYS query analysis."""
+import logging
 import typer
 from rich.console import Console
 from rich.table import Table
 from ..db.connection import get_db
 from ..db.chroma import get_chroma
 from ..db.loader import load_lmsys_dataset
+from ..utils.logging import setup_logging
 
 app = typer.Typer(help="LMSYS Query Analysis CLI")
 console = Console()
+logger = logging.getLogger("lmsys")
+
+
+@app.callback()
+def _configure(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose logging (DEBUG)."),
+):
+    """Configure logging before executing a subcommand."""
+    setup_logging(verbose=verbose)
 
 
 @app.command()
@@ -20,6 +31,7 @@ def load(
 ):
     """Download and load LMSYS-1M dataset into SQLite."""
     try:
+        logger.info("Starting data load: limit=%s, use_chroma=%s", limit, use_chroma)
         db = get_db(db_path)
         chroma = get_chroma(chroma_path) if use_chroma else None
 
@@ -41,13 +53,13 @@ def load(
         table.add_row("Errors", str(stats["errors"]))
 
         console.print(table)
-        console.print(f"\n[green]Database: {db.db_path}[/green]")
+        logger.info("Database path: %s", db.db_path)
         if use_chroma and chroma:
-            console.print(f"[green]ChromaDB: {chroma.persist_directory}[/green]")
-            console.print(f"[green]Total vectors in ChromaDB: {chroma.count_queries()}[/green]")
+            logger.info("Chroma path: %s", chroma.persist_directory)
+            logger.info("Chroma queries total: %s", chroma.count_queries())
 
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        logger.exception("Load failed: %s", e)
         raise typer.Exit(1)
 
 
@@ -63,7 +75,7 @@ def cluster(
 ):
     """Run clustering analysis on queries."""
     if algorithm.lower() != "kmeans":
-        console.print(f"[red]Only 'kmeans' algorithm is currently supported[/red]")
+        logger.error("Unsupported algorithm: %s", algorithm)
         raise typer.Exit(1)
 
     try:
@@ -72,6 +84,12 @@ def cluster(
         db = get_db(db_path)
         chroma = get_chroma(chroma_path) if use_chroma else None
 
+        logger.info(
+            "Running clustering: n_clusters=%s, model=%s, use_chroma=%s",
+            n_clusters,
+            embedding_model,
+            use_chroma,
+        )
         run_id = run_kmeans_clustering(
             db=db,
             n_clusters=n_clusters,
@@ -81,26 +99,85 @@ def cluster(
         )
 
         if run_id:
-            console.print(f"\n[green]Run ID: {run_id}[/green]")
+            logger.info("Clustering completed: run_id=%s", run_id)
             console.print(f"[cyan]Use 'lmsys inspect {run_id} <cluster_id>' to explore clusters[/cyan]")
             if use_chroma and chroma:
                 console.print(f"[cyan]Use 'lmsys search --run-id {run_id} <query>' to search cluster summaries[/cyan]")
 
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        logger.exception("Clustering failed: %s", e)
         raise typer.Exit(1)
 
 
 @app.command()
 def list(
     run_id: str = typer.Option(None, help="Filter by run ID"),
-    topic_id: int = typer.Option(None, help="Filter by topic/cluster ID"),
+    cluster_id: int = typer.Option(None, help="Filter by cluster ID"),
+    model: str = typer.Option(None, help="Filter by model name"),
     limit: int = typer.Option(50, help="Number of queries to display"),
+    db_path: str = typer.Option(None, help="Database path"),
 ):
-    """List queries with optional filtering by run_id and topic_id."""
-    console.print("[yellow]Listing queries...[/yellow]")
-    # TODO: Implement query listing
-    console.print(f"[green]Showing {limit} queries[/green]")
+    """List queries with optional filtering by run_id and cluster_id."""
+    try:
+        from ..db.models import Query, QueryCluster
+        from sqlmodel import select
+
+        db = get_db(db_path)
+        session = db.get_session()
+
+        try:
+            # Build query with filters
+            if run_id and cluster_id:
+                # Filter by run and cluster
+                statement = (
+                    select(Query)
+                    .join(QueryCluster, Query.id == QueryCluster.query_id)
+                    .where(QueryCluster.run_id == run_id)
+                    .where(QueryCluster.cluster_id == cluster_id)
+                    .limit(limit)
+                )
+            elif run_id:
+                # Filter by run only
+                statement = (
+                    select(Query)
+                    .join(QueryCluster, Query.id == QueryCluster.query_id)
+                    .where(QueryCluster.run_id == run_id)
+                    .limit(limit)
+                )
+            else:
+                # No run filter, just list queries
+                statement = select(Query).limit(limit)
+                if model:
+                    statement = statement.where(Query.model == model)
+
+            queries = session.exec(statement).all()
+
+            if not queries:
+                logger.warning("No queries found for given filters")
+                return
+
+            table = Table(title=f"Queries ({len(queries)} shown)")
+            table.add_column("ID", style="cyan", width=8)
+            table.add_column("Model", style="yellow", width=20)
+            table.add_column("Query", style="white", width=80)
+            table.add_column("Language", style="green", width=10)
+
+            for query in queries:
+                table.add_row(
+                    str(query.id),
+                    query.model[:20] if query.model else "unknown",
+                    (query.query_text[:77] + "...") if len(query.query_text) > 80 else query.query_text,
+                    query.language or "?",
+                )
+
+            console.print(table)
+
+        finally:
+            session.close()
+
+    except Exception as e:
+        logger.exception("List failed: %s", e)
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -120,7 +197,7 @@ def runs(
             runs = session.exec(statement).all()
 
             if not runs:
-                console.print("[yellow]No clustering runs found[/yellow]")
+                logger.warning("No clustering runs found")
                 return
 
             table = Table(title="Clustering Runs")
@@ -145,7 +222,7 @@ def runs(
             session.close()
 
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        logger.exception("Runs failed: %s", e)
         raise typer.Exit(1)
 
 
@@ -171,7 +248,7 @@ def list_clusters(
             summaries = session.exec(statement).all()
 
             if not summaries:
-                console.print(f"[yellow]No summaries found for run {run_id}[/yellow]")
+                logger.warning("No summaries found for run %s", run_id)
                 console.print(f"[cyan]Run 'lmsys summarize {run_id} --use-chroma' to generate summaries[/cyan]")
                 return
 
@@ -196,7 +273,7 @@ def list_clusters(
             session.close()
 
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        logger.exception("List-clusters failed: %s", e)
         raise typer.Exit(1)
 
 
@@ -237,7 +314,7 @@ def summarize(
                 ).distinct()
                 cluster_ids = [row for row in session.exec(statement)]
 
-            console.print(f"[cyan]Summarizing {len(cluster_ids)} clusters for run {run_id}...[/cyan]")
+            logger.info("Summarizing %s clusters for run %s", len(cluster_ids), run_id)
 
             # Prepare clusters data
             clusters_data = []
@@ -260,7 +337,7 @@ def summarize(
             )
 
             # Store in SQLite
-            console.print("[yellow]Storing summaries in SQLite...[/yellow]")
+            logger.info("Storing summaries in SQLite...")
             for cid, summary_data in results.items():
                 # Check if summary already exists
                 statement = select(ClusterSummary).where(
@@ -317,14 +394,14 @@ def summarize(
 
                 console.print(f"[green]Updated {len(cluster_ids)} summaries in ChromaDB[/green]")
 
-            console.print(f"\n[green]Generated summaries for {len(results)} clusters![/green]")
+            logger.info("Generated summaries for %s clusters", len(results))
             console.print(f"[cyan]Use 'lmsys list-clusters {run_id}' to view titles[/cyan]")
 
         finally:
             session.close()
 
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        logger.exception("Summarize failed: %s", e)
         import traceback
         traceback.print_exc()
         raise typer.Exit(1)
@@ -334,22 +411,154 @@ def summarize(
 def inspect(
     run_id: str = typer.Argument(..., help="Run ID to inspect"),
     cluster_id: int = typer.Argument(..., help="Cluster ID to inspect"),
+    db_path: str = typer.Option(None, help="Database path"),
+    show_queries: int = typer.Option(10, help="Number of queries to show"),
 ):
     """Inspect specific cluster in detail."""
-    console.print(f"[yellow]Inspecting cluster {cluster_id} from run {run_id}...[/yellow]")
-    # TODO: Implement cluster inspection
-    console.print("[green]Done![/green]")
+    try:
+        from ..db.models import Query, QueryCluster, ClusterSummary
+        from sqlmodel import select
+
+        db = get_db(db_path)
+        session = db.get_session()
+
+        try:
+            # Get cluster summary if exists
+            statement = select(ClusterSummary).where(
+                ClusterSummary.run_id == run_id,
+                ClusterSummary.cluster_id == cluster_id
+            )
+            summary = session.exec(statement).first()
+
+            # Get all queries in this cluster
+            statement = (
+                select(Query)
+                .join(QueryCluster, Query.id == QueryCluster.query_id)
+                .where(QueryCluster.run_id == run_id)
+                .where(QueryCluster.cluster_id == cluster_id)
+            )
+            queries = session.exec(statement).all()
+
+            if not queries:
+                logger.warning("No queries found in cluster %s", cluster_id)
+                return
+
+            # Display cluster info
+            console.print(f"\n[cyan]{'='*80}[/cyan]")
+            console.print(f"[bold cyan]Cluster {cluster_id} from run {run_id}[/bold cyan]")
+            console.print(f"[cyan]{'='*80}[/cyan]\n")
+
+            if summary:
+                console.print(f"[bold yellow]Title:[/bold yellow] {summary.title or 'N/A'}")
+                console.print(f"\n[bold yellow]Description:[/bold yellow]")
+                console.print(f"{summary.description or 'N/A'}\n")
+
+            console.print(f"[bold green]Total Queries:[/bold green] {len(queries)}\n")
+
+            # Show sample queries
+            console.print(f"[bold yellow]Sample Queries (showing {min(show_queries, len(queries))}):[/bold yellow]\n")
+
+            for i, query in enumerate(queries[:show_queries], 1):
+                console.print(f"[cyan]{i}.[/cyan] {query.query_text}")
+                console.print(f"   [dim]Model: {query.model} | Language: {query.language or 'unknown'}[/dim]\n")
+
+            if len(queries) > show_queries:
+                console.print(f"[dim]... and {len(queries) - show_queries} more queries[/dim]\n")
+
+            console.print(f"[cyan]Use 'lmsys list --run-id {run_id} --cluster-id {cluster_id}' to see all queries[/cyan]")
+
+        finally:
+            session.close()
+
+    except Exception as e:
+        logger.exception("Inspect failed: %s", e)
+        raise typer.Exit(1)
 
 
 @app.command()
 def export(
     run_id: str = typer.Argument(..., help="Run ID to export"),
     output: str = typer.Option("export.csv", help="Output file path"),
+    format: str = typer.Option("csv", help="Export format: csv or json"),
+    db_path: str = typer.Option(None, help="Database path"),
 ):
     """Export cluster results to file."""
-    console.print(f"[yellow]Exporting run {run_id} to {output}...[/yellow]")
-    # TODO: Implement export
-    console.print("[green]Export complete![/green]")
+    try:
+        import csv
+        import json
+        from ..db.models import Query, QueryCluster, ClusterSummary
+        from sqlmodel import select
+
+        db = get_db(db_path)
+        session = db.get_session()
+
+        try:
+            # Get all query-cluster mappings
+            statement = (
+                select(Query, QueryCluster, ClusterSummary)
+                .join(QueryCluster, Query.id == QueryCluster.query_id)
+                .outerjoin(
+                    ClusterSummary,
+                    (ClusterSummary.run_id == QueryCluster.run_id) &
+                    (ClusterSummary.cluster_id == QueryCluster.cluster_id)
+                )
+                .where(QueryCluster.run_id == run_id)
+            )
+            results = session.exec(statement).all()
+
+            if not results:
+                logger.warning("No data found for run %s", run_id)
+                return
+
+            console.print(f"[cyan]Exporting {len(results)} queries...[/cyan]")
+
+            if format == "csv":
+                with open(output, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow([
+                        'query_id', 'cluster_id', 'query_text', 'model', 'language',
+                        'cluster_title', 'cluster_description'
+                    ])
+
+                    for query, qc, summary in results:
+                        writer.writerow([
+                            query.id,
+                            qc.cluster_id,
+                            query.query_text,
+                            query.model,
+                            query.language or '',
+                            summary.title if summary else '',
+                            summary.description if summary else '',
+                        ])
+
+            elif format == "json":
+                data = []
+                for query, qc, summary in results:
+                    data.append({
+                        'query_id': query.id,
+                        'cluster_id': qc.cluster_id,
+                        'query_text': query.query_text,
+                        'model': query.model,
+                        'language': query.language,
+                        'cluster_title': summary.title if summary else None,
+                        'cluster_description': summary.description if summary else None,
+                    })
+
+                with open(output, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+
+            else:
+                console.print(f"[red]Unsupported format: {format}[/red]")
+                raise typer.Exit(1)
+
+            logger.info("Exported to %s", output)
+
+        finally:
+            session.close()
+
+    except Exception as e:
+        logger.exception("Export failed: %s", e)
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -365,7 +574,7 @@ def search(
         chroma = get_chroma(chroma_path)
 
         if search_type == "queries":
-            console.print(f"[cyan]Searching for similar queries...[/cyan]")
+            logger.info("Searching queries: n_results=%s", n_results)
             results = chroma.search_queries(query, n_results=n_results)
 
             if results and results["ids"] and len(results["ids"][0]) > 0:
@@ -397,7 +606,7 @@ def search(
                 console.print("[yellow]No results found[/yellow]")
 
         elif search_type == "clusters":
-            console.print(f"[cyan]Searching cluster summaries{f' for run {run_id}' if run_id else ''}...[/cyan]")
+            logger.info("Searching cluster summaries: run_id=%s, n_results=%s", run_id, n_results)
             results = chroma.search_cluster_summaries(query, run_id=run_id, n_results=n_results)
 
             if results and results["ids"] and len(results["ids"][0]) > 0:
@@ -427,11 +636,11 @@ def search(
                 console.print("[yellow]No results found[/yellow]")
 
         else:
-            console.print(f"[red]Invalid search_type: {search_type}. Use 'queries' or 'clusters'[/red]")
+            logger.error("Invalid search_type: %s", search_type)
             raise typer.Exit(1)
 
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        logger.exception("Search failed: %s", e)
         console.print("[yellow]Make sure ChromaDB is initialized by running 'lmsys load --use-chroma' first[/yellow]")
         raise typer.Exit(1)
 
