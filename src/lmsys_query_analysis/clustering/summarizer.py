@@ -7,9 +7,7 @@ optional rate limiting to speed up large runs safely.
 from typing import List, Optional, Dict, Tuple
  
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import time
 import anyio
 import instructor
 from pydantic import BaseModel, Field
@@ -21,85 +19,55 @@ from rich.progress import (
     BarColumn,
     TaskProgressColumn,
 )
+from jinja2 import Environment
+from aiolimiter import AsyncLimiter
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
 console = Console()
 
-EXAMPLES_PROMPT = """
-<few_shot_examples>
-  <example label="A">
-    <sample_queries>
-      <item>Why does pandas .loc throw KeyError on column subset?</item>
-      <item>Fix TypeError: unsupported operand type(s) for +: 'int' and 'str' in Python</item>
-      <item>Vectorizing loops in NumPy for performance</item>
-    </sample_queries>
-    <title>Python debugging and data wrangling: pandas, NumPy errors</title>
-    <description>Users troubleshoot Python code with a focus on pandas indexing, NumPy array operations, and common Type/Key errors. Guidance emphasizes minimal examples, error interpretation, and idiomatic fixes.</description>
-  </example>
-  <example label="B">
-    <sample_queries>
-      <item>Fetch data from a REST API with bearer token using fetch()</item>
-      <item>Axios POST returns 401 — how to send JWT header?</item>
-      <item>Handle 429 rate limit responses and retries in JavaScript</item>
-    </sample_queries>
-    <title>JavaScript REST API usage and authentication</title>
-    <description>Requests cover calling APIs from the browser/node, attaching JWT/Bearer auth, handling status codes (401/429), and implementing retry/backoff. Code examples use fetch and Axios patterns.</description>
-  </example>
-  <example label="C">
-    <sample_queries>
-      <item>SQL: Count distinct users per day with LEFT JOIN</item>
-      <item>GROUP BY with conditional SUM over multiple categories</item>
-      <item>Window function to find top N products per region</item>
-    </sample_queries>
-    <title>SQL analytics with joins, aggregates, and windows</title>
-    <description>Analytical SQL tasks combining joins, GROUP BY, conditional aggregation, and window functions (RANK/ROW_NUMBER). Solutions emphasize readable CTEs and correct grouping semantics.</description>
-  </example>
-  <example label="D">
-    <sample_queries>
-      <item>Fine-tune a small Llama model on custom Q&amp;A data</item>
-      <item>Why is my training loss NaN in PyTorch mixed precision?</item>
-      <item>Compare F1 and accuracy for imbalanced classification</item>
-    </sample_queries>
-    <title>ML model training and evaluation: PyTorch, metrics, fine-tuning</title>
-    <description>Practical ML workflows including dataset prep, training stability (overflow/AMP), and metric selection for imbalanced tasks. Advice centers on troubleshooting training loops, schedulers, and evaluation protocols.</description>
-  </example>
-  <example label="E">
-    <sample_queries>
-      <item>Docker build ignores .dockerignore; how to reduce image size?</item>
-      <item>Nginx reverse proxy 502 when forwarding to Gunicorn</item>
-      <item>Kubernetes CrashLoopBackOff reading config from secrets</item>
-    </sample_queries>
-    <title>DevOps containerization and deployment: Docker, Nginx, Kubernetes</title>
-    <description>Infra topics around container images, reverse proxies, and k8s deployments. Solutions cover Docker layering, proper proxy buffers/timeouts, health checks, and Secret/ConfigMap mounts.</description>
-  </example>
-  <example label="F">
-    <sample_queries>
-      <item>Detect and prevent jailbreak attempts in system prompts</item>
-      <item>Red-team prompts to bypass safety filters — show examples</item>
-      <item>Classify prompts by risk category (self-harm, malware, PII)</item>
-    </sample_queries>
-    <title>LLM safety and prompt hardening: jailbreak detection and taxonomy</title>
-    <description>Safety and governance tasks including jailbreak detection, red-teaming, and content risk classification. Emphasis on policies, refusal guidelines, and robust prompt templates.</description>
-  </example>
-  <example label="G">
-    <sample_queries>
-      <item>Create a Seaborn heatmap with annotations and custom colorbar</item>
-      <item>Altair interactive chart: filter by dropdown, highlight selection</item>
-      <item>Plotly Express facet grid with per-facet y-axis</item>
-    </sample_queries>
-    <title>Data visualization recipes: Seaborn, Altair, Plotly</title>
-    <description>Visualization tasks across common Python libraries, focusing on annotated heatmaps, interactive selections, and faceting. Guidance prioritizes clear legends, accessibility, and aesthetics.</description>
-  </example>
-  <example label="H">
-    <sample_queries>
-      <item>Translate product descriptions to Spanish and preserve HTML tags</item>
-      <item>Localize date/number formats for German users</item>
-      <item>Glossary-enforced translation for brand terms</item>
-    </sample_queries>
-    <title>Multilingual translation and localization with formatting constraints</title>
-    <description>Translation requests with constraints on placeholders/HTML and locale-aware formatting. Recommendations include tag-aware translation and glossary/terminology control.</description>
-  </example>
-</few_shot_examples>
-"""
+
+def _create_template():
+    """Create Jinja2 template with custom filters."""
+    env = Environment()
+    env.filters['truncate'] = lambda s, length=220: s[:length]
+    return env.from_string("""
+<summary_task>
+  <cluster id="{{ cluster_id }}">
+    <stats total_queries="{{ total_queries }}" sample_count="{{ sample_count }}" />
+    <target_queries>
+{% for query in queries -%}
+      <query idx="{{ loop.index }}"><![CDATA[{{ query | truncate }}]]></query>
+{% endfor -%}
+    </target_queries>
+  </cluster>
+{% if contrast_block -%}
+{{ contrast_block }}
+{% endif -%}
+  <instructions>
+    <title_guidelines>
+      <rule>5-10 words; include domain + action + subject.</rule>
+      <rule>Prefer concrete nouns/verbs; avoid generic terms ("general", "misc").</rule>
+      <rule>If code-heavy, prefix with language or framework.</rule>
+      <rule>Keep the title in English.</rule>
+    </title_guidelines>
+    <description_guidelines>
+      <rule>Summarize common intents and tasks.</rule>
+      <rule>Mention constraints: error fixing, homework help, API usage, jailbreak attempts, evaluation prompts.</rule>
+      <rule>Call out tools/libraries/datasets/languages if prominent.</rule>
+      <rule>If mixed topics, name top 1–2 subthemes.</rule>
+      <rule>Name dominant template/boilerplate patterns.</rule>
+      <rule>Mention placeholders/redactions (NAME_1/NAME_2, &lt;URL&gt;, [MASK]) if prevalent.</rule>
+      <rule>State explicitly if greetings-only or meta/test prompts.</rule>
+    </description_guidelines>
+  </instructions>
+  <output>Return fields: title, description.</output>
+</summary_task>
+""")
 
 
 class ClusterSummaryResponse(BaseModel):
@@ -143,6 +111,13 @@ class ClusterSummarizer:
         self.embedding_model = embedding_model
         self.embedding_provider = embedding_provider
 
+        # Initialize Jinja2 template
+        self.template = _create_template()
+        
+        # Initialize rate limiter if rpm is specified
+        # Convert rpm to requests per second with 1-second time period
+        self.rate_limiter = AsyncLimiter(rpm, 60.0) if rpm else None
+
         # Initialize instructor client with full model string
         if api_key:
             self.client = instructor.from_provider(model, api_key=api_key)
@@ -173,39 +148,14 @@ class ClusterSummarizer:
         # Select a representative and diverse sample of queries
         sampled = self._select_representative_queries(cluster_queries, max_queries)
 
-        # Build XML-formatted prompt
-        queries_xml = "\n".join(
-            f"      <query idx=\"{i + 1}\"><![CDATA[{q[:220]}]]></query>" for i, q in enumerate(sampled)
+        # Render prompt using Jinja2 template
+        prompt = self.template.render(
+            cluster_id=cluster_id,
+            total_queries=len(cluster_queries),
+            sample_count=len(sampled),
+            queries=sampled,
+            contrast_block=contrast_block,
         )
-
-        prompt = f"""
-<summary_task>
-  <cluster id="{cluster_id}">
-    <stats total_queries="{len(cluster_queries)}" sample_count="{len(sampled)}" />
-    <target_queries>
-{queries_xml}
-    </target_queries>
-  </cluster>
-  <instructions>
-    <title_guidelines>
-      <rule>5-10 words; include domain + action + subject.</rule>
-      <rule>Prefer concrete nouns/verbs; avoid generic terms ("general", "misc").</rule>
-      <rule>If code-heavy, prefix with language or framework.</rule>
-      <rule>Keep the title in English.</rule>
-    </title_guidelines>
-    <description_guidelines>
-      <rule>Summarize common intents and tasks.</rule>
-      <rule>Mention constraints: error fixing, homework help, API usage, jailbreak attempts, evaluation prompts.</rule>
-      <rule>Call out tools/libraries/datasets/languages if prominent.</rule>
-      <rule>If mixed topics, name top 1–2 subthemes.</rule>
-      <rule>Name dominant template/boilerplate patterns.</rule>
-      <rule>Mention placeholders/redactions (NAME_1/NAME_2, &lt;URL&gt;, [MASK]) if prevalent.</rule>
-      <rule>State explicitly if greetings-only or meta/test prompts.</rule>
-    </description_guidelines>
-  </instructions>
-  <output>Return fields: title, description.</output>
-</summary_task>
-"""
 
         try:
             # Call LLM with structured output - instructor handles model internally
@@ -280,33 +230,8 @@ class ClusterSummarizer:
         contrast_examples: int,
         contrast_mode: str,
     ) -> Dict[int, dict]:
-        """Async concurrent generation using anyio with optional rate limiting.
+        """Async concurrent generation using anyio with semaphore-based rate limiting."""
 
-        Also computes contrastive neighbor context to include in prompts.
-        """
-
-        class RateLimiter:
-            def __init__(self, rate_per_min: Optional[int]):
-                self.rate_per_sec = (
-                    None if rate_per_min is None else float(rate_per_min) / 60.0
-                )
-                self._lock = anyio.Lock()
-                self._next_time = time.monotonic()
-
-            async def wait(self):
-                if self.rate_per_sec is None or self.rate_per_sec <= 0:
-                    return
-                delay = 0.0
-                async with self._lock:
-                    now = time.monotonic()
-                    slot = max(self._next_time, now)
-                    delay = max(0.0, slot - now)
-                    # schedule next slot
-                    self._next_time = slot + (1.0 / self.rate_per_sec)
-                if delay > 0:
-                    await anyio.sleep(delay)
-
-        limiter = RateLimiter(rpm)
         total = len(clusters_data)
         results: Dict[int, dict] = {}
         semaphore = anyio.Semaphore(concurrency)
@@ -320,102 +245,48 @@ class ClusterSummarizer:
         for cid, qtexts in clusters_data:
             sampled_map[cid] = self._select_representative_queries(qtexts, max_queries)
 
-        # Compute neighbor similarity using embeddings; optionally TF-IDF for keywords mode
+        # Prepare neighbor context per cluster by randomly selecting other clusters
         id_list = [cid for cid, _ in clusters_data]
-        docs = ["\n".join(sampled_map[cid]) for cid in id_list]
         sizes_map: Dict[int, int] = {cid: len(qs) for cid, qs in clusters_data}
-        sim_matrix = None
-        Xc = None
-        vec = None
-        if len(docs) >= 2 and contrast_neighbors > 0:
-            # Prefer embeddings for neighbor selection
-            try:
-                import os
-                from .embeddings import EmbeddingGenerator
-
-                provider = "openai" if os.getenv("OPENAI_API_KEY") else "sentence-transformers"
-                model_name = (
-                    "text-embedding-3-small" if provider == "openai" else "all-MiniLM-L6-v2"
-                )
-                eg = EmbeddingGenerator(
-                    model_name=model_name,
-                    provider=provider,
-                    concurrency=self.concurrency,
-                )
-                emb = eg.generate_embeddings(docs, show_progress=False)
-                sim_matrix = cosine_similarity(emb, emb)
-            except Exception:
-                # Fallback to TF-IDF similarity if embeddings fail
-                vec = TfidfVectorizer(
-                    max_features=8000, ngram_range=(1, 2), min_df=1, max_df=0.95
-                )
-                Xc = vec.fit_transform(docs)
-                sim_matrix = cosine_similarity(Xc, Xc)
-
-            # If keywords mode requested, build TF-IDF matrix for keyword extraction
-            if vec is None and Xc is None and contrast_mode == "keywords":
-                vec = TfidfVectorizer(
-                    max_features=8000, ngram_range=(1, 2), min_df=1, max_df=0.95
-                )
-                Xc = vec.fit_transform(docs)
-
-        # Prepare neighbor context per cluster
         neighbor_context: Dict[int, str] = {}
-        use_neighbors = (contrast_neighbors or 0) > 0 and (contrast_examples or 0) > 0 and contrast_mode == "neighbors"
-        use_keywords = (contrast_neighbors or 0) > 0 and contrast_mode == "keywords"
-        for i, cid in enumerate(id_list):
-            block_lines: List[str] = []
-            if sim_matrix is None:
-                neighbor_context[cid] = ""
-                continue
-            sims = sim_matrix[i].copy()
-            sims[i] = -1.0  # exclude self
-            nbr_idx = sims.argsort()[::-1][: max(0, int(contrast_neighbors))]
-            if len(nbr_idx) == 0:
-                neighbor_context[cid] = ""
-                continue
-            block_lines.append("<contrastive_neighbors>")
-            for j in nbr_idx:
-                nid = id_list[j]
-                nsize = sizes_map.get(nid, 0)
-                if use_neighbors:
-                    exs = sampled_map.get(nid, [])[: max(0, int(contrast_examples))]
-                    exs_fmt = []
-                    for e in exs:
-                        line = e.splitlines()[0].strip()
-                        if len(line) > 180:
-                            line = line[:177] + "..."
-                        exs_fmt.append(line)
+        
+        if contrast_neighbors > 0 and contrast_examples > 0 and len(id_list) > 1:
+            import random
+            for i, cid in enumerate(id_list):
+                # Randomly select n other clusters (excluding self)
+                other_ids = [other_id for j, other_id in enumerate(id_list) if j != i]
+                if not other_ids:
+                    neighbor_context[cid] = ""
+                    continue
+                
+                n_neighbors = min(contrast_neighbors, len(other_ids))
+                neighbor_ids = random.sample(other_ids, n_neighbors)
+                
+                block_lines = ["<contrastive_neighbors>"]
+                for nid in neighbor_ids:
+                    nsize = sizes_map.get(nid, 0)
+                    exs = sampled_map.get(nid, [])[:contrast_examples]
+                    exs_fmt = [e.splitlines()[0].strip()[:180] for e in exs]
+                    
                     block_lines.append(f"  <neighbor cluster_id=\"{nid}\" size=\"{nsize}\">")
                     for ex in exs_fmt:
                         block_lines.append(f"    <example><![CDATA[{ex}]]></example>")
                     block_lines.append("  </neighbor>")
-                elif use_keywords and Xc is not None and vec is not None:
-                    row = Xc[j]
-                    if row.nnz:
-                        nz = row.nonzero()[1]
-                        weights = row.data
-                        order = weights.argsort()[::-1]
-                        top_idx = [nz[k] for k in order[:7]]
-                        vocab = vec.get_feature_names_out()
-                        kws = [vocab[t] for t in top_idx]
-                        block_lines.append(
-                            f"  <neighbor cluster_id=\"{nid}\" size=\"{nsize}\"><keywords>"
-                            + ", ".join(kws)
-                            + "</keywords></neighbor>"
-                        )
-            block_lines.append("</contrastive_neighbors>")
-            neighbor_context[cid] = "\n".join(block_lines) if block_lines else ""
+                
+                block_lines.append("</contrastive_neighbors>")
+                neighbor_context[cid] = "\n".join(block_lines)
+        else:
+            for cid in id_list:
+                neighbor_context[cid] = ""
 
         async def worker(
             idx: int, cid: int, queries: List[str], progress_task, progress
         ):
-            # Build per-cluster summary with retries and rate limit
+            # Build per-cluster summary with retries
             backoff = 1.0
             for attempt in range(5):
                 try:
                     async with semaphore:
-                        await limiter.wait()
                         summary = await self._async_generate_cluster_summary(
                             cluster_queries=queries,
                             cluster_id=cid,
@@ -465,39 +336,14 @@ class ClusterSummarizer:
         # Select a representative and diverse sample of queries
         sampled = self._select_representative_queries(cluster_queries, max_queries)
 
-        # Build XML-formatted prompt
-        queries_xml = "\n".join(
-            f"      <query idx=\"{i + 1}\"><![CDATA[{q[:220]}]]></query>" for i, q in enumerate(sampled)
+        # Render prompt using Jinja2 template
+        prompt = self.template.render(
+            cluster_id=cluster_id,
+            total_queries=len(cluster_queries),
+            sample_count=len(sampled),
+            queries=sampled,
+            contrast_block=contrast_block,
         )
-        prompt = f"""
-<summary_task>
-  <cluster id="{cluster_id}">
-    <stats total_queries="{len(cluster_queries)}" sample_count="{len(sampled)}" />
-    <target_queries>
-{queries_xml}
-    </target_queries>
-  </cluster>
-  {contrast_block}
-  <instructions>
-    <title_guidelines>
-      <rule>5-10 words; include domain + action + subject.</rule>
-      <rule>Prefer concrete nouns/verbs; avoid generic terms ("general", "misc").</rule>
-      <rule>If code-heavy, prefix with language or framework.</rule>
-      <rule>Keep the title in English.</rule>
-    </title_guidelines>
-    <description_guidelines>
-      <rule>Summarize common intents and tasks.</rule>
-      <rule>Mention constraints: error fixing, homework help, API usage, jailbreak attempts, evaluation prompts.</rule>
-      <rule>Call out tools/libraries/datasets/languages if prominent.</rule>
-      <rule>If mixed topics, name top 1–2 subthemes.</rule>
-      <rule>Name dominant template/boilerplate patterns.</rule>
-      <rule>Mention placeholders/redactions (NAME_1/NAME_2, &lt;URL&gt;, [MASK]) if prevalent.</rule>
-      <rule>State explicitly if greetings-only or meta/test prompts.</rule>
-    </description_guidelines>
-  </instructions>
-  <output>Return fields: title, description.</output>
-</summary_task>
-"""
 
         response = await self.async_client.chat.completions.create(
             response_model=ClusterSummaryResponse,
