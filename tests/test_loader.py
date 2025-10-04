@@ -1,4 +1,5 @@
 """Tests for data loader."""
+
 import pytest
 from lmsys_query_analysis.db.loader import extract_first_query
 from lmsys_query_analysis.db.connection import Database
@@ -94,7 +95,7 @@ def test_add_query_to_db(temp_db):
         conversation_id="test-789",
         model="claude-3",
         query_text="How does clustering work?",
-        language="en"
+        language="en",
     )
     session.add(query)
     session.commit()

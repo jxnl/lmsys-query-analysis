@@ -1,4 +1,5 @@
 """Database connection and session management using SQLModel."""
+
 from pathlib import Path
 from sqlmodel import create_engine, SQLModel, Session
 from sqlalchemy import event

@@ -1,4 +1,5 @@
 """Tests for database models."""
+
 import pytest
 from datetime import datetime
 from sqlmodel import Session, create_engine, select
@@ -14,6 +15,7 @@ from lmsys_query_analysis.db.models import (
 def engine():
     """Create in-memory SQLite engine for testing."""
     from sqlmodel import SQLModel
+
     engine = create_engine("sqlite:///:memory:")
     SQLModel.metadata.create_all(engine)
     return engine
@@ -33,7 +35,7 @@ def test_create_query(session):
         model="gpt-4",
         query_text="What is machine learning?",
         language="en",
-        extra_metadata={"test": True}
+        extra_metadata={"test": True},
     )
     session.add(query)
     session.commit()
@@ -76,7 +78,7 @@ def test_create_clustering_run(session):
         algorithm="kmeans",
         parameters={"n_clusters": 10, "random_state": 42},
         description="Test clustering run",
-        num_clusters=10
+        num_clusters=10,
     )
     session.add(run)
     session.commit()
@@ -100,20 +102,13 @@ def test_query_cluster_relationship(session):
     session.refresh(query)
 
     # Create clustering run
-    run = ClusteringRun(
-        run_id="run-002",
-        algorithm="kmeans",
-        num_clusters=5
-    )
+    run = ClusteringRun(run_id="run-002", algorithm="kmeans", num_clusters=5)
     session.add(run)
     session.commit()
 
     # Create cluster assignment
     cluster = QueryCluster(
-        run_id=run.run_id,
-        query_id=query.id,
-        cluster_id=2,
-        confidence_score=0.95
+        run_id=run.run_id, query_id=query.id, cluster_id=2, confidence_score=0.95
     )
     session.add(cluster)
     session.commit()
@@ -128,11 +123,7 @@ def test_query_cluster_relationship(session):
 
 def test_cluster_summary(session):
     """Test creating a ClusterSummary."""
-    run = ClusteringRun(
-        run_id="run-003",
-        algorithm="hdbscan",
-        num_clusters=8
-    )
+    run = ClusteringRun(run_id="run-003", algorithm="hdbscan", num_clusters=8)
     session.add(run)
     session.commit()
 
@@ -141,7 +132,7 @@ def test_cluster_summary(session):
         cluster_id=1,
         summary="This cluster contains queries about Python programming",
         num_queries=150,
-        representative_queries=[1, 5, 23, 45]
+        representative_queries=[1, 5, 23, 45],
     )
     session.add(summary)
     session.commit()
@@ -158,7 +149,9 @@ def test_query_filtering(session):
     """Test filtering queries by model and language."""
     queries = [
         Query(conversation_id="q1", model="gpt-4", query_text="Query 1", language="en"),
-        Query(conversation_id="q2", model="gpt-3.5", query_text="Query 2", language="en"),
+        Query(
+            conversation_id="q2", model="gpt-3.5", query_text="Query 2", language="en"
+        ),
         Query(conversation_id="q3", model="gpt-4", query_text="Query 3", language="es"),
     ]
     for q in queries:
