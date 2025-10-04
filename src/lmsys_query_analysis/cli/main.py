@@ -532,8 +532,9 @@ def summarize(
 
             logger.info("Summarizing %s clusters for run %s", len(cluster_ids), run_id)
 
-            # Prepare clusters data
+            # Prepare clusters data (simplified - no embedding fetching for now)
             clusters_data = []
+
             for cid in cluster_ids:
                 # Get all queries in this cluster
                 statement = (

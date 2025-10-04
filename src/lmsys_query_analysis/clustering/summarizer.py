@@ -67,10 +67,31 @@ class ClusterSummaryResponse(BaseModel):
     """Structured response from LLM for cluster summarization."""
 
     title: str = Field(
-        ..., description="Short title (5-10 words) capturing the main topic of the cluster"
+        ...,
+        description="""Concise, specific title (3-7 words) that captures the PRIMARY theme.
+
+        RULES:
+        - Use specific technical terms, domains, or actions (e.g., "Python Flask API Development", "German Language Capability Checks")
+        - Avoid generic prefixes like "User Queries About", "Diverse", "Various"
+        - Avoid vague words: "Diverse", "Various", "General", "Mixed", "Multiple"
+        - Use concrete nouns and verbs
+        - If multilingual, specify language(s)
+
+        GOOD: "Stable Diffusion Image Prompts", "SQL Query Generation", "Spanish Greetings"
+        BAD: "User Queries on Various Topics", "Diverse User Requests", "General Questions"
+        """
     )
     description: str = Field(
-        ..., description="2-3 sentences explaining the cluster theme and what the queries are about"
+        ...,
+        description="""2-3 concise sentences explaining the cluster's PRIMARY purpose and key patterns.
+
+        Structure:
+        1. What users are trying to accomplish (main goal/task)
+        2. Common characteristics (technical level, phrasing style, specific subtopics)
+        3. What distinguishes this cluster from similar ones (if contrastive neighbors provided)
+
+        Focus on the DOMINANT pattern (60%+ of queries), not every variation.
+        """
     )
 
 
@@ -157,20 +178,42 @@ class ClusterSummarizer:
             messages=[
                 {
                     "role": "system",
-                    "content": """You are an expert data analyst specializing in query pattern analysis. Your task is to analyze clusters of user queries submitted to LLM systems and provide insightful summaries.
+                    "content": """You are an expert taxonomist specializing in categorizing user interactions with LLM systems. Your goal is to create PRECISE, SPECIFIC cluster labels that enable quick understanding.
 
-When analyzing a cluster:
-1. Identify the core theme or use case that unites the queries
-2. Note any patterns in how users phrase requests (technical vs casual, specific vs general)
-3. Highlight key characteristics that make this cluster distinct
-4. If contrastive neighbors are provided, emphasize what makes THIS cluster unique compared to similar clusters
+CRITICAL INSTRUCTIONS:
 
-Provide:
-- **Title**: A clear, specific 5-10 word description of the cluster's main theme
-- **Description**: 2-3 sentences explaining:
-  - What users in this cluster are trying to accomplish
-  - Common patterns or notable characteristics
-  - What makes this cluster distinct (especially vs neighbors if provided)""",
+1. IDENTIFY THE DOMINANT PATTERN (what 60-80% of queries share)
+   - Ignore outliers and edge cases
+   - Focus on the PRIMARY use case or theme
+   - If truly mixed, identify the 2-3 main subtypes
+
+2. TITLE REQUIREMENTS:
+   - 3-7 words maximum
+   - Use SPECIFIC technical terms, domains, or action verbs
+   - NEVER use: "User Queries", "Diverse", "Various", "General", "Mixed", "Multiple", "Different"
+   - ALWAYS be concrete: use programming languages, specific topics, named tools/frameworks
+   - Examples of GOOD titles:
+     * "Python Web Scraping Code"
+     * "German Language Capability Tests"
+     * "SQL Database Query Generation"
+     * "Stable Diffusion Art Prompts"
+   - Examples of BAD titles (NEVER DO THIS):
+     * "User Queries About Programming" ❌
+     * "Diverse Technical Requests" ❌
+     * "Various Creative Writing Tasks" ❌
+
+3. DESCRIPTION REQUIREMENTS:
+   - Sentence 1: State the PRIMARY goal/task (what users want to accomplish)
+   - Sentence 2: Key patterns (technical level, common subtopics, phrasing style)
+   - Sentence 3: (Optional) What distinguishes from neighbors if provided
+   - Be SPECIFIC: mention actual examples, technical terms, languages, frameworks
+   - Focus on DOMINANT pattern, not every variation
+
+4. MULTILINGUAL CLUSTERS:
+   - Always specify the language(s) in the title
+   - Example: "Portuguese Business Writing", "Arabic General Knowledge"
+
+Follow the Pydantic schema rules exactly.""",
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -360,20 +403,42 @@ Provide:
         messages = [
             {
                 "role": "system",
-                "content": """You are an expert data analyst specializing in query pattern analysis. Your task is to analyze clusters of user queries submitted to LLM systems and provide insightful summaries.
+                "content": """You are an expert taxonomist specializing in categorizing user interactions with LLM systems. Your goal is to create PRECISE, SPECIFIC cluster labels that enable quick understanding.
 
-When analyzing a cluster:
-1. Identify the core theme or use case that unites the queries
-2. Note any patterns in how users phrase requests (technical vs casual, specific vs general)
-3. Highlight key characteristics that make this cluster distinct
-4. If contrastive neighbors are provided, emphasize what makes THIS cluster unique compared to similar clusters
+CRITICAL INSTRUCTIONS:
 
-Provide:
-- **Title**: A clear, specific 5-10 word description of the cluster's main theme
-- **Description**: 2-3 sentences explaining:
-  - What users in this cluster are trying to accomplish
-  - Common patterns or notable characteristics
-  - What makes this cluster distinct (especially vs neighbors if provided)""",
+1. IDENTIFY THE DOMINANT PATTERN (what 60-80% of queries share)
+   - Ignore outliers and edge cases
+   - Focus on the PRIMARY use case or theme
+   - If truly mixed, identify the 2-3 main subtypes
+
+2. TITLE REQUIREMENTS:
+   - 3-7 words maximum
+   - Use SPECIFIC technical terms, domains, or action verbs
+   - NEVER use: "User Queries", "Diverse", "Various", "General", "Mixed", "Multiple", "Different"
+   - ALWAYS be concrete: use programming languages, specific topics, named tools/frameworks
+   - Examples of GOOD titles:
+     * "Python Web Scraping Code"
+     * "German Language Capability Tests"
+     * "SQL Database Query Generation"
+     * "Stable Diffusion Art Prompts"
+   - Examples of BAD titles (NEVER DO THIS):
+     * "User Queries About Programming" ❌
+     * "Diverse Technical Requests" ❌
+     * "Various Creative Writing Tasks" ❌
+
+3. DESCRIPTION REQUIREMENTS:
+   - Sentence 1: State the PRIMARY goal/task (what users want to accomplish)
+   - Sentence 2: Key patterns (technical level, common subtopics, phrasing style)
+   - Sentence 3: (Optional) What distinguishes from neighbors if provided
+   - Be SPECIFIC: mention actual examples, technical terms, languages, frameworks
+   - Focus on DOMINANT pattern, not every variation
+
+4. MULTILINGUAL CLUSTERS:
+   - Always specify the language(s) in the title
+   - Example: "Portuguese Business Writing", "Arabic General Knowledge"
+
+Follow the Pydantic schema rules exactly.""",
             },
             {"role": "user", "content": prompt},
         ]
@@ -401,11 +466,14 @@ Provide:
     def _select_representative_queries(
         self, cluster_queries: List[str], max_queries: int
     ) -> List[str]:
-        """Select a diverse, representative subset of queries using embeddings + MMR.
+        """Select a diverse, representative subset of queries using stratified random sampling.
 
         - Deduplicate queries (case-insensitive, trimmed)
-        - Compute embeddings for a capped subset of queries
-        - Select k via centroid relevance + MMR for diversity
+        - Use stratified sampling (beginning, middle, end) for diversity
+
+        Args:
+            cluster_queries: List of query texts
+            max_queries: Maximum number to select
         """
         if not cluster_queries:
             return []
@@ -413,12 +481,14 @@ Provide:
         # Normalize and deduplicate while preserving original text
         seen = set()
         originals: List[str] = []
-        for q in cluster_queries:
+        original_indices: List[int] = []  # Track original indices for embedding lookup
+        for i, q in enumerate(cluster_queries):
             q = (q or "").strip()
             key = " ".join(q.lower().split())
             if key and key not in seen:
                 seen.add(key)
                 originals.append(q)
+                original_indices.append(i)
 
         k = min(max_queries, len(originals))
         if k <= 0:
@@ -426,51 +496,33 @@ Provide:
         if k >= len(originals):
             return originals
 
-        # Cap number of items to embed for efficiency
-        cap = max(5 * k, 300)
-        if len(originals) > cap:
-            originals = originals[:cap]
+        # SIMPLIFIED: Use stratified random sampling instead of MMR
+        # This avoids needing embeddings and is much faster
+        import random
 
-        # Embed using configured embedding model (matches clustering model)
-        try:
-            from .embeddings import EmbeddingGenerator
+        # If we have few queries, just return them all
+        if len(originals) <= k:
+            return originals
 
-            eg = EmbeddingGenerator(
-                model_name=self.embedding_model,
-                provider=self.embedding_provider,
-                concurrency=self.concurrency,
-            )
-            E = eg.generate_embeddings(originals, show_progress=False)
-        except Exception:
-            # As a last resort, fall back to a simple first-k selection
-            return originals[:k]
+        # Stratified sampling: take samples from beginning, middle, and end
+        # This ensures we capture diversity without embeddings
+        samples = []
 
-        # Compute centroid relevance
-        centroid = E.mean(axis=0, keepdims=True)
-        rel = cosine_similarity(E, centroid).ravel()
+        # Take first few (often most common/representative)
+        samples.extend(originals[:k//3])
 
-        # MMR selection in embedding space
-        lambda_param = 0.7
-        selected: List[int] = []
-        candidates = set(range(E.shape[0]))
+        # Random sample from middle
+        middle_start = len(originals) // 3
+        middle_end = 2 * len(originals) // 3
+        middle_size = min(k//3, middle_end - middle_start)
+        if middle_size > 0:
+            samples.extend(random.sample(originals[middle_start:middle_end], middle_size))
 
-        first = int(np.argmax(rel))
-        selected.append(first)
-        candidates.remove(first)
+        # Random sample from end
+        end_start = 2 * len(originals) // 3
+        remaining = k - len(samples)
+        if remaining > 0 and end_start < len(originals):
+            end_size = min(remaining, len(originals) - end_start)
+            samples.extend(random.sample(originals[end_start:], end_size))
 
-        while len(selected) < k and candidates:
-            sims_to_selected = cosine_similarity(E[list(candidates)], E[selected]).max(
-                axis=1
-            )
-            candidate_list = list(candidates)
-            scores = (
-                lambda_param * rel[candidate_list]
-                - (1 - lambda_param) * sims_to_selected
-            )
-            best_idx = int(np.argmax(scores))
-            chosen = candidate_list[best_idx]
-            selected.append(chosen)
-            candidates.remove(chosen)
-
-        selected.sort()
-        return [originals[i] for i in selected]
+        return samples[:k]  # Ensure we don't exceed k
