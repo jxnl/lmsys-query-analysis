@@ -349,6 +349,7 @@ def runs(
 def list_clusters(
     run_id: str = typer.Argument(..., help="Run ID to list clusters for"),
     db_path: str = typer.Option(None, help="Database path"),
+    summary_run_id: str = typer.Option(None, help="Filter by specific summary run ID"),
     limit: int = typer.Option(None, help="Limit number of clusters to show"),
     show_examples: int = typer.Option(
         0, help="Show up to N example queries per cluster"
@@ -371,6 +372,23 @@ def list_clusters(
                     ClusterSummary.num_queries.desc(), ClusterSummary.cluster_id.asc()
                 )
             )
+
+            # Filter by summary_run_id if provided
+            if summary_run_id:
+                statement = statement.where(ClusterSummary.summary_run_id == summary_run_id)
+            else:
+                # If no summary_run_id specified, get the most recent one
+                from sqlalchemy import func
+                latest_stmt = (
+                    select(ClusterSummary.summary_run_id)
+                    .where(ClusterSummary.run_id == run_id)
+                    .order_by(ClusterSummary.generated_at.desc())
+                    .limit(1)
+                )
+                latest_summary_run = session.exec(latest_stmt).first()
+                if latest_summary_run:
+                    statement = statement.where(ClusterSummary.summary_run_id == latest_summary_run)
+
             if limit:
                 statement = statement.limit(limit)
 
@@ -379,7 +397,7 @@ def list_clusters(
             if not summaries:
                 logger.warning("No summaries found for run %s", run_id)
                 console.print(
-                    f"[cyan]Run 'lmsys summarize {run_id} --use-chroma' to generate summaries[/cyan]"
+                    f"[cyan]Run 'lmsys summarize {run_id}' to generate summaries[/cyan]"
                 )
                 return
 
@@ -450,7 +468,7 @@ def summarize(
         "anthropic/claude-sonnet-4-5-20250929", help="LLM model (provider/model)"
     ),
     max_queries: int = typer.Option(100, help="Max queries to send to LLM per cluster"),
-    concurrency: int = typer.Option(4, help="Parallel LLM calls for summarization"),
+    concurrency: int = typer.Option(12, help="Parallel LLM calls for summarization"),
     rpm: int = typer.Option(None, help="Optional requests-per-minute rate limit"),
     use_chroma: bool = typer.Option(False, help="Update ChromaDB with new summaries"),
     contrast_neighbors: int = typer.Option(
@@ -462,60 +480,53 @@ def summarize(
     contrast_mode: str = typer.Option(
         "neighbors", help="Contrast mode: 'neighbors' (examples) or 'keywords'"
     ),
+    summary_run_id: str = typer.Option(
+        None, help="Custom summary run ID (auto-generated if not provided)"
+    ),
+    alias: str = typer.Option(
+        None, help="Friendly alias for this summary run (e.g., 'claude-v1', 'gpt4-best')"
+    ),
     db_path: str = typer.Option(None, help="Database path"),
     chroma_path: str = typer.Option(None, help="ChromaDB path"),
 ):
     """Generate LLM-powered titles and descriptions for clusters."""
     try:
+        from datetime import datetime
         from ..clustering.summarizer import ClusterSummarizer
-        from ..clustering.embeddings import EmbeddingGenerator
         from ..db.models import ClusterSummary, QueryCluster, Query, ClusteringRun
         from sqlmodel import select
 
         db = get_db(db_path)
-        chroma = get_chroma(chroma_path) if use_chroma else None
 
-        # Initialize summarizer
-        summarizer = ClusterSummarizer(model=model, concurrency=concurrency, rpm=rpm)
         console.print(f"[cyan]Using LLM: {model}[/cyan]")
 
         session = db.get_session()
 
         try:
-            # Get the clustering run to extract embedding model info
+            # Get the clustering run to check it exists
             run_statement = select(ClusteringRun).where(ClusteringRun.run_id == run_id)
             run = session.exec(run_statement).first()
             if not run:
                 console.print(f"[red]Run {run_id} not found[/red]")
                 raise typer.Exit(1)
 
-            # Extract embedding model from run parameters
-            embedding_model = "all-MiniLM-L6-v2"  # default
-            embedding_provider = "sentence-transformers"  # default
-            if run.parameters:
-                embedding_model = run.parameters.get("embedding_model", embedding_model)
-                # Infer provider based on model name
-                if "text-embedding" in embedding_model:
-                    embedding_provider = "openai"
-                elif "embed" in embedding_model and "openai" not in embedding_model:
-                    embedding_provider = "sentence-transformers"
+            # Generate summary_run_id if not provided
+            if not summary_run_id:
+                # Format: summary-{model_short}-{timestamp}
+                model_short = model.split("/")[-1][:20]  # Take last part of model name
+                timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+                summary_run_id = f"summary-{model_short}-{timestamp}"
 
-            logger.info(
-                "Using embedding model from clustering run: %s (%s)",
-                embedding_model,
-                embedding_provider,
-            )
-            console.print(
-                f"[dim]Embedding model: {embedding_provider}/{embedding_model}[/dim]"
-            )
+            console.print(f"[cyan]Summary run ID: {summary_run_id}[/cyan]")
+            if alias:
+                console.print(f"[cyan]Alias: {alias}[/cyan]")
+            logger.info("Starting summarization run: %s (alias: %s)", summary_run_id, alias or "none")
 
-            # Re-initialize summarizer with correct embedding model
+            # Initialize summarizer (no embedding model needed)
             summarizer = ClusterSummarizer(
                 model=model,
                 concurrency=concurrency,
                 rpm=rpm,
-                embedding_model=embedding_model,
-                embedding_provider=embedding_provider,
             )
 
             # Get clusters to summarize
@@ -532,9 +543,8 @@ def summarize(
 
             logger.info("Summarizing %s clusters for run %s", len(cluster_ids), run_id)
 
-            # Prepare clusters data (simplified - no embedding fetching for now)
+            # Prepare clusters data
             clusters_data = []
-
             for cid in cluster_ids:
                 # Get all queries in this cluster
                 statement = (
@@ -561,10 +571,23 @@ def summarize(
             # Store in SQLite
             logger.info("Storing summaries in SQLite...")
             sizes_map = {cid: len(qs) for cid, qs in clusters_data}
+
+            # Prepare summarization parameters for storage
+            summary_params = {
+                "max_queries": max_queries,
+                "concurrency": concurrency,
+                "rpm": rpm,
+                "contrast_neighbors": contrast_neighbors,
+                "contrast_examples": contrast_examples,
+                "contrast_mode": contrast_mode,
+            }
+
             for cid, summary_data in results.items():
-                # Check if summary already exists
+                # Check if summary already exists for this summary_run_id
                 statement = select(ClusterSummary).where(
-                    ClusterSummary.run_id == run_id, ClusterSummary.cluster_id == cid
+                    ClusterSummary.run_id == run_id,
+                    ClusterSummary.cluster_id == cid,
+                    ClusterSummary.summary_run_id == summary_run_id,
                 )
                 existing = session.exec(statement).first()
 
@@ -578,69 +601,97 @@ def summarize(
                     existing.representative_queries = [
                         q[:200] for q in summary_data["sample_queries"]
                     ]
+                    existing.model = model
+                    existing.parameters = summary_params
                 else:
                     # Create new
                     new_summary = ClusterSummary(
                         run_id=run_id,
                         cluster_id=cid,
+                        summary_run_id=summary_run_id,
                         title=summary_data["title"],
                         description=summary_data["description"],
                         summary=f"{summary_data['title']}\n\n{summary_data['description']}",
                         num_queries=sizes_map.get(cid, 0),
                         representative_queries=[
-                            q[:200] for q in summary_data["sample_queries"]
+                            q for q in summary_data["sample_queries"]
                         ],
+                        model=model,
+                        parameters=summary_params,
                     )
                     session.add(new_summary)
 
             session.commit()
 
-            # Update ChromaDB if requested
-            if use_chroma and chroma:
-                console.print(
-                    "[yellow]Updating ChromaDB with new summaries...[/yellow]"
-                )
+            # Display generated summaries
+            logger.info("Generated summaries for %s clusters", len(results))
+            console.print(f"\n[bold green]✓ Generated {len(results)} cluster summaries[/bold green]\n")
 
-                # Generate embeddings for title + description using the same model as clustering
+            for cid in sorted(results.keys()):
+                summary_data = results[cid]
+                console.print(f"[bold cyan]Cluster {cid}[/bold cyan]: {summary_data['title']}")
+                console.print(f"  {summary_data['description']}")
+                console.print(f"  [dim]({sizes_map.get(cid, 0)} queries)[/dim]\n")
+
+            # Store in ChromaDB if requested
+            if use_chroma:
+                from ..db.chroma import get_chroma
+                from ..clustering.embeddings import EmbeddingGenerator
+
+                logger.info("Storing summaries in ChromaDB...")
+                console.print("[cyan]Generating embeddings for summaries...[/cyan]")
+
+                chroma = get_chroma(chroma_path)
+
+                # Initialize embedding generator (use same defaults as load command)
                 embedding_gen = EmbeddingGenerator(
-                    model_name=embedding_model,
-                    provider=embedding_provider,
-                    concurrency=concurrency,
+                    model_name="text-embedding-3-small",
+                    provider="openai",
                 )
-                texts = [
-                    f"{results[cid]['title']}\n\n{results[cid]['description']}"
-                    for cid in cluster_ids
-                ]
+
+                # Prepare data for batch storage
+                cluster_ids_list = []
+                summaries_list = []
+                titles_list = []
+                descriptions_list = []
+                metadata_list = []
+
+                for cid, summary_data in results.items():
+                    cluster_ids_list.append(cid)
+                    # Combine title + description for the document text
+                    summary_text = f"{summary_data['title']}\n\n{summary_data['description']}"
+                    summaries_list.append(summary_text)
+                    titles_list.append(summary_data["title"])
+                    descriptions_list.append(summary_data["description"])
+                    metadata_list.append({
+                        "num_queries": sizes_map.get(cid, 0),
+                        "model": model,
+                    })
+
+                # Generate embeddings for summaries
                 embeddings = embedding_gen.generate_embeddings(
-                    texts, show_progress=False
+                    summaries_list,
+                    batch_size=32,
+                    show_progress=True,
                 )
 
-                # Update ChromaDB (will overwrite existing)
-                titles = [results[cid]["title"] for cid in cluster_ids]
-                descriptions = [results[cid]["description"] for cid in cluster_ids]
-                summaries = texts
-                metadata_list = [
-                    {"num_queries": len([q for c, q in clusters_data if c == cid][0])}
-                    for cid in cluster_ids
-                ]
-
+                # Store in ChromaDB
                 chroma.add_cluster_summaries_batch(
                     run_id=run_id,
-                    cluster_ids=cluster_ids,
-                    summaries=summaries,
+                    cluster_ids=cluster_ids_list,
+                    summaries=summaries_list,
                     embeddings=embeddings,
                     metadata_list=metadata_list,
-                    titles=titles,
-                    descriptions=descriptions,
+                    titles=titles_list,
+                    descriptions=descriptions_list,
                 )
 
                 console.print(
-                    f"[green]Updated {len(cluster_ids)} summaries in ChromaDB[/green]"
+                    f"[green]Stored {len(cluster_ids_list)} summaries in ChromaDB[/green]"
                 )
 
-            logger.info("Generated summaries for %s clusters", len(results))
             console.print(
-                f"[cyan]Use 'lmsys list-clusters {run_id}' to view titles[/cyan]"
+                f"\n[cyan]Use 'lmsys list-clusters {run_id}' to view all cluster titles[/cyan]"
             )
 
         finally:

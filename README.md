@@ -113,22 +113,35 @@ uv run lmsys cluster hdbscan --use-chroma \
 
 ### LLM Summarization
 
+The summarization system now supports **multiple summary runs** for the same clustering run, allowing you to:
+- Compare different LLM models side-by-side
+- Iterate on prompts without losing previous results
+- Track which parameters produced the best summaries
+
+Each summary run is uniquely identified by a `summary_run_id` (auto-generated as `summary-{model}-{timestamp}`).
+
 ```bash
 # Generate titles and descriptions for all clusters
-uv run lmsys summarize <RUN_ID> --use-chroma
+# Auto-generates summary_run_id like: summary-claude-sonnet-4-5-2025-20251004-124530
+uv run lmsys summarize <RUN_ID>
 
-# Use different LLM provider
-uv run lmsys summarize <RUN_ID> --model "openai/gpt-4" --use-chroma
-uv run lmsys summarize <RUN_ID> --model "groq/llama-3.1-8b-instant" --use-chroma
+# Use different LLM models (creates separate summary runs)
+uv run lmsys summarize <RUN_ID> --model "openai/gpt-4"
+uv run lmsys summarize <RUN_ID> --model "groq/llama-3.1-8b-instant"
+
+# Custom summary run ID for easy reference
+uv run lmsys summarize <RUN_ID> --summary-run-id "claude-v1"
 
 # Summarize specific cluster only
-uv run lmsys summarize <RUN_ID> --cluster-id 5 --use-chroma
+uv run lmsys summarize <RUN_ID> --cluster-id 5
 
 # Adjust number of queries sent to LLM
-uv run lmsys summarize <RUN_ID> --max-queries 100 --use-chroma
+uv run lmsys summarize <RUN_ID> --max-queries 100
 
 # Speed up with concurrency and optional rate limiting
-uv run lmsys summarize <RUN_ID> --concurrency 8 --rpm 60 --use-chroma
+uv run lmsys summarize <RUN_ID> --concurrency 8 --rpm 60
+
+# Note: --use-chroma flag has been removed. Summaries are stored in SQLite only.
 ```
 
 ### Viewing Results
@@ -140,8 +153,11 @@ uv run lmsys runs
 # Show only the most recent run
 uv run lmsys runs --latest
 
-# List clusters with LLM-generated titles
+# List clusters with LLM-generated titles (shows latest summary run by default)
 uv run lmsys list-clusters <RUN_ID>
+
+# View specific summary run
+uv run lmsys list-clusters <RUN_ID> --summary-run-id "summary-claude-sonnet-4-5-2025-20251004-124530"
 
 # Limit results
 uv run lmsys list-clusters <RUN_ID> --limit 20
@@ -182,9 +198,12 @@ Search uses explicit query embeddings to ensure consistency with stored vectors.
 **query_clusters** - Map queries to clusters per run
 - `run_id`, `query_id`, `cluster_id`, `confidence_score`
 
-**cluster_summaries** - LLM-generated summaries
-- `run_id`, `cluster_id`, `title`, `description`
-- `num_queries`, `representative_queries` (JSON)
+**cluster_summaries** - LLM-generated summaries (supports multiple summary runs)
+- `run_id`, `cluster_id`, `summary_run_id` (unique per summarization)
+- `title`, `description`, `summary`, `num_queries`
+- `representative_queries` (JSON)
+- `model` (LLM used), `parameters` (JSON - summarization settings)
+- `generated_at`
 
 ### ChromaDB Collections
 
@@ -322,7 +341,7 @@ uv run lmsys summarize <RUN_ID> \
 
 ### Schema Migration
 
-If you get "no such column: cluster_summaries.title":
+If you get schema errors after updating:
 
 ```bash
 # Option 1: Delete and recreate (loses data)
@@ -330,10 +349,11 @@ rm ~/.lmsys-query-analysis/queries.db
 rm -rf ~/.lmsys-query-analysis/chroma
 # Then re-run load and cluster commands
 
-# Option 2: Manual migration
-sqlite3 ~/.lmsys-query-analysis/queries.db \
-  "ALTER TABLE cluster_summaries ADD COLUMN title TEXT; \
-   ALTER TABLE cluster_summaries ADD COLUMN description TEXT;"
+# Option 2: Check current schema
+sqlite3 ~/.lmsys-query-analysis/queries.db ".schema cluster_summaries"
+
+# Note: The cluster_summaries table now requires summary_run_id field.
+# If upgrading from older version, recreate the database.
 ```
 
 ### ChromaDB Not Found

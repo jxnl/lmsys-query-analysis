@@ -5,9 +5,8 @@ optional rate limiting to speed up large runs safely.
 """
 
 from typing import List, Optional, Dict, Tuple
+import logging
 
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 import anyio
 import instructor
 from pydantic import BaseModel, Field
@@ -29,6 +28,15 @@ from tenacity import (
 )
 
 console = Console()
+
+# Constants
+RATE_LIMITER_WINDOW_SECONDS = 60.0
+STRATIFIED_SAMPLE_FIRST_RATIO = 1 / 3
+STRATIFIED_SAMPLE_MIDDLE_RATIO = 1 / 3
+MAX_NEIGHBOR_EXAMPLE_LENGTH = 180
+RETRY_MAX_ATTEMPTS = 5
+RETRY_MIN_WAIT = 1
+RETRY_MAX_WAIT = 8
 
 
 def _create_template():
@@ -96,16 +104,18 @@ class ClusterSummaryResponse(BaseModel):
 
 
 class ClusterSummarizer:
-    """Generate titles and descriptions for query clusters using LLMs via instructor."""
+    """Generate titles and descriptions for query clusters using LLMs via instructor.
+
+    Note: This class no longer requires embedding models. Embeddings are only needed
+    for ChromaDB updates, which are handled separately in the CLI layer.
+    """
 
     def __init__(
         self,
         model: str = "anthropic/claude-sonnet-4-5-20250929",
         api_key: Optional[str] = None,
-        concurrency: int = 4,
+        concurrency: int = 20,
         rpm: Optional[int] = None,
-        embedding_model: str = "all-MiniLM-L6-v2",
-        embedding_provider: str = "sentence-transformers",
     ):
         """Initialize the summarizer.
 
@@ -116,114 +126,27 @@ class ClusterSummarizer:
             api_key: API key for the provider (or set env var ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
             concurrency: Number of concurrent LLM requests
             rpm: Optional requests-per-minute rate limit (global across tasks)
-            embedding_model: Embedding model for query selection (should match clustering model)
-            embedding_provider: Provider for embeddings (sentence-transformers, openai, etc.)
         """
         self.model = model
         self.concurrency = max(1, int(concurrency))
         self.rpm = rpm if (rpm is None or rpm > 0) else None
-        self.embedding_model = embedding_model
-        self.embedding_provider = embedding_provider
+        self.logger = logging.getLogger("lmsys")
 
         # Initialize Jinja2 template
         self.template = _create_template()
 
         # Initialize rate limiter if rpm is specified
-        # Convert rpm to requests per second with 1-second time period
-        self.rate_limiter = AsyncLimiter(rpm, 60.0) if rpm else None
+        self.rate_limiter = (
+            AsyncLimiter(rpm, RATE_LIMITER_WINDOW_SECONDS) if rpm else None
+        )
 
-        # Initialize instructor client with full model string
+        # Initialize async instructor client with full model string
         if api_key:
-            self.client = instructor.from_provider(model, api_key=api_key)
             self.async_client = instructor.from_provider(
                 model, api_key=api_key, async_client=True
             )
         else:
-            self.client = instructor.from_provider(model)
             self.async_client = instructor.from_provider(model, async_client=True)
-
-    def generate_cluster_summary(
-        self,
-        cluster_queries: List[str],
-        cluster_id: int,
-        max_queries: int = 50,
-        contrast_neighbors: Optional[List[dict]] = None,
-    ) -> dict:
-        """Generate title and description for a cluster.
-
-        Args:
-            cluster_queries: All query texts in the cluster
-            cluster_id: Cluster ID for reference
-            max_queries: Maximum queries to include in prompt (sample if more)
-            contrast_neighbors: Optional list of neighbor cluster data for contrast
-
-        Returns:
-            Dict with keys: title, description, sample_queries
-        """
-        # Select a representative and diverse sample of queries
-        sampled = self._select_representative_queries(cluster_queries, max_queries)
-
-        # Render prompt using Jinja2 template
-        prompt = self.template.render(
-            cluster_id=cluster_id,
-            total_queries=len(cluster_queries),
-            sample_count=len(sampled),
-            queries=sampled,
-            contrast_neighbors=contrast_neighbors or [],
-        )
-
-        # Call LLM with structured output - instructor handles model internally
-        response = self.client.chat.completions.create(
-            response_model=ClusterSummaryResponse,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """You are an expert taxonomist specializing in categorizing user interactions with LLM systems. Your goal is to create PRECISE, SPECIFIC cluster labels that enable quick understanding.
-
-CRITICAL INSTRUCTIONS:
-
-1. IDENTIFY THE DOMINANT PATTERN (what 60-80% of queries share)
-   - Ignore outliers and edge cases
-   - Focus on the PRIMARY use case or theme
-   - If truly mixed, identify the 2-3 main subtypes
-
-2. TITLE REQUIREMENTS:
-   - 3-7 words maximum
-   - Use SPECIFIC technical terms, domains, or action verbs
-   - NEVER use: "User Queries", "Diverse", "Various", "General", "Mixed", "Multiple", "Different"
-   - ALWAYS be concrete: use programming languages, specific topics, named tools/frameworks
-   - Examples of GOOD titles:
-     * "Python Web Scraping Code"
-     * "German Language Capability Tests"
-     * "SQL Database Query Generation"
-     * "Stable Diffusion Art Prompts"
-   - Examples of BAD titles (NEVER DO THIS):
-     * "User Queries About Programming" ❌
-     * "Diverse Technical Requests" ❌
-     * "Various Creative Writing Tasks" ❌
-
-3. DESCRIPTION REQUIREMENTS:
-   - Sentence 1: State the PRIMARY goal/task (what users want to accomplish)
-   - Sentence 2: Key patterns (technical level, common subtopics, phrasing style)
-   - Sentence 3: (Optional) What distinguishes from neighbors if provided
-   - Be SPECIFIC: mention actual examples, technical terms, languages, frameworks
-   - Focus on DOMINANT pattern, not every variation
-
-4. MULTILINGUAL CLUSTERS:
-   - Always specify the language(s) in the title
-   - Example: "Portuguese Business Writing", "Arabic General Knowledge"
-
-Follow the Pydantic schema rules exactly.""",
-                },
-                {"role": "user", "content": prompt},
-            ],
-        )
-
-        return {
-            "title": response.title,
-            "description": response.description,
-            "sample_queries": sampled[:10],  # Store top 10 for reference
-        }
 
     def generate_batch_summaries(
         self,
@@ -275,7 +198,6 @@ Follow the Pydantic schema rules exactly.""",
         contrast_mode: str,
     ) -> Dict[int, dict]:
         """Async concurrent generation using anyio with semaphore-based rate limiting."""
-
         total = len(clusters_data)
         results: Dict[int, dict] = {}
         semaphore = anyio.Semaphore(concurrency)
@@ -283,61 +205,44 @@ Follow the Pydantic schema rules exactly.""",
         console.print(
             f"[cyan]Generating LLM summaries for {total} clusters using {self.model} (concurrency={concurrency}{', rpm=' + str(rpm) if rpm else ''})...[/cyan]"
         )
+        self.logger.info(
+            "Starting async batch summarization: total=%d, max_queries=%d, concurrency=%d, rpm=%s",
+            total,
+            max_queries,
+            concurrency,
+            rpm,
+        )
 
         # Pre-select representative queries for each cluster
         sampled_map: Dict[int, List[str]] = {}
         for cid, qtexts in clusters_data:
             sampled_map[cid] = self._select_representative_queries(qtexts, max_queries)
 
-        # Prepare neighbor context per cluster by randomly selecting other clusters
-        id_list = [cid for cid, _ in clusters_data]
-        sizes_map: Dict[int, int] = {cid: len(qs) for cid, qs in clusters_data}
-        neighbor_context: Dict[int, str] = {}
-
-        if contrast_neighbors > 0 and contrast_examples > 0 and len(id_list) > 1:
-            import random
-
-            for i, cid in enumerate(id_list):
-                # Randomly select n other clusters (excluding self)
-                other_ids = [other_id for j, other_id in enumerate(id_list) if j != i]
-                if not other_ids:
-                    neighbor_context[cid] = ""
-                    continue
-
-                n_neighbors = min(contrast_neighbors, len(other_ids))
-                neighbor_ids = random.sample(other_ids, n_neighbors)
-
-                block_lines = ["<contrastive_neighbors>"]
-                for nid in neighbor_ids:
-                    nsize = sizes_map.get(nid, 0)
-                    exs = sampled_map.get(nid, [])[:contrast_examples]
-                    exs_fmt = [e.splitlines()[0].strip()[:180] for e in exs]
-
-                    block_lines.append(
-                        f'  <neighbor cluster_id="{nid}" size="{nsize}">'
-                    )
-                    for ex in exs_fmt:
-                        block_lines.append(f"    <example><![CDATA[{ex}]]></example>")
-                    block_lines.append("  </neighbor>")
-
-                block_lines.append("</contrastive_neighbors>")
-                neighbor_context[cid] = "\n".join(block_lines)
-        else:
-            for cid in id_list:
-                neighbor_context[cid] = ""
+        # Build neighbor context for contrastive learning
+        neighbor_context = self._build_neighbor_context(
+            clusters_data,
+            sampled_map,
+            contrast_neighbors,
+            contrast_examples,
+            contrast_mode,
+        )
 
         async def worker(
             idx: int, cid: int, queries: List[str], progress_task, progress
         ):
             # Build per-cluster summary (retries handled by tenacity decorator)
+            self.logger.debug(
+                "Worker %d starting for cluster %d (%d queries)", idx, cid, len(queries)
+            )
             async with semaphore:
                 summary = await self._async_generate_cluster_summary(
                     cluster_queries=queries,
                     cluster_id=cid,
                     max_queries=max_queries,
-                    contrast_block=neighbor_context.get(cid, ""),
+                    contrast_neighbors=neighbor_context.get(cid, []),
                 )
             results[cid] = summary
+            self.logger.info("Completed summary for cluster %d: %s", cid, summary["title"])
 
             if progress_task is not None:
                 progress.update(progress_task, advance=1)
@@ -359,8 +264,8 @@ Follow the Pydantic schema rules exactly.""",
         return results
 
     @retry(
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=1, max=8),
+        stop=stop_after_attempt(RETRY_MAX_ATTEMPTS),
+        wait=wait_exponential(multiplier=1, min=RETRY_MIN_WAIT, max=RETRY_MAX_WAIT),
         retry=retry_if_exception_type(Exception),
     )
     async def _async_generate_cluster_summary(
@@ -368,7 +273,7 @@ Follow the Pydantic schema rules exactly.""",
         cluster_queries: List[str],
         cluster_id: int,
         max_queries: int = 50,
-        contrast_block: str = "",
+        contrast_neighbors: Optional[List[Dict]] = None,
     ) -> dict:
         """Async variant of single-cluster summarization using AsyncInstructor.
 
@@ -378,27 +283,27 @@ Follow the Pydantic schema rules exactly.""",
             cluster_queries: All queries in the cluster
             cluster_id: Cluster ID
             max_queries: Max queries to send to LLM
-            contrast_block: Pre-rendered contrast block XML string
+            contrast_neighbors: List of neighbor cluster data for contrastive learning
         """
         # Select a representative and diverse sample of queries
+        self.logger.debug(
+            "Selecting representative queries for cluster %d from %d total",
+            cluster_id,
+            len(cluster_queries),
+        )
         sampled = self._select_representative_queries(cluster_queries, max_queries)
+        self.logger.debug(
+            "Selected %d representative queries for cluster %d", len(sampled), cluster_id
+        )
 
-        # Build prompt - just the core cluster data since contrast_block is pre-rendered
-        core_prompt = f"""<summary_task>
-  <cluster id="{cluster_id}">
-    <stats total_queries="{len(cluster_queries)}" sample_count="{len(sampled)}" />
-    <target_queries>
-"""
-        for idx, query in enumerate(sampled, 1):
-            core_prompt += f'      <query idx="{idx}">{query}</query>\n'
-        core_prompt += "    </target_queries>\n  </cluster>\n"
-
-        if contrast_block:
-            core_prompt += contrast_block + "\n"
-
-        core_prompt += "</summary_task>"
-
-        prompt = core_prompt
+        # Build prompt using Jinja template
+        prompt = self.template.render(
+            cluster_id=cluster_id,
+            total_queries=len(cluster_queries),
+            sample_count=len(sampled),
+            queries=sampled,
+            contrast_neighbors=contrast_neighbors or [],
+        )
 
         messages = [
             {
@@ -444,25 +349,116 @@ Follow the Pydantic schema rules exactly.""",
         ]
 
         # Apply rate limiting if configured
-        if self.rate_limiter:
-            async with self.rate_limiter:
-                response = await self.async_client.chat.completions.create(
-                    response_model=ClusterSummaryResponse,
-                    messages=messages,
-                )
-        else:
-            response = await self.async_client.chat.completions.create(
-                response_model=ClusterSummaryResponse,
-                messages=messages,
-            )
+        response = await self._call_llm_with_rate_limit(
+            response_model=ClusterSummaryResponse,
+            messages=messages,
+        )
+
+        self.logger.info("Generated summary for cluster %d: %s", cluster_id, response.title)
 
         return {
             "title": response.title,
             "description": response.description,
-            "sample_queries": sampled[:10],
+            "sample_queries": sampled,
         }
 
     # -------- Helper methods --------
+
+    async def _call_llm_with_rate_limit(self, response_model, messages):
+        """Make LLM call with optional rate limiting."""
+        if self.rate_limiter:
+            async with self.rate_limiter:
+                return await self.async_client.chat.completions.create(
+                    response_model=response_model,
+                    messages=messages,
+                )
+        return await self.async_client.chat.completions.create(
+            response_model=response_model,
+            messages=messages,
+        )
+
+    def _build_neighbor_context(
+        self,
+        clusters_data: List[Tuple[int, List[str]]],
+        sampled_map: Dict[int, List[str]],
+        contrast_neighbors: int,
+        contrast_examples: int,
+        contrast_mode: str,
+    ) -> Dict[int, List[Dict]]:
+        """Build neighbor context for contrastive learning."""
+        import random
+
+        id_list = [cid for cid, _ in clusters_data]
+        sizes_map = {cid: len(qs) for cid, qs in clusters_data}
+
+        # Skip if no neighbors requested or only one cluster
+        # Note: contrast_examples can be 0 for keywords mode
+        if contrast_neighbors <= 0 or len(id_list) <= 1:
+            return {cid: [] for cid in id_list}
+
+        neighbor_context = {}
+        for i, cid in enumerate(id_list):
+            other_ids = [other_id for j, other_id in enumerate(id_list) if j != i]
+            if not other_ids:
+                neighbor_context[cid] = []
+                continue
+
+            n_neighbors = min(contrast_neighbors, len(other_ids))
+            neighbor_ids = random.sample(other_ids, n_neighbors)
+
+            neighbors_data = []
+            for nid in neighbor_ids:
+                # Get examples if contrast_examples > 0
+                examples = []
+                if contrast_examples > 0:
+                    examples = sampled_map.get(nid, [])[:contrast_examples]
+                    examples = [
+                        e.splitlines()[0].strip()[:MAX_NEIGHBOR_EXAMPLE_LENGTH]
+                        for e in examples
+                    ]
+
+                neighbors_data.append(
+                    {
+                        "cluster_id": nid,
+                        "size": sizes_map.get(nid, 0),
+                        "mode": contrast_mode,
+                        "examples": examples,
+                        "keywords": "",
+                    }
+                )
+
+            neighbor_context[cid] = neighbors_data
+
+        return neighbor_context
+
+    def _stratified_sample(self, items: List[str], k: int) -> List[str]:
+        """Sample k items using stratified approach (beginning, middle, end)."""
+        import random
+
+        if len(items) <= k:
+            return items
+
+        # Calculate split points
+        n_first = int(k * STRATIFIED_SAMPLE_FIRST_RATIO)
+        n_middle = int(k * STRATIFIED_SAMPLE_MIDDLE_RATIO)
+        n_last = k - n_first - n_middle
+
+        # Split into thirds
+        third = len(items) // 3
+        first_third = items[:third]
+        middle_third = items[third : 2 * third]
+        last_third = items[2 * third :]
+
+        # Sample from each section
+        samples = []
+        samples.extend(first_third[:n_first])
+        if middle_third and n_middle > 0:
+            samples.extend(random.sample(middle_third, min(n_middle, len(middle_third))))
+        if last_third and n_last > 0:
+            samples.extend(random.sample(last_third, min(n_last, len(last_third))))
+
+        return samples[:k]
+
     def _select_representative_queries(
         self, cluster_queries: List[str], max_queries: int
     ) -> List[str]:
@@ -481,48 +477,16 @@ Follow the Pydantic schema rules exactly.""",
         # Normalize and deduplicate while preserving original text
         seen = set()
         originals: List[str] = []
-        original_indices: List[int] = []  # Track original indices for embedding lookup
-        for i, q in enumerate(cluster_queries):
+        for q in cluster_queries:
             q = (q or "").strip()
             key = " ".join(q.lower().split())
             if key and key not in seen:
                 seen.add(key)
                 originals.append(q)
-                original_indices.append(i)
 
         k = min(max_queries, len(originals))
         if k <= 0:
             return []
-        if k >= len(originals):
-            return originals
 
-        # SIMPLIFIED: Use stratified random sampling instead of MMR
-        # This avoids needing embeddings and is much faster
-        import random
-
-        # If we have few queries, just return them all
-        if len(originals) <= k:
-            return originals
-
-        # Stratified sampling: take samples from beginning, middle, and end
-        # This ensures we capture diversity without embeddings
-        samples = []
-
-        # Take first few (often most common/representative)
-        samples.extend(originals[:k//3])
-
-        # Random sample from middle
-        middle_start = len(originals) // 3
-        middle_end = 2 * len(originals) // 3
-        middle_size = min(k//3, middle_end - middle_start)
-        if middle_size > 0:
-            samples.extend(random.sample(originals[middle_start:middle_end], middle_size))
-
-        # Random sample from end
-        end_start = 2 * len(originals) // 3
-        remaining = k - len(samples)
-        if remaining > 0 and end_start < len(originals):
-            end_size = min(remaining, len(originals) - end_start)
-            samples.extend(random.sample(originals[end_start:], end_size))
-
-        return samples[:k]  # Ensure we don't exceed k
+        # Use stratified sampling to ensure diversity
+        return self._stratified_sample(originals, k)

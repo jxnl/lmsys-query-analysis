@@ -74,12 +74,18 @@ class QueryCluster(SQLModel, table=True):
 
 
 class ClusterSummary(SQLModel, table=True):
-    """Table storing generated summaries/analysis for clusters."""
+    """Table storing generated summaries/analysis for clusters.
+
+    Multiple summary runs can exist for the same clustering run, allowing
+    comparison of different LLM models, prompts, or summarization parameters.
+    """
 
     __tablename__ = "cluster_summaries"
     __table_args__ = (
-        UniqueConstraint("run_id", "cluster_id", name="uq_clustersummary_run_cluster"),
+        UniqueConstraint("run_id", "cluster_id", "summary_run_id", name="uq_clustersummary_run_cluster_summary"),
         Index("ix_cluster_summaries_run_id", "run_id"),
+        Index("ix_cluster_summaries_cluster_id", "cluster_id"),
+        Index("ix_cluster_summaries_summary_run_id", "summary_run_id"),
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -89,12 +95,16 @@ class ClusterSummary(SQLModel, table=True):
             ForeignKey("clustering_runs.run_id", ondelete="CASCADE"),
         ),
     )
-    cluster_id: int = Field(index=True)
+    cluster_id: int
+    summary_run_id: str  # Unique ID for this summarization run
+    alias: Optional[str] = None  # Friendly name for this summary run (e.g., "claude-v1", "gpt4-test")
     title: Optional[str] = None  # LLM-generated short title
     description: Optional[str] = None  # LLM-generated description
     summary: Optional[str] = None  # Full summary text (backwards compat)
     num_queries: Optional[int] = None
     representative_queries: Optional[list] = Field(default=None, sa_column=Column(JSON))
+    model: Optional[str] = None  # LLM model used (e.g., "anthropic/claude-sonnet-4-5-20250929")
+    parameters: Optional[dict] = Field(default=None, sa_column=Column(JSON))  # Summarization parameters
     generated_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Relationship

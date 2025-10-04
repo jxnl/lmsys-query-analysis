@@ -21,8 +21,8 @@ class FakeAsyncChat:
             self._prompts = prompts_ref
 
         async def create(self, response_model=None, messages=None):  # type: ignore[no-redef]
-            # Capture the prompt content for assertions
-            content = messages[0]["content"] if messages else ""
+            # Capture the user message content (index 1) for assertions
+            content = messages[1]["content"] if messages and len(messages) > 1 else ""
             self._prompts.append(content)
             # Return a minimal object with required fields
             return SimpleNamespace(
@@ -51,7 +51,7 @@ def patch_instructor(monkeypatch, prompts: List[str]):
                 self._prompts = prompts_ref
 
             def create(self, response_model=None, messages=None):  # sync create
-                content = messages[0]["content"] if messages else ""
+                content = messages[1]["content"] if messages and len(messages) > 1 else ""
                 self._prompts.append(content)
                 return SimpleNamespace(
                     title="Test Title", description="Test Description"

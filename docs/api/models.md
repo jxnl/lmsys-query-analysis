@@ -89,18 +89,22 @@ assignment = QueryCluster(
 
 ## ClusterSummary
 
-LLM-generated summaries for clusters.
+LLM-generated summaries for clusters. **Supports multiple summary runs** to compare different models and parameters.
 
 ### Fields
 
 - **id** (int): Auto-incremented primary key
 - **run_id** (str): Foreign key to ClusteringRun
 - **cluster_id** (int): Cluster number
+- **summary_run_id** (str): Unique ID for this summarization (e.g., "summary-claude-sonnet-4-5-2025-20251004-124530")
 - **title** (str | None): Short cluster title
 - **description** (str | None): Detailed description
+- **summary** (str | None): Combined title + description (backward compat)
 - **num_queries** (int): Count of queries in cluster
 - **representative_queries** (list | None): Sample queries as JSON
-- **created_at** (datetime): Timestamp of summary creation
+- **model** (str | None): LLM model used (e.g., "anthropic/claude-sonnet-4-5-20250929")
+- **parameters** (dict | None): Summarization parameters (max_queries, concurrency, contrast settings, etc.)
+- **generated_at** (datetime): Timestamp of summary creation
 
 ### Example
 
@@ -110,10 +114,36 @@ from lmsys_query_analysis.db.models import ClusterSummary
 summary = ClusterSummary(
     run_id="kmeans-100-20251003-123456",
     cluster_id=5,
+    summary_run_id="summary-claude-sonnet-4-5-2025-20251004-124530",
     title="CSS Layout Questions",
     description="Queries about CSS positioning, flexbox, and grid layouts",
     num_queries=150,
-    representative_queries=["How to center a div?", "Flexbox vs Grid?"]
+    representative_queries=["How to center a div?", "Flexbox vs Grid?"],
+    model="anthropic/claude-sonnet-4-5-20250929",
+    parameters={"max_queries": 100, "concurrency": 12}
+)
+```
+
+### Multiple Summary Runs
+
+You can create multiple summaries for the same cluster using different models:
+
+```python
+# Compare Claude and GPT-4 summaries
+claude_summary = ClusterSummary(
+    run_id="kmeans-100-20251003-123456",
+    cluster_id=5,
+    summary_run_id="summary-claude-v1",
+    model="anthropic/claude-sonnet-4-5-20250929",
+    ...
+)
+
+gpt4_summary = ClusterSummary(
+    run_id="kmeans-100-20251003-123456",
+    cluster_id=5,
+    summary_run_id="summary-gpt4-v1",
+    model="openai/gpt-4",
+    ...
 )
 ```
 
@@ -158,11 +188,15 @@ erDiagram
         int id PK
         string run_id FK
         int cluster_id
+        string summary_run_id
         string title
         string description
+        string summary
         int num_queries
         json representative_queries
-        datetime created_at
+        string model
+        json parameters
+        datetime generated_at
     }
 ```
 
@@ -190,17 +224,37 @@ queries = session.exec(statement).all()
 from lmsys_query_analysis.db.models import ClusterSummary
 from sqlmodel import select
 
-# Get all summaries for a run
+# Get all summaries for a specific summary run
 statement = select(ClusterSummary).where(
-    ClusterSummary.run_id == "kmeans-100-20251003-123456"
+    ClusterSummary.run_id == "kmeans-100-20251003-123456",
+    ClusterSummary.summary_run_id == "summary-claude-v1"
 )
 summaries = session.exec(statement).all()
 
-# Get clusters sorted by size
+# Get latest summary run for a clustering run
 statement = select(ClusterSummary).where(
     ClusterSummary.run_id == "kmeans-100-20251003-123456"
+).order_by(ClusterSummary.generated_at.desc()).limit(1)
+latest_summary = session.exec(statement).first()
+
+# Get clusters sorted by size
+statement = select(ClusterSummary).where(
+    ClusterSummary.run_id == "kmeans-100-20251003-123456",
+    ClusterSummary.summary_run_id == "summary-claude-v1"
 ).order_by(ClusterSummary.num_queries.desc())
 top_clusters = session.exec(statement).all()
+
+# Compare summaries from different models
+claude_stmt = select(ClusterSummary).where(
+    ClusterSummary.run_id == "kmeans-100-20251003-123456",
+    ClusterSummary.cluster_id == 5,
+    ClusterSummary.model.like("%claude%")
+)
+gpt4_stmt = select(ClusterSummary).where(
+    ClusterSummary.run_id == "kmeans-100-20251003-123456",
+    ClusterSummary.cluster_id == 5,
+    ClusterSummary.model.like("%gpt-4%")
+)
 ```
 
 ## Next Steps
