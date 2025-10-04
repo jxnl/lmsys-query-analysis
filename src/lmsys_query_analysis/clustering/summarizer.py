@@ -25,71 +25,80 @@ from rich.progress import (
 console = Console()
 
 EXAMPLES_PROMPT = """
-EXAMPLES (format and specificity you should follow):
-
-Example A
-Sample queries:
-- Why does pandas .loc throw KeyError on column subset?
-- Fix TypeError: unsupported operand type(s) for +: 'int' and 'str' in Python
-- Vectorizing loops in NumPy for performance
-Title: Python debugging and data wrangling: pandas, NumPy errors
-Description: Users troubleshoot Python code with a focus on pandas indexing, NumPy array operations, and common Type/Key errors. Guidance emphasizes minimal examples, error interpretation, and idiomatic fixes.
-
-Example B
-Sample queries:
-- Fetch data from a REST API with bearer token using fetch()
-- Axios POST returns 401 — how to send JWT header?
-- Handle 429 rate limit responses and retries in JavaScript
-Title: JavaScript REST API usage and authentication
-Description: Requests cover calling APIs from the browser/node, attaching JWT/Bearer auth, handling status codes (401/429), and implementing retry/backoff. Code examples use fetch and Axios patterns.
-
-Example C
-Sample queries:
-- SQL: Count distinct users per day with LEFT JOIN
-- GROUP BY with conditional SUM over multiple categories
-- Window function to find top N products per region
-Title: SQL analytics with joins, aggregates, and windows
-Description: Analytical SQL tasks combining joins, GROUP BY, conditional aggregation, and window functions (RANK/ROW_NUMBER). Solutions emphasize readable CTEs and correct grouping semantics.
-
-Example D
-Sample queries:
-- Fine-tune a small Llama model on custom Q&A data
-- Why is my training loss NaN in PyTorch mixed precision?
-- Compare F1 and accuracy for imbalanced classification
-Title: ML model training and evaluation: PyTorch, metrics, fine-tuning
-Description: Practical ML workflows including dataset prep, training stability (overflow/AMP), and metric selection for imbalanced tasks. Advice centers on troubleshooting training loops, schedulers, and evaluation protocols.
-
-Example E
-Sample queries:
-- Docker build ignores .dockerignore; how to reduce image size?
-- Nginx reverse proxy 502 when forwarding to Gunicorn
-- Kubernetes CrashLoopBackOff reading config from secrets
-Title: DevOps containerization and deployment: Docker, Nginx, Kubernetes
-Description: Infra topics around container images, reverse proxies, and k8s deployments. Solutions cover Docker layering, proper proxy buffers/timeouts, health checks, and Secret/ConfigMap mounts.
-
-Example F
-Sample queries:
-- Detect and prevent jailbreak attempts in system prompts
-- Red-team prompts to bypass safety filters — show examples
-- Classify prompts by risk category (self-harm, malware, PII)
-Title: LLM safety and prompt hardening: jailbreak detection and taxonomy
-Description: Safety and governance tasks including jailbreak detection, red-teaming, and content risk classification. Emphasis on policies, refusal guidelines, and robust prompt templates.
-
-Example G
-Sample queries:
-- Create a Seaborn heatmap with annotations and custom colorbar
-- Altair interactive chart: filter by dropdown, highlight selection
-- Plotly Express facet grid with per-facet y-axis
-Title: Data visualization recipes: Seaborn, Altair, Plotly
-Description: Visualization tasks across common Python libraries, focusing on annotated heatmaps, interactive selections, and faceting. Guidance prioritizes clear legends, accessibility, and aesthetics.
-
-Example H
-Sample queries:
-- Translate product descriptions to Spanish and preserve HTML tags
-- Localize date/number formats for German users
-- Glossary-enforced translation for brand terms
-Title: Multilingual translation and localization with formatting constraints
-Description: Translation requests with constraints on placeholders/HTML and locale-aware formatting. Recommendations include tag-aware translation and glossary/terminology control.
+<few_shot_examples>
+  <example label="A">
+    <sample_queries>
+      <item>Why does pandas .loc throw KeyError on column subset?</item>
+      <item>Fix TypeError: unsupported operand type(s) for +: 'int' and 'str' in Python</item>
+      <item>Vectorizing loops in NumPy for performance</item>
+    </sample_queries>
+    <title>Python debugging and data wrangling: pandas, NumPy errors</title>
+    <description>Users troubleshoot Python code with a focus on pandas indexing, NumPy array operations, and common Type/Key errors. Guidance emphasizes minimal examples, error interpretation, and idiomatic fixes.</description>
+  </example>
+  <example label="B">
+    <sample_queries>
+      <item>Fetch data from a REST API with bearer token using fetch()</item>
+      <item>Axios POST returns 401 — how to send JWT header?</item>
+      <item>Handle 429 rate limit responses and retries in JavaScript</item>
+    </sample_queries>
+    <title>JavaScript REST API usage and authentication</title>
+    <description>Requests cover calling APIs from the browser/node, attaching JWT/Bearer auth, handling status codes (401/429), and implementing retry/backoff. Code examples use fetch and Axios patterns.</description>
+  </example>
+  <example label="C">
+    <sample_queries>
+      <item>SQL: Count distinct users per day with LEFT JOIN</item>
+      <item>GROUP BY with conditional SUM over multiple categories</item>
+      <item>Window function to find top N products per region</item>
+    </sample_queries>
+    <title>SQL analytics with joins, aggregates, and windows</title>
+    <description>Analytical SQL tasks combining joins, GROUP BY, conditional aggregation, and window functions (RANK/ROW_NUMBER). Solutions emphasize readable CTEs and correct grouping semantics.</description>
+  </example>
+  <example label="D">
+    <sample_queries>
+      <item>Fine-tune a small Llama model on custom Q&amp;A data</item>
+      <item>Why is my training loss NaN in PyTorch mixed precision?</item>
+      <item>Compare F1 and accuracy for imbalanced classification</item>
+    </sample_queries>
+    <title>ML model training and evaluation: PyTorch, metrics, fine-tuning</title>
+    <description>Practical ML workflows including dataset prep, training stability (overflow/AMP), and metric selection for imbalanced tasks. Advice centers on troubleshooting training loops, schedulers, and evaluation protocols.</description>
+  </example>
+  <example label="E">
+    <sample_queries>
+      <item>Docker build ignores .dockerignore; how to reduce image size?</item>
+      <item>Nginx reverse proxy 502 when forwarding to Gunicorn</item>
+      <item>Kubernetes CrashLoopBackOff reading config from secrets</item>
+    </sample_queries>
+    <title>DevOps containerization and deployment: Docker, Nginx, Kubernetes</title>
+    <description>Infra topics around container images, reverse proxies, and k8s deployments. Solutions cover Docker layering, proper proxy buffers/timeouts, health checks, and Secret/ConfigMap mounts.</description>
+  </example>
+  <example label="F">
+    <sample_queries>
+      <item>Detect and prevent jailbreak attempts in system prompts</item>
+      <item>Red-team prompts to bypass safety filters — show examples</item>
+      <item>Classify prompts by risk category (self-harm, malware, PII)</item>
+    </sample_queries>
+    <title>LLM safety and prompt hardening: jailbreak detection and taxonomy</title>
+    <description>Safety and governance tasks including jailbreak detection, red-teaming, and content risk classification. Emphasis on policies, refusal guidelines, and robust prompt templates.</description>
+  </example>
+  <example label="G">
+    <sample_queries>
+      <item>Create a Seaborn heatmap with annotations and custom colorbar</item>
+      <item>Altair interactive chart: filter by dropdown, highlight selection</item>
+      <item>Plotly Express facet grid with per-facet y-axis</item>
+    </sample_queries>
+    <title>Data visualization recipes: Seaborn, Altair, Plotly</title>
+    <description>Visualization tasks across common Python libraries, focusing on annotated heatmaps, interactive selections, and faceting. Guidance prioritizes clear legends, accessibility, and aesthetics.</description>
+  </example>
+  <example label="H">
+    <sample_queries>
+      <item>Translate product descriptions to Spanish and preserve HTML tags</item>
+      <item>Localize date/number formats for German users</item>
+      <item>Glossary-enforced translation for brand terms</item>
+    </sample_queries>
+    <title>Multilingual translation and localization with formatting constraints</title>
+    <description>Translation requests with constraints on placeholders/HTML and locale-aware formatting. Recommendations include tag-aware translation and glossary/terminology control.</description>
+  </example>
+</few_shot_examples>
 """
 
 
@@ -113,6 +122,8 @@ class ClusterSummarizer:
         api_key: Optional[str] = None,
         concurrency: int = 4,
         rpm: Optional[int] = None,
+        embedding_model: str = "all-MiniLM-L6-v2",
+        embedding_provider: str = "sentence-transformers",
     ):
         """Initialize the summarizer.
 
@@ -123,10 +134,14 @@ class ClusterSummarizer:
             api_key: API key for the provider (or set env var ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
             concurrency: Number of concurrent LLM requests
             rpm: Optional requests-per-minute rate limit (global across tasks)
+            embedding_model: Embedding model for query selection (should match clustering model)
+            embedding_provider: Provider for embeddings (sentence-transformers, openai, etc.)
         """
         self.model = model
         self.concurrency = max(1, int(concurrency))
         self.rpm = rpm if (rpm is None or rpm > 0) else None
+        self.embedding_model = embedding_model
+        self.embedding_provider = embedding_provider
 
         # Initialize instructor client with full model string
         if api_key:
@@ -158,37 +173,39 @@ class ClusterSummarizer:
         # Select a representative and diverse sample of queries
         sampled = self._select_representative_queries(cluster_queries, max_queries)
 
-        # Build prompt with clearer, more specific guidance
-        queries_text = "\n".join(f"{i + 1}. {q[:220]}" for i, q in enumerate(sampled))
+        # Build XML-formatted prompt
+        queries_xml = "\n".join(
+            f"      <query idx=\"{i + 1}\"><![CDATA[{q[:220]}]]></query>" for i, q in enumerate(sampled)
+        )
 
-        prompt = f"""You are analyzing a cluster of user queries from a conversational AI dataset.
-
-{EXAMPLES_PROMPT}
-
-TARGET CLUSTER QUERIES:
-<queries>
-{queries_text}
-</queries>
-
-<contrast_block>
-{contrast_block}
-</contrast_block>
-
-Analyze these queries and provide:
-1) SHORT TITLE (5-10 words):
-   - Include domain + action + subject (e.g., "Python bug debugging: pandas indexing errors").
-   - Prefer concrete nouns/verbs over generic words. Avoid "general", "misc", "various".
-   - If primarily code-related, prefix with the language or framework.
-2) DESCRIPTION (2-3 sentences):
-   - Summarize the most common intents and tasks.
-   - Mention notable constraints: error fixing, homework help, API usage, jailbreak attempts, evaluation prompts, etc.
-   - Call out specific tools, libraries, datasets, file types, or languages if prominent.
-   - If the cluster mixes subtopics, name the 1-2 most frequent subthemes succinctly.
-   - If queries are dominated by a single template or boilerplate prefix, name that pattern.
-   - If placeholders/redactions (e.g., NAME_1/NAME_2, <URL>, [MASK]) are prevalent, mention this trait.
-   - If the cluster is greetings-only or meta/test prompts, state that explicitly.
-
-Write concise, specific, and informative outputs focused on what makes this cluster distinct. Keep the title in English."""
+        prompt = f"""
+<summary_task>
+  <cluster id="{cluster_id}">
+    <stats total_queries="{len(cluster_queries)}" sample_count="{len(sampled)}" />
+    <target_queries>
+{queries_xml}
+    </target_queries>
+  </cluster>
+  <instructions>
+    <title_guidelines>
+      <rule>5-10 words; include domain + action + subject.</rule>
+      <rule>Prefer concrete nouns/verbs; avoid generic terms ("general", "misc").</rule>
+      <rule>If code-heavy, prefix with language or framework.</rule>
+      <rule>Keep the title in English.</rule>
+    </title_guidelines>
+    <description_guidelines>
+      <rule>Summarize common intents and tasks.</rule>
+      <rule>Mention constraints: error fixing, homework help, API usage, jailbreak attempts, evaluation prompts.</rule>
+      <rule>Call out tools/libraries/datasets/languages if prominent.</rule>
+      <rule>If mixed topics, name top 1–2 subthemes.</rule>
+      <rule>Name dominant template/boilerplate patterns.</rule>
+      <rule>Mention placeholders/redactions (NAME_1/NAME_2, &lt;URL&gt;, [MASK]) if prevalent.</rule>
+      <rule>State explicitly if greetings-only or meta/test prompts.</rule>
+    </description_guidelines>
+  </instructions>
+  <output>Return fields: title, description.</output>
+</summary_task>
+"""
 
         try:
             # Call LLM with structured output - instructor handles model internally
@@ -357,7 +374,7 @@ Write concise, specific, and informative outputs focused on what makes this clus
             if len(nbr_idx) == 0:
                 neighbor_context[cid] = ""
                 continue
-            block_lines.append("CONTRASTIVE NEIGHBORS (do not summarize these; use only to clarify distinctions):")
+            block_lines.append("<contrastive_neighbors>")
             for j in nbr_idx:
                 nid = id_list[j]
                 nsize = sizes_map.get(nid, 0)
@@ -369,9 +386,10 @@ Write concise, specific, and informative outputs focused on what makes this clus
                         if len(line) > 180:
                             line = line[:177] + "..."
                         exs_fmt.append(line)
-                    block_lines.append(f"Neighbor (Cluster {nid}, size≈{nsize}):")
+                    block_lines.append(f"  <neighbor cluster_id=\"{nid}\" size=\"{nsize}\">")
                     for ex in exs_fmt:
-                        block_lines.append(f"- {ex}")
+                        block_lines.append(f"    <example><![CDATA[{ex}]]></example>")
+                    block_lines.append("  </neighbor>")
                 elif use_keywords and Xc is not None and vec is not None:
                     row = Xc[j]
                     if row.nnz:
@@ -382,8 +400,11 @@ Write concise, specific, and informative outputs focused on what makes this clus
                         vocab = vec.get_feature_names_out()
                         kws = [vocab[t] for t in top_idx]
                         block_lines.append(
-                            f"Neighbor (Cluster {nid}, size≈{nsize}) keywords: " + ", ".join(kws)
+                            f"  <neighbor cluster_id=\"{nid}\" size=\"{nsize}\"><keywords>"
+                            + ", ".join(kws)
+                            + "</keywords></neighbor>"
                         )
+            block_lines.append("</contrastive_neighbors>")
             neighbor_context[cid] = "\n".join(block_lines) if block_lines else ""
 
         async def worker(
@@ -444,39 +465,39 @@ Write concise, specific, and informative outputs focused on what makes this clus
         # Select a representative and diverse sample of queries
         sampled = self._select_representative_queries(cluster_queries, max_queries)
 
-        queries_text = "\n".join(f"{i + 1}. {q[:220]}" for i, q in enumerate(sampled))
-        prompt = f"""You are analyzing a cluster of user queries from a conversational AI dataset.
-
-<queries>
-{queries_text}
-</queries>
-
-<contrast_block>
-{contrast_block}
-</contrast_block>
-
-{EXAMPLES_PROMPT}
-
-TARGET CLUSTER QUERIES:
-{queries_text}
-
-{contrast_block}
-
-Analyze these queries and provide:
-1) SHORT TITLE (5-10 words):
-   - Include domain + action + subject (e.g., "Python bug debugging: pandas indexing errors").
-   - Prefer concrete nouns/verbs over generic words. Avoid "general", "misc", "various".
-   - If primarily code-related, prefix with the language or framework.
-2) DESCRIPTION (2-3 sentences):
-   - Summarize the most common intents and tasks.
-   - Mention notable constraints: error fixing, homework help, API usage, jailbreak attempts, evaluation prompts, etc.
-   - Call out specific tools, libraries, datasets, file types, or languages if prominent.
-   - If the cluster mixes subtopics, name the 1-2 most frequent subthemes succinctly.
-   - If queries are dominated by a single template or boilerplate prefix, name that pattern.
-   - If placeholders/redactions (e.g., NAME_1/NAME_2, <URL>, [MASK]) are prevalent, mention this trait.
-   - If the cluster is greetings-only or meta/test prompts, state that explicitly.
-
-Write concise, specific, and informative outputs focused on what makes this cluster distinct. Keep the title in English."""
+        # Build XML-formatted prompt
+        queries_xml = "\n".join(
+            f"      <query idx=\"{i + 1}\"><![CDATA[{q[:220]}]]></query>" for i, q in enumerate(sampled)
+        )
+        prompt = f"""
+<summary_task>
+  <cluster id="{cluster_id}">
+    <stats total_queries="{len(cluster_queries)}" sample_count="{len(sampled)}" />
+    <target_queries>
+{queries_xml}
+    </target_queries>
+  </cluster>
+  {contrast_block}
+  <instructions>
+    <title_guidelines>
+      <rule>5-10 words; include domain + action + subject.</rule>
+      <rule>Prefer concrete nouns/verbs; avoid generic terms ("general", "misc").</rule>
+      <rule>If code-heavy, prefix with language or framework.</rule>
+      <rule>Keep the title in English.</rule>
+    </title_guidelines>
+    <description_guidelines>
+      <rule>Summarize common intents and tasks.</rule>
+      <rule>Mention constraints: error fixing, homework help, API usage, jailbreak attempts, evaluation prompts.</rule>
+      <rule>Call out tools/libraries/datasets/languages if prominent.</rule>
+      <rule>If mixed topics, name top 1–2 subthemes.</rule>
+      <rule>Name dominant template/boilerplate patterns.</rule>
+      <rule>Mention placeholders/redactions (NAME_1/NAME_2, &lt;URL&gt;, [MASK]) if prevalent.</rule>
+      <rule>State explicitly if greetings-only or meta/test prompts.</rule>
+    </description_guidelines>
+  </instructions>
+  <output>Return fields: title, description.</output>
+</summary_task>
+"""
 
         response = await self.async_client.chat.completions.create(
             response_model=ClusterSummaryResponse,
@@ -523,17 +544,14 @@ Write concise, specific, and informative outputs focused on what makes this clus
         if len(originals) > cap:
             originals = originals[:cap]
 
-        # Embed using available provider (OpenAI if key, else sentence-transformers)
+        # Embed using configured embedding model (matches clustering model)
         try:
-            import os
             from .embeddings import EmbeddingGenerator
 
-            provider = "openai" if os.getenv("OPENAI_API_KEY") else "sentence-transformers"
-            model_name = (
-                "text-embedding-3-small" if provider == "openai" else "all-MiniLM-L6-v2"
-            )
             eg = EmbeddingGenerator(
-                model_name=model_name, provider=provider, concurrency=self.concurrency
+                model_name=self.embedding_model,
+                provider=self.embedding_provider,
+                concurrency=self.concurrency
             )
             E = eg.generate_embeddings(originals, show_progress=False)
         except Exception:
