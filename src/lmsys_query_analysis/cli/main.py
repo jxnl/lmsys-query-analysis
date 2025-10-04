@@ -43,14 +43,21 @@ def load(
     ),
     db_batch_size: int = typer.Option(5000, help="DB insert batch size"),
     streaming: bool = typer.Option(False, help="Use streaming dataset iteration"),
-    no_pragmas: bool = typer.Option(False, help="Disable SQLite PRAGMA speedups during load"),
+    no_pragmas: bool = typer.Option(
+        False, help="Disable SQLite PRAGMA speedups during load"
+    ),
     force_reload: bool = typer.Option(
         False, "--force-reload", help="Reload existing queries (skip duplicate check)"
     ),
 ):
     """Download and load LMSYS-1M dataset into SQLite."""
     try:
-        logger.info("Starting data load: limit=%s, use_chroma=%s, force_reload=%s", limit, use_chroma, force_reload)
+        logger.info(
+            "Starting data load: limit=%s, use_chroma=%s, force_reload=%s",
+            limit,
+            use_chroma,
+            force_reload,
+        )
         db = get_db(db_path)
         chroma = get_chroma(chroma_path) if use_chroma else None
 
@@ -92,8 +99,12 @@ def cluster_kmeans(
     n_clusters: int = typer.Option(200, help="Number of clusters"),
     description: str = typer.Option("", help="Description of this clustering run"),
     db_path: str = typer.Option(None, help="Database path"),
-    embedding_model: str = typer.Option("text-embedding-3-small", help="Embedding model"),
-    embedding_provider: str = typer.Option("openai", help="'sentence-transformers' or 'openai'"),
+    embedding_model: str = typer.Option(
+        "text-embedding-3-small", help="Embedding model"
+    ),
+    embedding_provider: str = typer.Option(
+        "openai", help="'sentence-transformers' or 'openai'"
+    ),
     embed_batch_size: int = typer.Option(32, help="Embedding encode batch size"),
     chunk_size: int = typer.Option(5000, help="DB iteration chunk size"),
     mb_batch_size: int = typer.Option(4096, help="MiniBatchKMeans batch_size"),
@@ -128,9 +139,13 @@ def cluster_kmeans(
 
         if run_id:
             logger.info("Clustering completed: run_id=%s", run_id)
-            console.print(f"[cyan]Use 'lmsys inspect {run_id} <cluster_id>' to explore clusters[/cyan]")
+            console.print(
+                f"[cyan]Use 'lmsys inspect {run_id} <cluster_id>' to explore clusters[/cyan]"
+            )
             if use_chroma and chroma:
-                console.print(f"[cyan]Use 'lmsys search --run-id {run_id} <query>' to search cluster summaries[/cyan]")
+                console.print(
+                    f"[cyan]Use 'lmsys search --run-id {run_id} <query>' to search cluster summaries[/cyan]"
+                )
     except Exception as e:
         logger.exception("KMeans clustering failed: %s", e)
         raise typer.Exit(1)
@@ -141,13 +156,19 @@ def cluster_hdbscan(
     description: str = typer.Option("", help="Description of this clustering run"),
     db_path: str = typer.Option(None, help="Database path"),
     embedding_model: str = typer.Option("all-MiniLM-L6-v2", help="Embedding model"),
-    embedding_provider: str = typer.Option("sentence-transformers", help="'sentence-transformers' or 'openai'"),
+    embedding_provider: str = typer.Option(
+        "sentence-transformers", help="'sentence-transformers' or 'openai'"
+    ),
     embed_batch_size: int = typer.Option(32, help="Embedding encode batch size"),
     chunk_size: int = typer.Option(5000, help="DB iteration chunk size"),
     min_cluster_size: int = typer.Option(25, help="HDBSCAN minimum cluster size"),
-    min_samples: int = typer.Option(None, help="HDBSCAN min_samples (default: min_cluster_size)"),
+    min_samples: int = typer.Option(
+        None, help="HDBSCAN min_samples (default: min_cluster_size)"
+    ),
     epsilon: float = typer.Option(0.0, help="HDBSCAN cluster_selection_epsilon"),
-    metric: str = typer.Option("euclidean", help="Distance metric: euclidean or cosine"),
+    metric: str = typer.Option(
+        "euclidean", help="Distance metric: euclidean or cosine"
+    ),
     use_chroma: bool = typer.Option(False, help="Enable ChromaDB"),
     chroma_path: str = typer.Option(None, help="ChromaDB path"),
 ):
@@ -180,9 +201,13 @@ def cluster_hdbscan(
 
         if run_id:
             logger.info("Clustering completed: run_id=%s", run_id)
-            console.print(f"[cyan]Use 'lmsys inspect {run_id} <cluster_id>' to explore clusters[/cyan]")
+            console.print(
+                f"[cyan]Use 'lmsys inspect {run_id} <cluster_id>' to explore clusters[/cyan]"
+            )
             if use_chroma and chroma:
-                console.print(f"[cyan]Use 'lmsys search --run-id {run_id} <query>' to search cluster summaries[/cyan]")
+                console.print(
+                    f"[cyan]Use 'lmsys search --run-id {run_id} <query>' to search cluster summaries[/cyan]"
+                )
     except Exception as e:
         logger.exception("HDBSCAN clustering failed: %s", e)
         raise typer.Exit(1)
@@ -267,7 +292,9 @@ def list(
 @app.command()
 def runs(
     db_path: str = typer.Option(None, help="Database path"),
-    latest: bool = typer.Option(False, "--latest", help="Show only the most recent run"),
+    latest: bool = typer.Option(
+        False, "--latest", help="Show only the most recent run"
+    ),
 ):
     """List all clustering runs."""
     try:
@@ -323,6 +350,10 @@ def list_clusters(
     run_id: str = typer.Argument(..., help="Run ID to list clusters for"),
     db_path: str = typer.Option(None, help="Database path"),
     limit: int = typer.Option(None, help="Limit number of clusters to show"),
+    show_examples: int = typer.Option(
+        0, help="Show up to N example queries per cluster"
+    ),
+    example_width: int = typer.Option(80, help="Max characters per example query"),
 ):
     """List all clusters for a run with their titles and descriptions."""
     try:
@@ -336,7 +367,9 @@ def list_clusters(
             statement = (
                 select(ClusterSummary)
                 .where(ClusterSummary.run_id == run_id)
-                .order_by(ClusterSummary.num_queries.desc(), ClusterSummary.cluster_id.asc())
+                .order_by(
+                    ClusterSummary.num_queries.desc(), ClusterSummary.cluster_id.asc()
+                )
             )
             if limit:
                 statement = statement.limit(limit)
@@ -355,18 +388,50 @@ def list_clusters(
             table.add_column("Title", style="yellow", width=40)
             table.add_column("Queries", style="green", width=8)
             table.add_column("Description", style="white", width=60)
+            if show_examples and show_examples > 0:
+                table.add_column("Examples", style="white", width=example_width + 6)
 
             for summary in summaries:
-                table.add_row(
+                row = [
                     str(summary.cluster_id),
                     summary.title or "No title",
                     str(summary.num_queries) if summary.num_queries else "?",
                     (summary.description[:57] + "...")
                     if summary.description and len(summary.description) > 60
                     else (summary.description or "No description"),
-                )
+                ]
+
+                if show_examples and show_examples > 0:
+                    reps = summary.representative_queries or []
+                    examples = reps[:show_examples]
+                    # Trim each example and keep first line only for compactness
+                    formatted = []
+                    for ex in examples:
+                        ex = ex.splitlines()[0].strip()
+                        if len(ex) > example_width:
+                            ex = ex[: example_width - 3] + "..."
+                        formatted.append("- " + ex)
+                    row.append("\n".join(formatted) if formatted else "")
+
+                table.add_row(*row)
 
             console.print(table)
+            # Also print examples as plain lines to ensure visibility in narrow terminals
+            if show_examples and show_examples > 0:
+                console.print("\n[bold cyan]Examples per cluster[/bold cyan]")
+                for summary in summaries:
+                    reps = summary.representative_queries or []
+                    if not reps:
+                        continue
+                    console.print(
+                        f"[yellow]Cluster {summary.cluster_id}[/yellow] — {summary.title or ''}"
+                    )
+                    for ex in reps[:show_examples]:
+                        ex_line = ex.splitlines()[0].strip()
+                        if len(ex_line) > example_width:
+                            ex_line = ex_line[: example_width - 3] + "..."
+                        console.print(f"  - {ex_line}")
+
             console.print(f"\n[cyan]Total: {len(summaries)} clusters[/cyan]")
 
         finally:
@@ -381,9 +446,7 @@ def list_clusters(
 def summarize(
     run_id: str = typer.Argument(..., help="Run ID to summarize"),
     cluster_id: int = typer.Option(None, help="Specific cluster to summarize"),
-    model: str = typer.Option(
-        "openai/gpt-5-nano", help="LLM model (provider/model)"
-    ),
+    model: str = typer.Option("openai/gpt-5", help="LLM model (provider/model)"),
     max_queries: int = typer.Option(50, help="Max queries to send to LLM per cluster"),
     concurrency: int = typer.Option(4, help="Parallel LLM calls for summarization"),
     rpm: int = typer.Option(None, help="Optional requests-per-minute rate limit"),
@@ -736,6 +799,7 @@ def search(
             logger.info("Searching queries: n_results=%s", n_results)
             # Explicitly embed query to ensure consistency with stored vectors
             from ..clustering.embeddings import EmbeddingGenerator
+
             eg = EmbeddingGenerator(model_name=embedding_model)
             eg.load_model()
             q_emb = eg.model.encode(
@@ -785,6 +849,7 @@ def search(
             # Use the run's embedding model if available
             from ..db.models import ClusteringRun
             from sqlmodel import select
+
             search_model = embedding_model
             if run_id:
                 db = get_db(None)
@@ -796,6 +861,7 @@ def search(
                         search_model = run.parameters["embedding_model"]
 
             from ..clustering.embeddings import EmbeddingGenerator
+
             eg = EmbeddingGenerator(model_name=search_model)
             eg.load_model()
             q_emb = eg.model.encode(
@@ -850,30 +916,28 @@ def search(
 def clear(
     db_path: str = typer.Option(None, help="Database path"),
     chroma_path: str = typer.Option(None, help="ChromaDB path"),
-    confirm: bool = typer.Option(
-        False, "--yes", "-y", help="Skip confirmation prompt"
-    ),
+    confirm: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
 ):
     """Clear all data from SQLite database and ChromaDB."""
     import shutil
     from pathlib import Path
-    
+
     try:
         db = get_db(db_path)
         chroma = get_chroma(chroma_path)
-        
+
         # Show what will be deleted
         console.print("[yellow]This will delete:[/yellow]")
         console.print(f"  - SQLite database: {db.db_path}")
         console.print(f"  - ChromaDB data: {chroma.persist_directory}")
-        
+
         # Confirm unless --yes flag is used
         if not confirm:
             response = typer.confirm("Are you sure you want to continue?")
             if not response:
                 console.print("[green]Cancelled[/green]")
                 raise typer.Exit(0)
-        
+
         # Delete SQLite database
         db_file = Path(db.db_path)
         if db_file.exists():
@@ -881,17 +945,21 @@ def clear(
             console.print(f"[green]Deleted SQLite database: {db.db_path}[/green]")
         else:
             console.print(f"[yellow]SQLite database not found: {db.db_path}[/yellow]")
-        
+
         # Delete ChromaDB directory
         chroma_dir = Path(chroma.persist_directory)
         if chroma_dir.exists():
             shutil.rmtree(chroma_dir)
-            console.print(f"[green]Deleted ChromaDB data: {chroma.persist_directory}[/green]")
+            console.print(
+                f"[green]Deleted ChromaDB data: {chroma.persist_directory}[/green]"
+            )
         else:
-            console.print(f"[yellow]ChromaDB directory not found: {chroma.persist_directory}[/yellow]")
-        
+            console.print(
+                f"[yellow]ChromaDB directory not found: {chroma.persist_directory}[/yellow]"
+            )
+
         console.print("[green]Database cleared successfully[/green]")
-        
+
     except Exception as e:
         logger.exception("Clear failed: %s", e)
         raise typer.Exit(1)
@@ -917,7 +985,13 @@ def backfill_chroma(
         from sqlmodel import select
         from sqlalchemy import func
         from ..clustering.embeddings import EmbeddingGenerator
-        from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+        from rich.progress import (
+            Progress,
+            SpinnerColumn,
+            TextColumn,
+            BarColumn,
+            TaskProgressColumn,
+        )
 
         db = get_db(db_path)
         chroma = get_chroma(chroma_path)
@@ -925,23 +999,31 @@ def backfill_chroma(
         with db.get_session() as session:
             # Count total queries for progress
             count_result = session.exec(select(func.count()).select_from(Query)).one()
-            total_queries = int(count_result[0] if isinstance(count_result, tuple) else count_result)
+            total_queries = int(
+                count_result[0] if isinstance(count_result, tuple) else count_result
+            )
             if total_queries == 0:
                 console.print("[yellow]No queries found in database[/yellow]")
                 return
 
-            console.print(f"[green]Backfilling embeddings for up to {total_queries} queries[/green]")
+            console.print(
+                f"[green]Backfilling embeddings for up to {total_queries} queries[/green]"
+            )
 
             def iter_query_chunks():
                 offset = 0
                 while offset < total_queries:
-                    rows = session.exec(select(Query).offset(offset).limit(chunk_size)).all()
+                    rows = session.exec(
+                        select(Query).offset(offset).limit(chunk_size)
+                    ).all()
                     if not rows:
                         break
                     yield rows
                     offset += len(rows)
 
-            eg = EmbeddingGenerator(model_name=embedding_model, provider=embedding_provider)
+            eg = EmbeddingGenerator(
+                model_name=embedding_model, provider=embedding_provider
+            )
             # Load local model early if sentence-transformers
             if embedding_provider == "sentence-transformers":
                 eg.load_model()
@@ -956,7 +1038,9 @@ def backfill_chroma(
                 BarColumn(),
                 TaskProgressColumn(),
             ) as progress:
-                scan_task = progress.add_task("[cyan]Scanning and backfilling...", total=total_queries)
+                scan_task = progress.add_task(
+                    "[cyan]Scanning and backfilling...", total=total_queries
+                )
 
                 for chunk in iter_query_chunks():
                     ids = [q.id for q in chunk]
@@ -970,7 +1054,11 @@ def backfill_chroma(
                         to_embed_texts = [texts[i] for i in missing_idx]
 
                         # Generate embeddings with visible progress handled by generator
-                        emb = eg.generate_embeddings(to_embed_texts, batch_size=embed_batch_size, show_progress=True)
+                        emb = eg.generate_embeddings(
+                            to_embed_texts,
+                            batch_size=embed_batch_size,
+                            show_progress=True,
+                        )
 
                         metadata = [
                             {
@@ -990,7 +1078,11 @@ def backfill_chroma(
                         backfilled += len(missing_ids)
 
                     scanned += len(chunk)
-                    progress.update(scan_task, advance=len(chunk), description=f"[cyan]Scanning and backfilling ({scanned}/{total_queries})...")
+                    progress.update(
+                        scan_task,
+                        advance=len(chunk),
+                        description=f"[cyan]Scanning and backfilling ({scanned}/{total_queries})...",
+                    )
 
             elapsed = time.perf_counter() - start
             already_present = max(0, scanned - backfilled)
@@ -1010,6 +1102,7 @@ def backfill_chroma(
     except Exception as e:
         logger.exception("Backfill failed: %s", e)
         raise typer.Exit(1)
+
 
 if __name__ == "__main__":
     app()
