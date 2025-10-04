@@ -97,6 +97,7 @@ LLM-generated summaries for clusters. **Supports multiple summary runs** to comp
 - **run_id** (str): Foreign key to ClusteringRun
 - **cluster_id** (int): Cluster number
 - **summary_run_id** (str): Unique ID for this summarization (e.g., "summary-claude-sonnet-4-5-2025-20251004-124530")
+- **alias** (str | None): Friendly name for this summary run (e.g., "claude-v1", "gpt4-best", "production")
 - **title** (str | None): Short cluster title
 - **description** (str | None): Detailed description
 - **summary** (str | None): Combined title + description (backward compat)
@@ -115,6 +116,7 @@ summary = ClusterSummary(
     run_id="kmeans-100-20251003-123456",
     cluster_id=5,
     summary_run_id="summary-claude-sonnet-4-5-2025-20251004-124530",
+    alias="claude-v1",  # Friendly name for easy reference
     title="CSS Layout Questions",
     description="Queries about CSS positioning, flexbox, and grid layouts",
     num_queries=150,
@@ -129,11 +131,12 @@ summary = ClusterSummary(
 You can create multiple summaries for the same cluster using different models:
 
 ```python
-# Compare Claude and GPT-4 summaries
+# Compare Claude and GPT-4 summaries using aliases
 claude_summary = ClusterSummary(
     run_id="kmeans-100-20251003-123456",
     cluster_id=5,
-    summary_run_id="summary-claude-v1",
+    summary_run_id="summary-claude-sonnet-4-5-2025-20251004-124530",
+    alias="claude-v1",  # Easy to remember!
     model="anthropic/claude-sonnet-4-5-20250929",
     ...
 )
@@ -141,7 +144,8 @@ claude_summary = ClusterSummary(
 gpt4_summary = ClusterSummary(
     run_id="kmeans-100-20251003-123456",
     cluster_id=5,
-    summary_run_id="summary-gpt4-v1",
+    summary_run_id="summary-gpt-4-20251004-124600",
+    alias="gpt4-test",  # Easy to remember!
     model="openai/gpt-4",
     ...
 )
@@ -189,6 +193,7 @@ erDiagram
         string run_id FK
         int cluster_id
         string summary_run_id
+        string alias
         string title
         string description
         string summary
@@ -224,10 +229,17 @@ queries = session.exec(statement).all()
 from lmsys_query_analysis.db.models import ClusterSummary
 from sqlmodel import select
 
-# Get all summaries for a specific summary run
+# Get all summaries for a specific summary run by alias (easiest!)
 statement = select(ClusterSummary).where(
     ClusterSummary.run_id == "kmeans-100-20251003-123456",
-    ClusterSummary.summary_run_id == "summary-claude-v1"
+    ClusterSummary.alias == "claude-v1"
+)
+summaries = session.exec(statement).all()
+
+# Or by summary_run_id
+statement = select(ClusterSummary).where(
+    ClusterSummary.run_id == "kmeans-100-20251003-123456",
+    ClusterSummary.summary_run_id == "summary-claude-sonnet-4-5-2025-20251004-124530"
 )
 summaries = session.exec(statement).all()
 
@@ -237,23 +249,23 @@ statement = select(ClusterSummary).where(
 ).order_by(ClusterSummary.generated_at.desc()).limit(1)
 latest_summary = session.exec(statement).first()
 
-# Get clusters sorted by size
+# Get clusters sorted by size for a specific alias
 statement = select(ClusterSummary).where(
     ClusterSummary.run_id == "kmeans-100-20251003-123456",
-    ClusterSummary.summary_run_id == "summary-claude-v1"
+    ClusterSummary.alias == "claude-v1"
 ).order_by(ClusterSummary.num_queries.desc())
 top_clusters = session.exec(statement).all()
 
-# Compare summaries from different models
+# Compare summaries from different models by alias
 claude_stmt = select(ClusterSummary).where(
     ClusterSummary.run_id == "kmeans-100-20251003-123456",
     ClusterSummary.cluster_id == 5,
-    ClusterSummary.model.like("%claude%")
+    ClusterSummary.alias == "claude-v1"
 )
 gpt4_stmt = select(ClusterSummary).where(
     ClusterSummary.run_id == "kmeans-100-20251003-123456",
     ClusterSummary.cluster_id == 5,
-    ClusterSummary.model.like("%gpt-4%")
+    ClusterSummary.alias == "gpt4-test"
 )
 ```
 

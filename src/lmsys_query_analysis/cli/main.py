@@ -350,6 +350,7 @@ def list_clusters(
     run_id: str = typer.Argument(..., help="Run ID to list clusters for"),
     db_path: str = typer.Option(None, help="Database path"),
     summary_run_id: str = typer.Option(None, help="Filter by specific summary run ID"),
+    alias: str = typer.Option(None, help="Filter by summary alias (e.g., 'claude-v1')"),
     limit: int = typer.Option(None, help="Limit number of clusters to show"),
     show_examples: int = typer.Option(
         0, help="Show up to N example queries per cluster"
@@ -373,11 +374,13 @@ def list_clusters(
                 )
             )
 
-            # Filter by summary_run_id if provided
+            # Filter by summary_run_id or alias if provided
             if summary_run_id:
                 statement = statement.where(ClusterSummary.summary_run_id == summary_run_id)
+            elif alias:
+                statement = statement.where(ClusterSummary.alias == alias)
             else:
-                # If no summary_run_id specified, get the most recent one
+                # If no summary_run_id or alias specified, get the most recent one
                 from sqlalchemy import func
                 latest_stmt = (
                     select(ClusterSummary.summary_run_id)
@@ -603,12 +606,14 @@ def summarize(
                     ]
                     existing.model = model
                     existing.parameters = summary_params
+                    existing.alias = alias
                 else:
                     # Create new
                     new_summary = ClusterSummary(
                         run_id=run_id,
                         cluster_id=cid,
                         summary_run_id=summary_run_id,
+                        alias=alias,
                         title=summary_data["title"],
                         description=summary_data["description"],
                         summary=f"{summary_data['title']}\n\n{summary_data['description']}",

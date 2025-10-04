@@ -118,19 +118,18 @@ The summarization system now supports **multiple summary runs** for the same clu
 - Iterate on prompts without losing previous results
 - Track which parameters produced the best summaries
 
-Each summary run is uniquely identified by a `summary_run_id` (auto-generated as `summary-{model}-{timestamp}`).
+Each summary run is uniquely identified by a `summary_run_id` (auto-generated as `summary-{model}-{timestamp}`) and can have a friendly `alias` for easy reference.
 
 ```bash
-# Generate titles and descriptions for all clusters
-# Auto-generates summary_run_id like: summary-claude-sonnet-4-5-2025-20251004-124530
-uv run lmsys summarize <RUN_ID>
+# Generate titles and descriptions with a friendly alias
+uv run lmsys summarize <RUN_ID> --alias "claude-v1"
 
 # Use different LLM models (creates separate summary runs)
-uv run lmsys summarize <RUN_ID> --model "openai/gpt-4"
-uv run lmsys summarize <RUN_ID> --model "groq/llama-3.1-8b-instant"
+uv run lmsys summarize <RUN_ID> --model "openai/gpt-4" --alias "gpt4-test"
+uv run lmsys summarize <RUN_ID> --model "groq/llama-3.1-8b-instant" --alias "llama-fast"
 
 # Custom summary run ID for easy reference
-uv run lmsys summarize <RUN_ID> --summary-run-id "claude-v1"
+uv run lmsys summarize <RUN_ID> --summary-run-id "claude-v1" --alias "my-best"
 
 # Summarize specific cluster only
 uv run lmsys summarize <RUN_ID> --cluster-id 5
@@ -156,7 +155,10 @@ uv run lmsys runs --latest
 # List clusters with LLM-generated titles (shows latest summary run by default)
 uv run lmsys list-clusters <RUN_ID>
 
-# View specific summary run
+# View specific summary run by alias (easier!)
+uv run lmsys list-clusters <RUN_ID> --alias "claude-v1"
+
+# Or by summary run ID
 uv run lmsys list-clusters <RUN_ID> --summary-run-id "summary-claude-sonnet-4-5-2025-20251004-124530"
 
 # Limit results
@@ -200,6 +202,7 @@ Search uses explicit query embeddings to ensure consistency with stored vectors.
 
 **cluster_summaries** - LLM-generated summaries (supports multiple summary runs)
 - `run_id`, `cluster_id`, `summary_run_id` (unique per summarization)
+- `alias` (friendly name like "claude-v1", "gpt4-best")
 - `title`, `description`, `summary`, `num_queries`
 - `representative_queries` (JSON)
 - `model` (LLM used), `parameters` (JSON - summarization settings)
