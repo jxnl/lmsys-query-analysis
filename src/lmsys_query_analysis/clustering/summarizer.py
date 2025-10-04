@@ -163,16 +163,16 @@ class ClusterSummarizer:
 
         prompt = f"""You are analyzing a cluster of user queries from a conversational AI dataset.
 
-Cluster ID: {cluster_id}
-Total queries in cluster: {len(cluster_queries)}
-Sample queries shown: {len(sampled)}
-
 {EXAMPLES_PROMPT}
 
 TARGET CLUSTER QUERIES:
+<queries>
 {queries_text}
+</queries>
 
+<contrast_block>
 {contrast_block}
+</contrast_block>
 
 Analyze these queries and provide:
 1) SHORT TITLE (5-10 words):
@@ -447,9 +447,13 @@ Write concise, specific, and informative outputs focused on what makes this clus
         queries_text = "\n".join(f"{i + 1}. {q[:220]}" for i, q in enumerate(sampled))
         prompt = f"""You are analyzing a cluster of user queries from a conversational AI dataset.
 
-Cluster ID: {cluster_id}
-Total queries in cluster: {len(cluster_queries)}
-Sample queries shown: {len(sampled)}
+<queries>
+{queries_text}
+</queries>
+
+<contrast_block>
+{contrast_block}
+</contrast_block>
 
 {EXAMPLES_PROMPT}
 
@@ -489,71 +493,76 @@ Write concise, specific, and informative outputs focused on what makes this clus
     def _select_representative_queries(
         self, cluster_queries: List[str], max_queries: int
     ) -> List[str]:
-        """Select a diverse, representative subset of queries using TF-IDF + MMR.
+        """Select a diverse, representative subset of queries using embeddings + MMR.
 
-        - Deduplicates queries (case-insensitive, trimmed)
-        - Uses TF-IDF to compute a centroid of the cluster
-        - Applies Maximal Marginal Relevance (MMR) to balance relevance and diversity
+        - Deduplicate queries (case-insensitive, trimmed)
+        - Compute embeddings for a capped subset of queries
+        - Select k via centroid relevance + MMR for diversity
         """
         if not cluster_queries:
             return []
 
         # Normalize and deduplicate while preserving original text
         seen = set()
-        normalized: List[Tuple[str, str]] = []  # (original, key)
+        originals: List[str] = []
         for q in cluster_queries:
-            q = q.strip()
+            q = (q or "").strip()
             key = " ".join(q.lower().split())
             if key and key not in seen:
                 seen.add(key)
-                normalized.append((q, key))
+                originals.append(q)
 
-        originals = [o for o, _ in normalized]
         k = min(max_queries, len(originals))
         if k <= 0:
             return []
         if k >= len(originals):
             return originals
 
-        # Vectorize
-        vectorizer = TfidfVectorizer(
-            max_features=5000,
-            ngram_range=(1, 2),
-            min_df=1,
-            max_df=0.9,
-        )
-        X = vectorizer.fit_transform(originals)
+        # Cap number of items to embed for efficiency
+        cap = max(5 * k, 300)
+        if len(originals) > cap:
+            originals = originals[:cap]
 
-        # Centroid relevance (ensure dense ndarray, not np.matrix)
-        centroid = np.asarray(X.mean(axis=0)).ravel()
-        rel = cosine_similarity(X, centroid.reshape(1, -1)).ravel()
+        # Embed using available provider (OpenAI if key, else sentence-transformers)
+        try:
+            import os
+            from .embeddings import EmbeddingGenerator
 
-        # MMR selection
+            provider = "openai" if os.getenv("OPENAI_API_KEY") else "sentence-transformers"
+            model_name = (
+                "text-embedding-3-small" if provider == "openai" else "all-MiniLM-L6-v2"
+            )
+            eg = EmbeddingGenerator(
+                model_name=model_name, provider=provider, concurrency=self.concurrency
+            )
+            E = eg.generate_embeddings(originals, show_progress=False)
+        except Exception:
+            # As a last resort, fall back to a simple first-k selection
+            return originals[:k]
+
+        # Compute centroid relevance
+        centroid = E.mean(axis=0, keepdims=True)
+        rel = cosine_similarity(E, centroid).ravel()
+
+        # MMR selection in embedding space
         lambda_param = 0.7
         selected: List[int] = []
-        candidates = set(range(X.shape[0]))
+        candidates = set(range(E.shape[0]))
 
-        # Start with most relevant
         first = int(np.argmax(rel))
         selected.append(first)
         candidates.remove(first)
 
-        # Precompute pairwise similarities lazily as needed
         while len(selected) < k and candidates:
-            # Compute diversity term: max similarity to any selected
-            sims_to_selected = cosine_similarity(X[list(candidates)], X[selected]).max(
+            sims_to_selected = cosine_similarity(E[list(candidates)], E[selected]).max(
                 axis=1
             )
             candidate_list = list(candidates)
-            scores = (
-                lambda_param * rel[candidate_list]
-                - (1 - lambda_param) * sims_to_selected
-            )
+            scores = lambda_param * rel[candidate_list] - (1 - lambda_param) * sims_to_selected
             best_idx = int(np.argmax(scores))
             chosen = candidate_list[best_idx]
             selected.append(chosen)
             candidates.remove(chosen)
 
-        # Preserve original order lightly by sorting chosen by original index
         selected.sort()
         return [originals[i] for i in selected]
