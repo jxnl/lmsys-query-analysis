@@ -112,7 +112,7 @@ class ClusterSummarizer:
 
     def __init__(
         self,
-        model: str = "anthropic/claude-sonnet-4-5-20250929",
+        model: str = "openai/gpt-4o-mini",
         api_key: Optional[str] = None,
         concurrency: int = 40,
         rpm: Optional[int] = None,
@@ -121,8 +121,8 @@ class ClusterSummarizer:
 
         Args:
             model: Model in format "provider/model_name" (e.g.,
-                   "anthropic/claude-sonnet-4-5-20250929", "openai/gpt-4o",
-                   "groq/llama-3.1-8b-instant")
+                   "openai/gpt-4o-mini", "openai/gpt-4o",
+                   "anthropic/claude-sonnet-4-5-20250929", "groq/llama-3.1-8b-instant")
             api_key: API key for the provider (or set env var ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
             concurrency: Number of concurrent LLM requests
             rpm: Optional requests-per-minute rate limit (global across tasks)

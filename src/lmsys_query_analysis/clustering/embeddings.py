@@ -30,7 +30,7 @@ class EmbeddingGenerator:
         model_name: str = "text-embedding-3-small",
         provider: str = "openai",
         api_key: Optional[str] = None,
-        concurrency: int = 20,
+        concurrency: int = 100,
         request_timeout: float = 30.0,
     ):
         """Initialize embedding generator.

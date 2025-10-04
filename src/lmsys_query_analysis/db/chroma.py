@@ -151,7 +151,7 @@ class ChromaManager:
                 {
                     **meta,
                     "run_id": run_id,
-                    "cluster_id": cid,
+                    "cluster_id": int(cid),
                     "title": title,
                     "description": desc,
                 }
@@ -162,7 +162,7 @@ class ChromaManager:
         else:
             documents = summaries
             enriched_metadata = [
-                {**meta, "run_id": run_id, "cluster_id": cid}
+                {**meta, "run_id": run_id, "cluster_id": int(cid)}
                 for meta, cid in zip(metadata_list, cluster_ids)
             ]
 

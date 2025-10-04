@@ -227,7 +227,7 @@ def run_hdbscan_clustering(
             used_ids = sorted(centroids.keys())
             centroid_arr = np.array([centroids[cid] for cid in used_ids])
             summaries = [f"HDBSCAN Cluster {cid}" for cid in used_ids]
-            meta = [{"num_queries": int(np.sum(labels == cid))} for cid in used_ids]
+            meta = [{"num_queries": int(int(np.sum(labels == cid)))} for cid in used_ids]
             chroma.add_cluster_summaries_batch(
                 run_id=run_id,
                 cluster_ids=used_ids,

@@ -315,8 +315,139 @@ CRITICAL INSTRUCTIONS:
    - Check for duplicates
    - Flag generic terms
 
+## Experiment 3: Clustering Algorithm Comparison (2025-10-04)
+
+### Motivation
+
+After observing mixed cluster quality with KMeans-20, we hypothesized that:
+1. **Too few clusters** → overly broad, heterogeneous groupings
+2. **KMeans limitations** → forces all points into clusters even when unrelated
+3. **Density-based methods** (HDBSCAN) → may find more natural groupings
+
+### Experimental Setup
+
+**Dataset**: 5000 LMSYS queries with embeddings
+
+**Approaches Tested:**
+1. **KMeans-20** (baseline): 20 clusters
+2. **KMeans-50**: 50 clusters (2.5x increase)
+3. **KMeans-100**: 100 clusters (5x increase)
+4. **HDBSCAN**: min_cluster_size=30, density-based
+
+### Results Summary
+
+| Approach | Clusters | Avg Size | Min Size | Max Size | Noise Points | Quality Assessment |
+|----------|----------|----------|----------|----------|--------------|-------------------|
+| **KMeans-20** | 20 | 250 | 196 | 276 | 0 (0%) | Mixed - some good, many heterogeneous |
+| **KMeans-50** | 50 | 100 | 30 | 226 | 0 (0%) | Improved - more focused but still mixed |
+| **KMeans-100** | 100 | 50 | 7 | 140 | 0 (0%) | Better granularity, smaller variance |
+| **HDBSCAN-30** | 8 | 124 | 30 | 177 | 4009 (80%) | Very specific clusters, too much noise |
+
+### Key Findings
+
+#### 1. KMeans Cluster Quality by k
+
+**KMeans-20 Issues:**
+- **Cluster 0 (Creative Writing)**: Mixed content - creative writing, logic puzzles, jokes, relationship analysis
+- **Cluster 2 (Text Completion)**: Heterogeneous - prompt engineering, coding, contact extraction, grammar
+- **Cluster 5 (Toxic Statements)**: Mostly coherent toxic/jailbreak prompts, some outliers
+- **Cluster 12 (Business Inquiries)**: Very mixed - business plans, philosophy, multiple choice questions
+- **Cluster 13 (Python Programming)**: **Highly coherent** - nearly all same template format
+
+**KMeans-50 Improvements:**
+- Cluster sizes reduced from 250 → 100 average
+- Still contains mixed content but more focused
+- Example Cluster 0: Still has creative prompts + logic puzzles + historical questions (needs more granularity)
+
+**KMeans-100 Improvements:**
+- Cluster sizes reduced to 50 average
+- Better separation of distinct topics
+- Example Cluster 0: More focused on historical/philosophical questions
+- Some very small clusters (min=7) may be too specific
+
+#### 2. HDBSCAN Characteristics
+
+**Strengths:**
+- **Very high specificity**: Cluster 0 was almost entirely Russian language queries (177 queries)
+- Finds natural density-based groupings
+- Homogeneous clusters with clear themes
+
+**Weaknesses:**
+- **80% classified as noise** (4009/5000 queries)
+- Only 8 clusters identified (too few for meaningful analysis)
+- Min cluster size of 30 may be too restrictive for this dataset
+
+### Hypotheses
+
+#### Why is cluster quality inconsistent?
+
+**Hypothesis 1: Embedding Space Structure**
+- LMSYS queries are **highly diverse** across multiple dimensions (language, domain, task type, style)
+- Embedding space may not have clear natural boundaries
+- KMeans forces hard assignments even when queries don't naturally cluster
+
+**Hypothesis 2: Multi-Modal Distribution**
+- Dataset contains distinct sub-populations:
+  - Template-based queries (like Python programming prompts) → cluster well
+  - Creative/open-ended queries → harder to cluster
+  - Multilingual content → clusters by language first
+  - Toxic/adversarial prompts → distinct pattern
+
+**Hypothesis 3: Optimal k is Domain-Dependent**
+- Programming/technical queries: Well-defined, fewer clusters needed
+- Creative/open-ended: Diverse, need many clusters or different approach
+- Multilingual: Should cluster by language first, then topic
+
+**Hypothesis 4: Hierarchical Structure Exists**
+- Some topics have clear hierarchy (e.g., Programming → Python → Flask → API)
+- Flat clustering (KMeans) misses this structure
+- Could benefit from hierarchical clustering or topic modeling
+
+### Recommendations
+
+#### 1. **Short-term: Use KMeans-100 for current analysis**
+- Best balance of specificity vs coverage
+- Minimal noise (0%)
+- Reasonable cluster sizes (avg 50)
+- Run summarization to assess quality
+
+#### 2. **Medium-term: Tune HDBSCAN parameters**
+- Reduce min_cluster_size (try 15-20)
+- Adjust cluster_selection_epsilon
+- Goal: <50% noise while maintaining specificity
+
+#### 3. **Long-term: Hybrid or Hierarchical Approach**
+- **Option A**: Two-stage clustering
+  1. First pass: Cluster by language/domain (coarse)
+  2. Second pass: Within each group, cluster by topic (fine)
+
+- **Option B**: Topic Modeling
+  - Use LDA or BERTopic instead of distance-based clustering
+  - May better capture overlapping themes
+
+- **Option C**: Ensemble Clustering
+  - Run multiple algorithms (KMeans, HDBSCAN, Agglomerative)
+  - Combine results using consensus clustering
+
+#### 4. **Immediate: Test Summarization Quality**
+- Hypothesis: Better clustering → better summaries
+- Next step: Run `lmsys summarize` on KMeans-100
+- Compare summary quality vs KMeans-20
+
+### Technical Notes
+
+**Bug Fixes During Experimentation:**
+- Fixed HDBSCAN ChromaDB type error: numpy int64 → Python int conversion
+- Updated `hdbscan_clustering.py` line 230: `int(int(np.sum(...)))`
+- Updated `chroma.py` lines 154, 165: `cluster_id: int(cid)`
+
 ## References
 
 - **Experiment 1 Run**: `kmeans-200-20251004-005043`
+- **Experiment 3 Runs**:
+  - `kmeans-20-20251004-165542`
+  - `kmeans-50-20251004-170427`
+  - `kmeans-100-20251004-170442`
+  - `hdbscan-30-20251004-170645`
 - **Model Used**: `openai/gpt-4o-mini`
 - **Code**: `src/lmsys_query_analysis/clustering/summarizer.py`

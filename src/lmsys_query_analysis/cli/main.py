@@ -468,7 +468,7 @@ def summarize(
     run_id: str = typer.Argument(..., help="Run ID to summarize"),
     cluster_id: int = typer.Option(None, help="Specific cluster to summarize"),
     model: str = typer.Option(
-        "anthropic/claude-sonnet-4-5-20250929", help="LLM model (provider/model)"
+        "openai/gpt-4o-mini", help="LLM model (provider/model)"
     ),
     max_queries: int = typer.Option(100, help="Max queries to send to LLM per cluster"),
     concurrency: int = typer.Option(30, help="Parallel LLM calls for summarization"),
