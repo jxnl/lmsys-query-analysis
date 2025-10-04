@@ -79,7 +79,7 @@ class ClusterSummarizer:
 
     def __init__(
         self,
-        model: str = "anthropic/sonnet-4.5-latest",
+        model: str = "anthropic/claude-sonnet-4-5-20250929",
         api_key: Optional[str] = None,
         concurrency: int = 4,
         rpm: Optional[int] = None,
@@ -90,7 +90,7 @@ class ClusterSummarizer:
 
         Args:
             model: Model in format "provider/model_name" (e.g.,
-                   "anthropic/sonnet-4.5-latest", "openai/gpt-5",
+                   "anthropic/claude-sonnet-4-5-20250929", "openai/gpt-4o",
                    "groq/llama-3.1-8b-instant")
             api_key: API key for the provider (or set env var ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
             concurrency: Number of concurrent LLM requests
@@ -151,35 +151,36 @@ class ClusterSummarizer:
             contrast_neighbors=contrast_neighbors or [],
         )
 
-        try:
-            # Call LLM with structured output - instructor handles model internally
-            response = self.client.chat.completions.create(
-                response_model=ClusterSummaryResponse,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a helpful assistant. whos job is to summarize a cluster of queries into a title and description.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-            )
+        # Call LLM with structured output - instructor handles model internally
+        response = self.client.chat.completions.create(
+            response_model=ClusterSummaryResponse,
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are an expert data analyst specializing in query pattern analysis. Your task is to analyze clusters of user queries submitted to LLM systems and provide insightful summaries.
 
-            return {
-                "title": response.title,
-                "description": response.description,
-                "sample_queries": sampled[:10],  # Store top 10 for reference
-            }
+When analyzing a cluster:
+1. Identify the core theme or use case that unites the queries
+2. Note any patterns in how users phrase requests (technical vs casual, specific vs general)
+3. Highlight key characteristics that make this cluster distinct
+4. If contrastive neighbors are provided, emphasize what makes THIS cluster unique compared to similar clusters
 
-        except Exception as e:
-            console.print(
-                f"[yellow]Warning: Failed to generate summary for cluster {cluster_id}: {e}[/yellow]"
-            )
-            # Fallback to basic summary
-            return {
-                "title": f"Cluster {cluster_id}",
-                "description": f"Contains {len(cluster_queries)} queries. Sample: {cluster_queries[0][:100]}...",
-                "sample_queries": sampled[:10],
-            }
+Provide:
+- **Title**: A clear, specific 5-10 word description of the cluster's main theme
+- **Description**: 2-3 sentences explaining:
+  - What users in this cluster are trying to accomplish
+  - Common patterns or notable characteristics
+  - What makes this cluster distinct (especially vs neighbors if provided)""",
+                },
+                {"role": "user", "content": prompt},
+            ],
+        )
+
+        return {
+            "title": response.title,
+            "description": response.description,
+            "sample_queries": sampled[:10],  # Store top 10 for reference
+        }
 
     def generate_batch_summaries(
         self,
@@ -286,22 +287,14 @@ class ClusterSummarizer:
             idx: int, cid: int, queries: List[str], progress_task, progress
         ):
             # Build per-cluster summary (retries handled by tenacity decorator)
-            try:
-                async with semaphore:
-                    summary = await self._async_generate_cluster_summary(
-                        cluster_queries=queries,
-                        cluster_id=cid,
-                        max_queries=max_queries,
-                        contrast_block=neighbor_context.get(cid, ""),
-                    )
-                results[cid] = summary
-            except Exception:
-                # Exhausted retries; fallback to basic summary
-                results[cid] = {
-                    "title": f"Cluster {cid}",
-                    "description": f"Contains {len(queries)} queries.",
-                    "sample_queries": (queries[:10] if queries else []),
-                }
+            async with semaphore:
+                summary = await self._async_generate_cluster_summary(
+                    cluster_queries=queries,
+                    cluster_id=cid,
+                    max_queries=max_queries,
+                    contrast_block=neighbor_context.get(cid, ""),
+                )
+            results[cid] = summary
 
             if progress_task is not None:
                 progress.update(progress_task, advance=1)
@@ -332,35 +325,70 @@ class ClusterSummarizer:
         cluster_queries: List[str],
         cluster_id: int,
         max_queries: int = 50,
-        contrast_neighbors: Optional[List[dict]] = None,
+        contrast_block: str = "",
     ) -> dict:
         """Async variant of single-cluster summarization using AsyncInstructor.
-        
+
         Automatically retries up to 5 times with exponential backoff on errors.
+
+        Args:
+            cluster_queries: All queries in the cluster
+            cluster_id: Cluster ID
+            max_queries: Max queries to send to LLM
+            contrast_block: Pre-rendered contrast block XML string
         """
         # Select a representative and diverse sample of queries
         sampled = self._select_representative_queries(cluster_queries, max_queries)
 
-        # Render prompt using Jinja2 template
-        prompt = self.template.render(
-            cluster_id=cluster_id,
-            total_queries=len(cluster_queries),
-            sample_count=len(sampled),
-            queries=sampled,
-            contrast_neighbors=contrast_neighbors or [],
-        )
+        # Build prompt - just the core cluster data since contrast_block is pre-rendered
+        core_prompt = f"""<summary_task>
+  <cluster id="{cluster_id}">
+    <stats total_queries="{len(cluster_queries)}" sample_count="{len(sampled)}" />
+    <target_queries>
+"""
+        for idx, query in enumerate(sampled, 1):
+            core_prompt += f'      <query idx="{idx}">{query}</query>\n'
+        core_prompt += "    </target_queries>\n  </cluster>\n"
+
+        if contrast_block:
+            core_prompt += contrast_block + "\n"
+
+        core_prompt += "</summary_task>"
+
+        prompt = core_prompt
+
+        messages = [
+            {
+                "role": "system",
+                "content": """You are an expert data analyst specializing in query pattern analysis. Your task is to analyze clusters of user queries submitted to LLM systems and provide insightful summaries.
+
+When analyzing a cluster:
+1. Identify the core theme or use case that unites the queries
+2. Note any patterns in how users phrase requests (technical vs casual, specific vs general)
+3. Highlight key characteristics that make this cluster distinct
+4. If contrastive neighbors are provided, emphasize what makes THIS cluster unique compared to similar clusters
+
+Provide:
+- **Title**: A clear, specific 5-10 word description of the cluster's main theme
+- **Description**: 2-3 sentences explaining:
+  - What users in this cluster are trying to accomplish
+  - Common patterns or notable characteristics
+  - What makes this cluster distinct (especially vs neighbors if provided)""",
+            },
+            {"role": "user", "content": prompt},
+        ]
 
         # Apply rate limiting if configured
         if self.rate_limiter:
             async with self.rate_limiter:
                 response = await self.async_client.chat.completions.create(
                     response_model=ClusterSummaryResponse,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=messages,
                 )
         else:
             response = await self.async_client.chat.completions.create(
                 response_model=ClusterSummaryResponse,
-                messages=[{"role": "user", "content": prompt}],
+                messages=messages,
             )
 
         return {

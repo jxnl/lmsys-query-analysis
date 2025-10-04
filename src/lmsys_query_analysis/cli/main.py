@@ -318,7 +318,7 @@ def runs(
 
             title = "Latest Clustering Run" if latest else "Clustering Runs"
             table = Table(title=title)
-            table.add_column("Run ID", style="cyan")
+            table.add_column("Run ID", style="cyan", no_wrap=True)
             table.add_column("Algorithm", style="yellow")
             table.add_column("Clusters", style="green")
             table.add_column("Created", style="magenta")
@@ -447,9 +447,9 @@ def summarize(
     run_id: str = typer.Argument(..., help="Run ID to summarize"),
     cluster_id: int = typer.Option(None, help="Specific cluster to summarize"),
     model: str = typer.Option(
-        "anthropic/sonnet-4.5-latest", help="LLM model (provider/model)"
+        "anthropic/claude-sonnet-4-5-20250929", help="LLM model (provider/model)"
     ),
-    max_queries: int = typer.Option(50, help="Max queries to send to LLM per cluster"),
+    max_queries: int = typer.Option(100, help="Max queries to send to LLM per cluster"),
     concurrency: int = typer.Option(4, help="Parallel LLM calls for summarization"),
     rpm: int = typer.Option(None, help="Optional requests-per-minute rate limit"),
     use_chroma: bool = typer.Option(False, help="Update ChromaDB with new summaries"),
@@ -649,7 +649,14 @@ def summarize(
         logger.exception("Summarize failed: %s", e)
         import traceback
 
-        traceback.print_exc()
+        # For ExceptionGroup, show all sub-exceptions
+        if hasattr(e, 'exceptions'):
+            console.print("[red]Multiple errors occurred:[/red]")
+            for sub_exc in e.exceptions:
+                console.print(f"[yellow]{type(sub_exc).__name__}: {sub_exc}[/yellow]")
+                traceback.print_exception(type(sub_exc), sub_exc, sub_exc.__traceback__)
+        else:
+            traceback.print_exc()
         raise typer.Exit(1)
 
 
