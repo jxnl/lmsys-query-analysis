@@ -6,7 +6,7 @@ Query analysis and clustering tool for the LMSYS-1M conversational dataset with 
 
 - **Data Loading**: Extract first user queries from LMSYS-1M dataset (1M conversations)
 - **SQLite Storage**: Efficient indexing and querying with SQLModel
-- **KMeans Clustering**: Fine-grained clustering with 100-200+ clusters
+- **Clustering**: MiniBatchKMeans (scales well) and HDBSCAN (density-based)
 - **ChromaDB Integration**: Semantic search across queries and cluster summaries
 - **LLM Summarization**: Generate titles and descriptions for clusters using any LLM provider
 - **CLI Interface**: Rich terminal UI with tables and progress bars
@@ -35,7 +35,6 @@ Set environment variable for your chosen provider:
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."  # For Anthropic Claude
 export OPENAI_API_KEY="sk-..."          # For OpenAI GPT
-export GROQ_API_KEY="gsk_..."           # For Groq
 ```
 
 ## Quick Start
@@ -78,10 +77,23 @@ uv run lmsys load --limit 10000 --use-chroma
 
 ```bash
 # Run KMeans with 200 clusters (recommended for fine-grained analysis)
-uv run lmsys cluster --n-clusters 200 --use-chroma --description "Fine-grained clustering"
+uv run lmsys cluster kmeans --n-clusters 200 --use-chroma \
+  --embedding-model all-MiniLM-L6-v2 \
+  --embedding-provider sentence-transformers \
+  --embed-batch-size 64 --mb-batch-size 8192 --chunk-size 10000 \
+  --description "Fine-grained clustering"
 
 # Faster with fewer clusters
-uv run lmsys cluster --n-clusters 50 --use-chroma
+uv run lmsys cluster kmeans --n-clusters 50 --use-chroma
+
+# HDBSCAN (finds natural clusters; excludes noise)
+uv run lmsys cluster hdbscan --use-chroma \
+  --embedding-model all-MiniLM-L6-v2 --embedding-provider sentence-transformers \
+  --embed-batch-size 64 --chunk-size 10000
+
+# Notes
+# - With --use-chroma, clustering reuses existing query embeddings from Chroma and backfills missing ones.
+# - Tune throughput with --embed-batch-size, --mb-batch-size, and --chunk-size.
 ```
 
 ### LLM Summarization
@@ -99,33 +111,46 @@ uv run lmsys summarize <RUN_ID> --cluster-id 5 --use-chroma
 
 # Adjust number of queries sent to LLM
 uv run lmsys summarize <RUN_ID> --max-queries 100 --use-chroma
+
+# Speed up with concurrency and optional rate limiting
+uv run lmsys summarize <RUN_ID> --concurrency 8 --rpm 60 --use-chroma
 ```
 
 ### Viewing Results
 
 ```bash
-# List all clustering runs
+# List all clustering runs (ordered by newest first)
 uv run lmsys runs
+
+# Show only the most recent run
+uv run lmsys runs --latest
 
 # List clusters with LLM-generated titles
 uv run lmsys list-clusters <RUN_ID>
 
 # Limit results
 uv run lmsys list-clusters <RUN_ID> --limit 20
+
+# Show example queries per cluster
+uv run lmsys list-clusters <RUN_ID> --show-examples 3
 ```
 
 ### Semantic Search
 
 ```bash
 # Search cluster summaries
-uv run lmsys search "python programming" --search-type clusters
+uv run lmsys search "python programming" --search-type clusters \
+  --run-id <RUN_ID> --embedding-model all-MiniLM-L6-v2
 
 # Search within specific run
 uv run lmsys search "machine learning" --search-type clusters --run-id <RUN_ID>
 
 # Search individual queries (if loaded with --use-chroma)
-uv run lmsys search "how to build neural network" --search-type queries --n-results 20
+uv run lmsys search "how to build neural network" --search-type queries \
+  --n-results 20 --embedding-model all-MiniLM-L6-v2
 ```
+
+Search uses explicit query embeddings to ensure consistency with stored vectors. Use an embedding model that matches the vectors in Chroma (the model used during load/cluster).
 
 ## Architecture
 
@@ -172,6 +197,27 @@ uv run pytest tests/ --cov=src/lmsys_query_analysis --cov-report=term
 uv run pytest tests/test_models.py -v
 ```
 
+### Smoke Test
+
+Run a minimal end-to-end check using a temporary SQLite DB and Chroma directory:
+
+```bash
+bash smoketest.sh                 # full run (requires HF + model downloads)
+SMOKE_LIMIT=500 bash smoketest.sh # adjust dataset size
+SMOKE_CLUSTERS=8 bash smoketest.sh
+SMOKE_OFFLINE=1 bash smoketest.sh # seed minimal data if load fails (offline)
+```
+
+The smoke test will: load or seed data, run clustering, list/inspect clusters, export CSV/JSON, and try semantic search when Chroma data is available.
+
+### Logging
+
+All commands support verbose logging:
+
+```bash
+uv run lmsys -v cluster --n-clusters 200
+```
+
 ### Project Structure
 
 ```
@@ -185,11 +231,15 @@ src/lmsys_query_analysis/
 │   └── chroma.py            # ChromaDB manager
 └── clustering/
     ├── embeddings.py        # Sentence-transformers wrapper
-    ├── kmeans.py            # KMeans clustering
+    ├── kmeans.py            # MiniBatchKMeans clustering (streaming)
     └── summarizer.py        # LLM summarization with instructor
 
 tests/                       # Test suite with 20+ tests
 ```
+
+Additional files
+- `src/lmsys_query_analysis/clustering/hdbscan_clustering.py` — HDBSCAN clustering
+- `src/lmsys_query_analysis/utils/logging.py` — Rich-backed logging setup
 
 ## Configuration
 
