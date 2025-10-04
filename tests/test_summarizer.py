@@ -53,7 +53,9 @@ def patch_instructor(monkeypatch, prompts: List[str]):
             def create(self, response_model=None, messages=None):  # sync create
                 content = messages[0]["content"] if messages else ""
                 self._prompts.append(content)
-                return SimpleNamespace(title="Test Title", description="Test Description")
+                return SimpleNamespace(
+                    title="Test Title", description="Test Description"
+                )
 
         def __init__(self, prompts_ref: List[str]):
             self.completions = self._Completions(prompts_ref)
@@ -62,7 +64,9 @@ def patch_instructor(monkeypatch, prompts: List[str]):
         def __init__(self, prompts_ref: List[str]):
             self.chat = _FakeSyncChat(prompts_ref)
 
-    def _fake_from_provider(model: str, api_key=None, async_client: bool = False, **kwargs):
+    def _fake_from_provider(
+        model: str, api_key=None, async_client: bool = False, **kwargs
+    ):
         # Return async or sync fake client capturing prompts
         if async_client:
             return FakeAsyncClient(prompts)
@@ -70,10 +74,14 @@ def patch_instructor(monkeypatch, prompts: List[str]):
 
     monkeypatch.setattr(instructor, "from_provider", _fake_from_provider, raising=True)
 
+
 @pytest.fixture
 def fake_embeddings(monkeypatch):
     """Patch EmbeddingGenerator.generate_embeddings to a deterministic matrix."""
-    def _fake_generate_embeddings(self, texts: List[str], batch_size: int = 32, show_progress: bool = True):
+
+    def _fake_generate_embeddings(
+        self, texts: List[str], batch_size: int = 32, show_progress: bool = True
+    ):
         # Return a simple embedding matrix that makes 0~1 near and 2 far
         n = len(texts)
         if n == 3:
@@ -93,7 +101,10 @@ def fake_embeddings(monkeypatch):
     import lmsys_query_analysis.clustering.embeddings as emb
 
     monkeypatch.setattr(
-        emb.EmbeddingGenerator, "generate_embeddings", _fake_generate_embeddings, raising=True
+        emb.EmbeddingGenerator,
+        "generate_embeddings",
+        _fake_generate_embeddings,
+        raising=True,
     )
 
 

@@ -500,8 +500,14 @@ def summarize(
                 elif "embed" in embedding_model and "openai" not in embedding_model:
                     embedding_provider = "sentence-transformers"
 
-            logger.info("Using embedding model from clustering run: %s (%s)", embedding_model, embedding_provider)
-            console.print(f"[dim]Embedding model: {embedding_provider}/{embedding_model}[/dim]")
+            logger.info(
+                "Using embedding model from clustering run: %s (%s)",
+                embedding_model,
+                embedding_provider,
+            )
+            console.print(
+                f"[dim]Embedding model: {embedding_provider}/{embedding_model}[/dim]"
+            )
 
             # Re-initialize summarizer with correct embedding model
             summarizer = ClusterSummarizer(
@@ -509,7 +515,7 @@ def summarize(
                 concurrency=concurrency,
                 rpm=rpm,
                 embedding_model=embedding_model,
-                embedding_provider=embedding_provider
+                embedding_provider=embedding_provider,
             )
 
             # Get clusters to summarize
@@ -598,7 +604,7 @@ def summarize(
                 embedding_gen = EmbeddingGenerator(
                     model_name=embedding_model,
                     provider=embedding_provider,
-                    concurrency=concurrency
+                    concurrency=concurrency,
                 )
                 texts = [
                     f"{results[cid]['title']}\n\n{results[cid]['description']}"

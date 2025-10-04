@@ -5,7 +5,7 @@ optional rate limiting to speed up large runs safely.
 """
 
 from typing import List, Optional, Dict, Tuple
- 
+
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import anyio
@@ -32,40 +32,33 @@ console = Console()
 
 
 def _create_template():
-    """Create Jinja2 template with custom filters."""
+    """Create Jinja2 template."""
     env = Environment()
-    env.filters['truncate'] = lambda s, length=220: s[:length]
     return env.from_string("""
 <summary_task>
   <cluster id="{{ cluster_id }}">
     <stats total_queries="{{ total_queries }}" sample_count="{{ sample_count }}" />
     <target_queries>
 {% for query in queries -%}
-      <query idx="{{ loop.index }}"><![CDATA[{{ query | truncate }}]]></query>
+      <query idx="{{ loop.index }}">{{ query }}</query>
 {% endfor -%}
     </target_queries>
   </cluster>
-{% if contrast_block -%}
-{{ contrast_block }}
+{% if contrast_neighbors -%}
+  <contrastive_neighbors>
+{%- for neighbor in contrast_neighbors %}
+    <neighbor cluster_id="{{ neighbor.cluster_id }}" size="{{ neighbor.size }}">
+{%- if neighbor.mode == "neighbors" %}
+{%- for example in neighbor.examples %}
+      <example>{{ example }}</example>
+{%- endfor %}
+{%- elif neighbor.mode == "keywords" %}
+      <keywords>{{ neighbor.keywords }}</keywords>
+{%- endif %}
+    </neighbor>
+{%- endfor %}
+  </contrastive_neighbors>
 {% endif -%}
-  <instructions>
-    <title_guidelines>
-      <rule>5-10 words; include domain + action + subject.</rule>
-      <rule>Prefer concrete nouns/verbs; avoid generic terms ("general", "misc").</rule>
-      <rule>If code-heavy, prefix with language or framework.</rule>
-      <rule>Keep the title in English.</rule>
-    </title_guidelines>
-    <description_guidelines>
-      <rule>Summarize common intents and tasks.</rule>
-      <rule>Mention constraints: error fixing, homework help, API usage, jailbreak attempts, evaluation prompts.</rule>
-      <rule>Call out tools/libraries/datasets/languages if prominent.</rule>
-      <rule>If mixed topics, name top 1–2 subthemes.</rule>
-      <rule>Name dominant template/boilerplate patterns.</rule>
-      <rule>Mention placeholders/redactions (NAME_1/NAME_2, &lt;URL&gt;, [MASK]) if prevalent.</rule>
-      <rule>State explicitly if greetings-only or meta/test prompts.</rule>
-    </description_guidelines>
-  </instructions>
-  <output>Return fields: title, description.</output>
 </summary_task>
 """)
 
@@ -74,10 +67,10 @@ class ClusterSummaryResponse(BaseModel):
     """Structured response from LLM for cluster summarization."""
 
     title: str = Field(
-        ..., description="Short title (5-10 words) capturing the main topic"
+        ..., description="Short title (5-10 words) capturing the main topic of the cluster"
     )
     description: str = Field(
-        ..., description="2-3 sentences explaining the cluster theme"
+        ..., description="2-3 sentences explaining the cluster theme and what the queries are about"
     )
 
 
@@ -113,7 +106,7 @@ class ClusterSummarizer:
 
         # Initialize Jinja2 template
         self.template = _create_template()
-        
+
         # Initialize rate limiter if rpm is specified
         # Convert rpm to requests per second with 1-second time period
         self.rate_limiter = AsyncLimiter(rpm, 60.0) if rpm else None
@@ -133,7 +126,7 @@ class ClusterSummarizer:
         cluster_queries: List[str],
         cluster_id: int,
         max_queries: int = 50,
-        contrast_block: str = "",
+        contrast_neighbors: Optional[List[dict]] = None,
     ) -> dict:
         """Generate title and description for a cluster.
 
@@ -141,6 +134,7 @@ class ClusterSummarizer:
             cluster_queries: All query texts in the cluster
             cluster_id: Cluster ID for reference
             max_queries: Maximum queries to include in prompt (sample if more)
+            contrast_neighbors: Optional list of neighbor cluster data for contrast
 
         Returns:
             Dict with keys: title, description, sample_queries
@@ -154,14 +148,20 @@ class ClusterSummarizer:
             total_queries=len(cluster_queries),
             sample_count=len(sampled),
             queries=sampled,
-            contrast_block=contrast_block,
+            contrast_neighbors=contrast_neighbors or [],
         )
 
         try:
             # Call LLM with structured output - instructor handles model internally
             response = self.client.chat.completions.create(
                 response_model=ClusterSummaryResponse,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant. whos job is to summarize a cluster of queries into a title and description.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
             )
 
             return {
@@ -249,30 +249,33 @@ class ClusterSummarizer:
         id_list = [cid for cid, _ in clusters_data]
         sizes_map: Dict[int, int] = {cid: len(qs) for cid, qs in clusters_data}
         neighbor_context: Dict[int, str] = {}
-        
+
         if contrast_neighbors > 0 and contrast_examples > 0 and len(id_list) > 1:
             import random
+
             for i, cid in enumerate(id_list):
                 # Randomly select n other clusters (excluding self)
                 other_ids = [other_id for j, other_id in enumerate(id_list) if j != i]
                 if not other_ids:
                     neighbor_context[cid] = ""
                     continue
-                
+
                 n_neighbors = min(contrast_neighbors, len(other_ids))
                 neighbor_ids = random.sample(other_ids, n_neighbors)
-                
+
                 block_lines = ["<contrastive_neighbors>"]
                 for nid in neighbor_ids:
                     nsize = sizes_map.get(nid, 0)
                     exs = sampled_map.get(nid, [])[:contrast_examples]
                     exs_fmt = [e.splitlines()[0].strip()[:180] for e in exs]
-                    
-                    block_lines.append(f"  <neighbor cluster_id=\"{nid}\" size=\"{nsize}\">")
+
+                    block_lines.append(
+                        f'  <neighbor cluster_id="{nid}" size="{nsize}">'
+                    )
                     for ex in exs_fmt:
                         block_lines.append(f"    <example><![CDATA[{ex}]]></example>")
                     block_lines.append("  </neighbor>")
-                
+
                 block_lines.append("</contrastive_neighbors>")
                 neighbor_context[cid] = "\n".join(block_lines)
         else:
@@ -282,30 +285,24 @@ class ClusterSummarizer:
         async def worker(
             idx: int, cid: int, queries: List[str], progress_task, progress
         ):
-            # Build per-cluster summary with retries
-            backoff = 1.0
-            for attempt in range(5):
-                try:
-                    async with semaphore:
-                        summary = await self._async_generate_cluster_summary(
-                            cluster_queries=queries,
-                            cluster_id=cid,
-                            max_queries=max_queries,
-                            contrast_block=neighbor_context.get(cid, ""),
-                        )
-                    results[cid] = summary
-                    if progress_task is not None:
-                        progress.update(progress_task, advance=1)
-                    return
-                except Exception:
-                    await anyio.sleep(backoff)
-                    backoff = min(backoff * 2, 8.0)
-            # Exhausted retries; fallback to basic
-            results[cid] = {
-                "title": f"Cluster {cid}",
-                "description": f"Contains {len(queries)} queries.",
-                "sample_queries": (queries[:10] if queries else []),
-            }
+            # Build per-cluster summary (retries handled by tenacity decorator)
+            try:
+                async with semaphore:
+                    summary = await self._async_generate_cluster_summary(
+                        cluster_queries=queries,
+                        cluster_id=cid,
+                        max_queries=max_queries,
+                        contrast_block=neighbor_context.get(cid, ""),
+                    )
+                results[cid] = summary
+            except Exception:
+                # Exhausted retries; fallback to basic summary
+                results[cid] = {
+                    "title": f"Cluster {cid}",
+                    "description": f"Contains {len(queries)} queries.",
+                    "sample_queries": (queries[:10] if queries else []),
+                }
+
             if progress_task is not None:
                 progress.update(progress_task, advance=1)
 
@@ -325,14 +322,22 @@ class ClusterSummarizer:
 
         return results
 
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=1, max=8),
+        retry=retry_if_exception_type(Exception),
+    )
     async def _async_generate_cluster_summary(
         self,
         cluster_queries: List[str],
         cluster_id: int,
         max_queries: int = 50,
-        contrast_block: str = "",
+        contrast_neighbors: Optional[List[dict]] = None,
     ) -> dict:
-        """Async variant of single-cluster summarization using AsyncInstructor."""
+        """Async variant of single-cluster summarization using AsyncInstructor.
+        
+        Automatically retries up to 5 times with exponential backoff on errors.
+        """
         # Select a representative and diverse sample of queries
         sampled = self._select_representative_queries(cluster_queries, max_queries)
 
@@ -342,13 +347,21 @@ class ClusterSummarizer:
             total_queries=len(cluster_queries),
             sample_count=len(sampled),
             queries=sampled,
-            contrast_block=contrast_block,
+            contrast_neighbors=contrast_neighbors or [],
         )
 
-        response = await self.async_client.chat.completions.create(
-            response_model=ClusterSummaryResponse,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        # Apply rate limiting if configured
+        if self.rate_limiter:
+            async with self.rate_limiter:
+                response = await self.async_client.chat.completions.create(
+                    response_model=ClusterSummaryResponse,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+        else:
+            response = await self.async_client.chat.completions.create(
+                response_model=ClusterSummaryResponse,
+                messages=[{"role": "user", "content": prompt}],
+            )
 
         return {
             "title": response.title,
@@ -397,7 +410,7 @@ class ClusterSummarizer:
             eg = EmbeddingGenerator(
                 model_name=self.embedding_model,
                 provider=self.embedding_provider,
-                concurrency=self.concurrency
+                concurrency=self.concurrency,
             )
             E = eg.generate_embeddings(originals, show_progress=False)
         except Exception:
@@ -422,7 +435,10 @@ class ClusterSummarizer:
                 axis=1
             )
             candidate_list = list(candidates)
-            scores = lambda_param * rel[candidate_list] - (1 - lambda_param) * sims_to_selected
+            scores = (
+                lambda_param * rel[candidate_list]
+                - (1 - lambda_param) * sims_to_selected
+            )
             best_idx = int(np.argmax(scores))
             chosen = candidate_list[best_idx]
             selected.append(chosen)
