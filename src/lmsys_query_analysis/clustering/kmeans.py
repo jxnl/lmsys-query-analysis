@@ -1,4 +1,5 @@
 """Mini-batch KMeans clustering implementation with streaming embeddings."""
+
 import numpy as np
 import time
 import logging
@@ -24,7 +25,10 @@ def run_kmeans_clustering(
     n_clusters: int = 200,
     description: str = "",
     embedding_model: str = "all-MiniLM-L6-v2",
-    batch_size: int = 32,
+    embed_batch_size: int = 32,
+    chunk_size: int = 5000,
+    mb_batch_size: int = 4096,
+    embedding_provider: str = "sentence-transformers",
     random_state: int = 42,
     chroma: Optional[ChromaManager] = None,
 ) -> str:
@@ -45,15 +49,19 @@ def run_kmeans_clustering(
     session = db.get_session()
 
     try:
-        console.print("[yellow]Counting queries in database...[/yellow]")
-        total_queries = session.exec(select(func.count(Query.id))).scalar_one()
+        console.print("Counting queries in database...")
+        count_result = session.exec(select(func.count()).select_from(Query)).one()
+        total_queries = int(
+            count_result[0] if isinstance(count_result, tuple) else count_result
+        )
 
         if total_queries == 0:
-            console.print("[red]No queries found in database. Run 'lmsys load' first.[/red]")
+            console.print(
+                "[red]No queries found in database. Run 'lmsys load' first.[/red]"
+            )
             return None
 
-        console.print(f"[green]Found {total_queries} queries[/green]
-")
+        console.print(f"[green]Found {total_queries} queries[/green]")
 
         # Create clustering run record (saved early to link assignments)
         run_id = f"kmeans-{n_clusters}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
@@ -65,7 +73,8 @@ def run_kmeans_clustering(
                 "embedding_model": embedding_model,
                 "random_state": random_state,
                 "kmeans": "MiniBatchKMeans",
-                "encode_batch_size": batch_size,
+                "encode_batch_size": embed_batch_size,
+                "mb_batch_size": mb_batch_size,
             },
             description=description,
             num_clusters=n_clusters,
@@ -73,22 +82,21 @@ def run_kmeans_clustering(
         session.add(clustering_run)
         session.commit()
 
-        # Initialize embedding model once
-        embedding_gen = EmbeddingGenerator(model_name=embedding_model)
-        embedding_gen.load_model()
+        # Initialize embedding generator lazily (only if needed)
+        embedding_gen = None
 
         # Initialize MiniBatchKMeans
         mbk = MiniBatchKMeans(
             n_clusters=n_clusters,
             random_state=random_state,
-            batch_size=max(1000, batch_size * 8),
-            n_init=10,
-            max_iter=100,
+            batch_size=max(1024, mb_batch_size),
+            n_init=20,
+            max_iter=200,
             verbose=0,
         )
 
         # Helper: iterate queries in chunks to limit memory
-        def iter_query_chunks(chunk_size: int = 5000):
+        def iter_query_chunks(chunk_size: int = chunk_size):
             offset = 0
             while offset < total_queries:
                 stmt = select(Query).offset(offset).limit(chunk_size)
@@ -99,20 +107,86 @@ def run_kmeans_clustering(
                 offset += len(rows)
 
         # First pass: partial_fit on streaming embeddings
-        console.print(f"[yellow]Training MiniBatchKMeans with {n_clusters} clusters...[/yellow]")
+        console.print(
+            f"[yellow]Training MiniBatchKMeans with {n_clusters} clusters...[/yellow]"
+        )
         fit_start = time.perf_counter()
         total_fit = 0
-        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
+        with Progress(
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}")
+        ) as progress:
             task = progress.add_task("[cyan]Fitting clusters (pass 1)...", total=None)
             for chunk in iter_query_chunks():
                 texts = [q.query_text for q in chunk]
-                embeddings = embedding_gen.model.encode(
-                    texts,
-                    batch_size=batch_size,
-                    show_progress_bar=False,
-                    convert_to_numpy=True,
-                )
-                mbk.partial_fit(embeddings)
+                ids = [q.id for q in chunk]
+
+                # Try to reuse embeddings from Chroma if available
+                chunk_embeddings = None
+                if chroma is not None:
+                    emb_map = chroma.get_query_embeddings_map(ids)
+                    if len(emb_map) == len(ids):
+                        chunk_embeddings = np.stack([emb_map[qid] for qid in ids])
+                    else:
+                        # Compute missing and optionally backfill
+                        missing_ids = [qid for qid in ids if qid not in emb_map]
+                        if missing_ids:
+                            if embedding_gen is None:
+                                embedding_gen = EmbeddingGenerator(
+                                    model_name=embedding_model,
+                                    provider=embedding_provider,
+                                )
+                                embedding_gen.load_model()
+                            # Compute all embeddings then compose full array
+                            all_emb = embedding_gen.model.encode(
+                                texts,
+                                batch_size=embed_batch_size,
+                                show_progress_bar=False,
+                                convert_to_numpy=True,
+                            )
+                            # Backfill map and Chroma for missing
+                            for qid, emb in zip(ids, all_emb):
+                                if qid not in emb_map:
+                                    emb_map[qid] = emb
+                            # Optionally write missing to Chroma (with metadata)
+                            try:
+                                if chroma is not None and len(missing_ids) > 0:
+                                    missing_idx = [
+                                        ids.index(mid) for mid in missing_ids
+                                    ]
+                                    meta = [
+                                        {
+                                            "model": chunk[i].model,
+                                            "language": chunk[i].language or "unknown",
+                                            "conversation_id": chunk[i].conversation_id,
+                                        }
+                                        for i in missing_idx
+                                    ]
+                                    chroma.add_queries_batch(
+                                        query_ids=missing_ids,
+                                        texts=[texts[i] for i in missing_idx],
+                                        embeddings=np.array(
+                                            [all_emb[i] for i in missing_idx]
+                                        ),
+                                        metadata=meta,
+                                    )
+                            except Exception:
+                                pass
+                            chunk_embeddings = np.stack([emb_map[qid] for qid in ids])
+                else:
+                    # No Chroma: compute embeddings
+                    if embedding_gen is None:
+                        embedding_gen = EmbeddingGenerator(
+                            model_name=embedding_model, provider=embedding_provider
+                        )
+                        embedding_gen.load_model()
+                    chunk_embeddings = embedding_gen.model.encode(
+                        texts,
+                        batch_size=embed_batch_size,
+                        show_progress_bar=False,
+                        convert_to_numpy=True,
+                    )
+
+                mbk.partial_fit(chunk_embeddings)
                 total_fit += len(texts)
             progress.update(task, completed=True)
 
@@ -121,7 +195,9 @@ def run_kmeans_clustering(
         if total_fit:
             logger.info(
                 "MiniBatch fit: %s vectors in %.2fs (%.1f/s)",
-                total_fit, fit_elapsed, (total_fit/fit_elapsed if fit_elapsed else float("inf")),
+                total_fit,
+                fit_elapsed,
+                (total_fit / fit_elapsed if fit_elapsed else float("inf")),
             )
 
         # Second pass: predict labels and write assignments incrementally
@@ -134,18 +210,71 @@ def run_kmeans_clustering(
 
         predict_start = time.perf_counter()
         total_pred = 0
-        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
+        with Progress(
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}")
+        ) as progress:
             task = progress.add_task("[cyan]Predicting (pass 2)...", total=None)
             for chunk in iter_query_chunks():
                 texts = [q.query_text for q in chunk]
                 ids = [q.id for q in chunk]
-                embeddings = embedding_gen.model.encode(
-                    texts,
-                    batch_size=batch_size,
-                    show_progress_bar=False,
-                    convert_to_numpy=True,
-                )
-                labels = mbk.predict(embeddings)
+
+                # Reuse embeddings from Chroma if possible; otherwise compute
+                if chroma is not None:
+                    emb_map = chroma.get_query_embeddings_map(ids)
+                    if len(emb_map) == len(ids):
+                        chunk_embeddings = np.stack([emb_map[qid] for qid in ids])
+                    else:
+                        missing_ids = [qid for qid in ids if qid not in emb_map]
+                        if embedding_gen is None:
+                            embedding_gen = EmbeddingGenerator(
+                                model_name=embedding_model, provider=embedding_provider
+                            )
+                            embedding_gen.load_model()
+                        all_emb = embedding_gen.model.encode(
+                            texts,
+                            batch_size=embed_batch_size,
+                            show_progress_bar=False,
+                            convert_to_numpy=True,
+                        )
+                        for qid, emb in zip(ids, all_emb):
+                            if qid not in emb_map:
+                                emb_map[qid] = emb
+                        try:
+                            if chroma is not None and len(missing_ids) > 0:
+                                missing_idx = [ids.index(mid) for mid in missing_ids]
+                                meta = [
+                                    {
+                                        "model": chunk[i].model,
+                                        "language": chunk[i].language or "unknown",
+                                        "conversation_id": chunk[i].conversation_id,
+                                    }
+                                    for i in missing_idx
+                                ]
+                                chroma.add_queries_batch(
+                                    query_ids=missing_ids,
+                                    texts=[texts[i] for i in missing_idx],
+                                    embeddings=np.array(
+                                        [all_emb[i] for i in missing_idx]
+                                    ),
+                                    metadata=meta,
+                                )
+                        except Exception:
+                            pass
+                        chunk_embeddings = np.stack([emb_map[qid] for qid in ids])
+                else:
+                    if embedding_gen is None:
+                        embedding_gen = EmbeddingGenerator(
+                            model_name=embedding_model, provider=embedding_provider
+                        )
+                        embedding_gen.load_model()
+                    chunk_embeddings = embedding_gen.model.encode(
+                        texts,
+                        batch_size=embed_batch_size,
+                        show_progress_bar=False,
+                        convert_to_numpy=True,
+                    )
+
+                labels = mbk.predict(chunk_embeddings)
                 total_pred += len(texts)
 
                 for qid, qtext, label in zip(ids, texts, labels):
@@ -171,7 +300,9 @@ def run_kmeans_clustering(
         if total_pred:
             logger.info(
                 "Predict+assign: %s vectors in %.2fs (%.1f/s)",
-                total_pred, pred_elapsed, (total_pred/pred_elapsed if pred_elapsed else float("inf")),
+                total_pred,
+                pred_elapsed,
+                (total_pred / pred_elapsed if pred_elapsed else float("inf")),
             )
 
         # Cluster statistics
@@ -190,14 +321,20 @@ def run_kmeans_clustering(
         if chroma:
             console.print("[yellow]Writing cluster centroids to ChromaDB...[/yellow]")
 
-            used_cluster_ids = [cid for cid in range(n_clusters) if cluster_counts[cid] > 0]
+            used_cluster_ids = [
+                cid for cid in range(n_clusters) if cluster_counts[cid] > 0
+            ]
             centroids = mbk.cluster_centers_[used_cluster_ids]
             summaries = [
-                f"Cluster {cid} ({cluster_counts[cid]} queries)\nSamples:\n" + "\n".join(f"- {q}" for q in sample_texts[cid])
+                f"Cluster {cid} ({cluster_counts[cid]} queries)\nSamples:\n"
+                + "\n".join(f"- {q}" for q in sample_texts[cid])
                 for cid in used_cluster_ids
             ]
             metadata = [
-                {"num_queries": cluster_counts[cid], "sample_count": len(sample_texts[cid])}
+                {
+                    "num_queries": cluster_counts[cid],
+                    "sample_count": len(sample_texts[cid]),
+                }
                 for cid in used_cluster_ids
             ]
 
@@ -209,12 +346,11 @@ def run_kmeans_clustering(
                 metadata_list=metadata,
             )
 
-            logger.info(
-                "Chroma summaries written: clusters=%s", len(used_cluster_ids)
-            )
+            logger.info("Chroma summaries written: clusters=%s", len(used_cluster_ids))
 
-            console.print(f"[green]Wrote {len(used_cluster_ids)} cluster summaries to ChromaDB[/green]
-")
+            console.print(
+                f"[green]Wrote {len(used_cluster_ids)} cluster summaries to ChromaDB[/green]"
+            )
 
         return run_id
 
@@ -245,7 +381,9 @@ def get_cluster_info(db: Database, run_id: str, cluster_id: int) -> dict:
         )
         results = session.exec(statement).all()
 
-        queries = [{"id": q.id, "text": q.query_text, "model": q.model} for q, _ in results]
+        queries = [
+            {"id": q.id, "text": q.query_text, "model": q.model} for q, _ in results
+        ]
 
         return {
             "run_id": run_id,
