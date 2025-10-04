@@ -1,0 +1,73 @@
+site_name: LMSYS Query Analysis
+site_description: Query analysis and clustering for LMSYS-1M dataset
+site_author: jxnl
+repo_url: https://github.com/jxnl/lmsys-query-analysis
+repo_name: jxnl/lmsys-query-analysis
+
+theme:
+  name: material
+  palette:
+    # Light mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+  - CLI Reference:
+    - Overview: cli/overview.md
+    - Data Loading: cli/load.md
+    - Clustering: cli/clustering.md
+    - Analysis: cli/analysis.md
+  - API Reference:
+    - Database Models: api/models.md
+    - Clustering: api/clustering.md
+    - CLI: api/cli.md
