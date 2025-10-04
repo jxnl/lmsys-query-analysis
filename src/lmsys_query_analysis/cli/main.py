@@ -451,6 +451,15 @@ def summarize(
     concurrency: int = typer.Option(4, help="Parallel LLM calls for summarization"),
     rpm: int = typer.Option(None, help="Optional requests-per-minute rate limit"),
     use_chroma: bool = typer.Option(False, help="Update ChromaDB with new summaries"),
+    contrast_neighbors: int = typer.Option(
+        2, help="Number of nearest neighbor clusters to include for contrast"
+    ),
+    contrast_examples: int = typer.Option(
+        2, help="Examples per neighbor cluster to include for contrast"
+    ),
+    contrast_mode: str = typer.Option(
+        "neighbors", help="Contrast mode: 'neighbors' (examples) or 'keywords'"
+    ),
     db_path: str = typer.Option(None, help="Database path"),
     chroma_path: str = typer.Option(None, help="ChromaDB path"),
 ):
@@ -505,6 +514,9 @@ def summarize(
                 max_queries=max_queries,
                 concurrency=concurrency,
                 rpm=rpm,
+                contrast_neighbors=contrast_neighbors,
+                contrast_examples=contrast_examples,
+                contrast_mode=contrast_mode,
             )
 
             # Store in SQLite
