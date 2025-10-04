@@ -2,16 +2,30 @@
 
 ## Purpose & Goals
 
-This repository provides agents with the ability to perform comprehensive data analysis on LLM Sys queries. The primary goal is to enable systematic investigation of how people are using LLM Sys through:
+This repository provides **terminal-based CLI tools for agents to perform comprehensive data analysis on LMSYS queries**. The primary goal is to enable systematic investigation of how people use LLM systems through data-driven analysis workflows.
+
+### Core Capabilities
 
 - **Data Loading**: Download and process the LMSYS-1M dataset from Hugging Face
 - **Clustering Analysis**: Group similar queries using embeddings and clustering algorithms (KMeans, HDBSCAN)
 - **Cluster Investigation**: Explore and summarize query clusters to identify patterns and usage trends
-- **Hypothesis Generation**: Discover interesting insights about user behavior, query patterns, and system interactions
+- **Contrastive Analysis**: Highlight what makes each cluster unique compared to neighbors
+- **Semantic Search**: Navigate queries and clusters using natural language
+- **Hypothesis Generation**: Discover insights about user behavior, query patterns, and LLM interactions
 
-The analysis workflow supports agents in forming data-driven hypotheses about LLM usage patterns, query complexity, user intent, and system performance across different query types.
+### Agent Workflow
 
-All of these capabilities are accessible through the command-line interface (CLI) using the `lmsys` command, making it easy for agents to perform comprehensive data analysis workflows.
+Agents can use this tool to:
+
+1. **Investigate LLM Usage Patterns**: Discover how users interact with different LLM systems
+2. **Identify Common Use Cases**: Group similar queries to find patterns
+3. **Generate Insights**: Use LLM-powered summarization to understand cluster characteristics
+4. **Form Hypotheses**: Systematically explore data to develop testable hypotheses
+5. **Export Findings**: Save analysis results for further investigation
+
+All capabilities are accessible through the `lmsys` CLI command in a composable workflow: `load → cluster → summarize → search → export`
+
+### Extensibility
 
 If agents identify gaps in functionality or need additional tools to enhance their analysis capabilities, they should suggest these improvements to the user for potential implementation.
 

@@ -1,6 +1,20 @@
 # LMSYS Query Analysis
 
-Query analysis and clustering tool for the LMSYS-1M conversational dataset with semantic search and LLM-powered summarization.
+**Terminal-based CLI tools for agents to perform comprehensive data analysis on LMSYS queries.**
+
+This project enables systematic investigation of how people use LLM systems through data-driven analysis workflows. Agents can explore the LMSYS-1M dataset to discover patterns, form hypotheses, and generate insights about user behavior, query complexity, and LLM usage trends.
+
+## Goal
+
+Enable terminal-based agents to:
+
+- **Investigate LLM Usage Patterns**: Discover how users interact with different LLM systems
+- **Identify Query Clusters**: Group similar queries to find common use cases and patterns
+- **Generate Insights**: Use LLM-powered summarization to understand what makes clusters unique
+- **Form Hypotheses**: Systematically explore data to develop testable hypotheses about user behavior
+- **Navigate Semantically**: Search queries and clusters using natural language
+
+All through a composable CLI workflow: `load → cluster → summarize → search → export`
 
 ## Features
 
@@ -9,7 +23,8 @@ Query analysis and clustering tool for the LMSYS-1M conversational dataset with 
 - **Clustering**: MiniBatchKMeans (scales well) and HDBSCAN (density-based)
 - **ChromaDB Integration**: Semantic search across queries and cluster summaries
 - **LLM Summarization**: Generate titles and descriptions for clusters using any LLM provider
-- **CLI Interface**: Rich terminal UI with tables and progress bars
+- **Contrastive Analysis**: Highlight what makes each cluster unique vs. neighbors
+- **CLI Interface**: Rich terminal UI designed for agent workflows
 
 ## Installation
 
