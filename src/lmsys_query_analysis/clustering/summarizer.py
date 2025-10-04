@@ -114,7 +114,7 @@ class ClusterSummarizer:
         self,
         model: str = "anthropic/claude-sonnet-4-5-20250929",
         api_key: Optional[str] = None,
-        concurrency: int = 20,
+        concurrency: int = 40,
         rpm: Optional[int] = None,
     ):
         """Initialize the summarizer.
