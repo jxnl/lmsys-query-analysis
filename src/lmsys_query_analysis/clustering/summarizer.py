@@ -216,6 +216,9 @@ Write concise, specific, and informative outputs focused on what makes this clus
         max_queries: int = 50,
         concurrency: Optional[int] = None,
         rpm: Optional[int] = None,
+        contrast_neighbors: int = 2,
+        contrast_examples: int = 2,
+        contrast_mode: str = "neighbors",
     ) -> dict[int, dict]:
         """Generate summaries for multiple clusters (concurrently).
 
@@ -239,6 +242,9 @@ Write concise, specific, and informative outputs focused on what makes this clus
             max_queries,
             use_concurrency,
             use_rpm,
+            contrast_neighbors,
+            contrast_examples,
+            contrast_mode,
         )
 
     # -------- Async path below --------
@@ -249,8 +255,14 @@ Write concise, specific, and informative outputs focused on what makes this clus
         max_queries: int,
         concurrency: int,
         rpm: Optional[int],
+        contrast_neighbors: int,
+        contrast_examples: int,
+        contrast_mode: str,
     ) -> Dict[int, dict]:
-        """Async concurrent generation using anyio with optional rate limiting."""
+        """Async concurrent generation using anyio with optional rate limiting.
+
+        Also computes contrastive neighbor context to include in prompts.
+        """
 
         class RateLimiter:
             def __init__(self, rate_per_min: Optional[int]):
@@ -282,6 +294,66 @@ Write concise, specific, and informative outputs focused on what makes this clus
             f"[cyan]Generating LLM summaries for {total} clusters using {self.model} (concurrency={concurrency}{', rpm=' + str(rpm) if rpm else ''})...[/cyan]"
         )
 
+        # Pre-select representative queries for each cluster
+        sampled_map: Dict[int, List[str]] = {}
+        for cid, qtexts in clusters_data:
+            sampled_map[cid] = self._select_representative_queries(qtexts, max_queries)
+
+        # Build TF-IDF centroids per cluster for neighbor similarity
+        id_list = [cid for cid, _ in clusters_data]
+        docs = ["\n".join(sampled_map[cid]) for cid in id_list]
+        sim_matrix = None
+        Xc = None
+        vec = None
+        if len(docs) >= 2 and contrast_neighbors > 0:
+            vec = TfidfVectorizer(max_features=8000, ngram_range=(1, 2), min_df=1, max_df=0.95)
+            Xc = vec.fit_transform(docs)
+            sim_matrix = cosine_similarity(Xc, Xc)
+
+        # Prepare neighbor context per cluster
+        neighbor_context: Dict[int, str] = {}
+        use_neighbors = (contrast_neighbors or 0) > 0 and (contrast_examples or 0) > 0 and contrast_mode == "neighbors"
+        use_keywords = (contrast_neighbors or 0) > 0 and contrast_mode == "keywords"
+        for i, cid in enumerate(id_list):
+            block_lines: List[str] = []
+            if sim_matrix is None:
+                neighbor_context[cid] = ""
+                continue
+            sims = sim_matrix[i].copy()
+            sims[i] = -1.0  # exclude self
+            nbr_idx = sims.argsort()[::-1][: max(0, int(contrast_neighbors))]
+            if len(nbr_idx) == 0:
+                neighbor_context[cid] = ""
+                continue
+            block_lines.append("CONTRASTIVE NEIGHBORS (do not summarize these; use only to clarify distinctions):")
+            for j in nbr_idx:
+                nid = id_list[j]
+                nsize = len([q for c, q in clusters_data if c == nid][0])
+                if use_neighbors:
+                    exs = sampled_map.get(nid, [])[: max(0, int(contrast_examples))]
+                    exs_fmt = []
+                    for e in exs:
+                        line = e.splitlines()[0].strip()
+                        if len(line) > 180:
+                            line = line[:177] + "..."
+                        exs_fmt.append(line)
+                    block_lines.append(f"Neighbor (Cluster {nid}, size≈{nsize}):")
+                    for ex in exs_fmt:
+                        block_lines.append(f"- {ex}")
+                elif use_keywords and Xc is not None and vec is not None:
+                    row = Xc[j]
+                    if row.nnz:
+                        nz = row.nonzero()[1]
+                        weights = row.data
+                        order = weights.argsort()[::-1]
+                        top_idx = [nz[k] for k in order[:7]]
+                        vocab = vec.get_feature_names_out()
+                        kws = [vocab[t] for t in top_idx]
+                        block_lines.append(
+                            f"Neighbor (Cluster {nid}, size≈{nsize}) keywords: " + ", ".join(kws)
+                        )
+            neighbor_context[cid] = "\n".join(block_lines) if block_lines else ""
+
         async def worker(
             idx: int, cid: int, queries: List[str], progress_task, progress
         ):
@@ -295,6 +367,7 @@ Write concise, specific, and informative outputs focused on what makes this clus
                             cluster_queries=queries,
                             cluster_id=cid,
                             max_queries=max_queries,
+                            contrast_block=neighbor_context.get(cid, ""),
                         )
                     results[cid] = summary
                     if progress_task is not None:
