@@ -416,7 +416,7 @@ def list_clusters(
                 table.add_row(*row)
 
             console.print(table)
-            # Also print examples as plain lines to ensure visibility in narrow terminals
+            # Ensure examples are visible even if the table drops/wraps columns in narrow terminals
             if show_examples and show_examples > 0:
                 console.print("\n[bold cyan]Examples per cluster[/bold cyan]")
                 for summary in summaries:
@@ -446,7 +446,9 @@ def list_clusters(
 def summarize(
     run_id: str = typer.Argument(..., help="Run ID to summarize"),
     cluster_id: int = typer.Option(None, help="Specific cluster to summarize"),
-    model: str = typer.Option("openai/gpt-5", help="LLM model (provider/model)"),
+    model: str = typer.Option(
+        "anthropic/sonnet-4.5-latest", help="LLM model (provider/model)"
+    ),
     max_queries: int = typer.Option(50, help="Max queries to send to LLM per cluster"),
     concurrency: int = typer.Option(4, help="Parallel LLM calls for summarization"),
     rpm: int = typer.Option(None, help="Optional requests-per-minute rate limit"),
@@ -521,6 +523,7 @@ def summarize(
 
             # Store in SQLite
             logger.info("Storing summaries in SQLite...")
+            sizes_map = {cid: len(qs) for cid, qs in clusters_data}
             for cid, summary_data in results.items():
                 # Check if summary already exists
                 statement = select(ClusterSummary).where(
@@ -546,7 +549,7 @@ def summarize(
                         title=summary_data["title"],
                         description=summary_data["description"],
                         summary=f"{summary_data['title']}\n\n{summary_data['description']}",
-                        num_queries=len([q for c, q in clusters_data if c == cid][0]),
+                        num_queries=sizes_map.get(cid, 0),
                         representative_queries=[
                             q[:200] for q in summary_data["sample_queries"]
                         ],
