@@ -469,7 +469,7 @@ def summarize(
     try:
         from ..clustering.summarizer import ClusterSummarizer
         from ..clustering.embeddings import EmbeddingGenerator
-        from ..db.models import ClusterSummary, QueryCluster, Query
+        from ..db.models import ClusterSummary, QueryCluster, Query, ClusteringRun
         from sqlmodel import select
 
         db = get_db(db_path)
@@ -482,6 +482,36 @@ def summarize(
         session = db.get_session()
 
         try:
+            # Get the clustering run to extract embedding model info
+            run_statement = select(ClusteringRun).where(ClusteringRun.run_id == run_id)
+            run = session.exec(run_statement).first()
+            if not run:
+                console.print(f"[red]Run {run_id} not found[/red]")
+                raise typer.Exit(1)
+
+            # Extract embedding model from run parameters
+            embedding_model = "all-MiniLM-L6-v2"  # default
+            embedding_provider = "sentence-transformers"  # default
+            if run.parameters:
+                embedding_model = run.parameters.get("embedding_model", embedding_model)
+                # Infer provider based on model name
+                if "text-embedding" in embedding_model:
+                    embedding_provider = "openai"
+                elif "embed" in embedding_model and "openai" not in embedding_model:
+                    embedding_provider = "sentence-transformers"
+
+            logger.info("Using embedding model from clustering run: %s (%s)", embedding_model, embedding_provider)
+            console.print(f"[dim]Embedding model: {embedding_provider}/{embedding_model}[/dim]")
+
+            # Re-initialize summarizer with correct embedding model
+            summarizer = ClusterSummarizer(
+                model=model,
+                concurrency=concurrency,
+                rpm=rpm,
+                embedding_model=embedding_model,
+                embedding_provider=embedding_provider
+            )
+
             # Get clusters to summarize
             if cluster_id is not None:
                 cluster_ids = [cluster_id]
@@ -564,8 +594,12 @@ def summarize(
                     "[yellow]Updating ChromaDB with new summaries...[/yellow]"
                 )
 
-                # Generate embeddings for title + description
-                embedding_gen = EmbeddingGenerator()
+                # Generate embeddings for title + description using the same model as clustering
+                embedding_gen = EmbeddingGenerator(
+                    model_name=embedding_model,
+                    provider=embedding_provider,
+                    concurrency=concurrency
+                )
                 texts = [
                     f"{results[cid]['title']}\n\n{results[cid]['description']}"
                     for cid in cluster_ids

@@ -125,14 +125,12 @@ def test_summarizer_prompt_includes_contrast_neighbors(fake_embeddings, monkeypa
     for v in res.values():
         assert "title" in v and "description" in v and "sample_queries" in v
 
-    # Assert prompts captured and include contrast section with neighbor IDs
+    # Assert prompts captured and include XML contrast section with neighbor entries
     assert len(prompts) == 3
     p0 = prompts[0]
-    assert "CONTRASTIVE NEIGHBORS" in p0
-    # Neighbor blocks should mention "Neighbor (Cluster" and some cluster ids
-    assert "Neighbor (Cluster" in p0
-    # Target cluster queries header present
-    assert "TARGET CLUSTER QUERIES:" in p0
+    assert "<contrastive_neighbors>" in p0
+    assert "<neighbor" in p0
+    assert "<target_queries>" in p0
 
 
 def test_summarizer_prompt_keywords_mode(fake_embeddings, monkeypatch):
@@ -158,7 +156,7 @@ def test_summarizer_prompt_keywords_mode(fake_embeddings, monkeypatch):
 
     assert set(res.keys()) == {10, 11, 12}
     assert len(prompts) == 3
-    assert any("keywords:" in p for p in prompts)
+    assert any("<keywords>" in p for p in prompts)
 
 
 def test_summarizer_prompt_no_contrast(fake_embeddings, monkeypatch):
@@ -183,4 +181,4 @@ def test_summarizer_prompt_no_contrast(fake_embeddings, monkeypatch):
 
     assert set(res.keys()) == {100, 101}
     # Prompts should not include contrast block
-    assert all("CONTRASTIVE NEIGHBORS" not in p for p in prompts)
+    assert all("<contrastive_neighbors>" not in p for p in prompts)
