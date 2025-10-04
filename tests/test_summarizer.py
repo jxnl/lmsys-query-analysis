@@ -1,0 +1,186 @@
+"""Smoke tests for the summarizer.
+
+These tests mock out LLM calls and embeddings so we can verify prompt assembly
+and output shape without network access.
+"""
+
+from types import SimpleNamespace
+from typing import List
+import numpy as np
+import pytest
+
+from lmsys_query_analysis.clustering.summarizer import ClusterSummarizer
+
+
+class FakeAsyncChat:
+    def __init__(self, prompts: List[str]):
+        self._prompts = prompts
+
+    class _Completions:
+        def __init__(self, prompts_ref: List[str]):
+            self._prompts = prompts_ref
+
+        async def create(self, response_model=None, messages=None):  # type: ignore[no-redef]
+            # Capture the prompt content for assertions
+            content = messages[0]["content"] if messages else ""
+            self._prompts.append(content)
+            # Return a minimal object with required fields
+            return SimpleNamespace(
+                title="Test Title",
+                description="Test Description",
+            )
+
+    @property
+    def completions(self):
+        # for parity with .chat.completions
+        return self._Completions(self._prompts)
+
+
+class FakeAsyncClient:
+    def __init__(self, prompts: List[str]):
+        self.chat = SimpleNamespace(completions=FakeAsyncChat(prompts).completions)
+
+
+def patch_instructor(monkeypatch, prompts: List[str]):
+    """Patch instructor.from_provider to avoid real client init and capture prompts."""
+    import instructor
+
+    class _FakeSyncChat:
+        class _Completions:
+            def __init__(self, prompts_ref: List[str]):
+                self._prompts = prompts_ref
+
+            def create(self, response_model=None, messages=None):  # sync create
+                content = messages[0]["content"] if messages else ""
+                self._prompts.append(content)
+                return SimpleNamespace(title="Test Title", description="Test Description")
+
+        def __init__(self, prompts_ref: List[str]):
+            self.completions = self._Completions(prompts_ref)
+
+    class _FakeSyncClient:
+        def __init__(self, prompts_ref: List[str]):
+            self.chat = _FakeSyncChat(prompts_ref)
+
+    def _fake_from_provider(model: str, api_key=None, async_client: bool = False, **kwargs):
+        # Return async or sync fake client capturing prompts
+        if async_client:
+            return FakeAsyncClient(prompts)
+        return _FakeSyncClient(prompts)
+
+    monkeypatch.setattr(instructor, "from_provider", _fake_from_provider, raising=True)
+
+@pytest.fixture
+def fake_embeddings(monkeypatch):
+    """Patch EmbeddingGenerator.generate_embeddings to a deterministic matrix."""
+    def _fake_generate_embeddings(self, texts: List[str], batch_size: int = 32, show_progress: bool = True):
+        # Return a simple embedding matrix that makes 0~1 near and 2 far
+        n = len(texts)
+        if n == 3:
+            return np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [0.99, 0.01, 0.0],
+                    [0.0, 0.0, 1.0],
+                ]
+            )
+        # Fallback: identity-ish
+        eye = np.eye(max(1, n))
+        return eye[:n]
+
+    # Patch on the module where it's used
+    # Patch the EmbeddingGenerator used by summarizer internals
+    import lmsys_query_analysis.clustering.embeddings as emb
+
+    monkeypatch.setattr(
+        emb.EmbeddingGenerator, "generate_embeddings", _fake_generate_embeddings, raising=True
+    )
+
+
+def test_summarizer_prompt_includes_contrast_neighbors(fake_embeddings, monkeypatch):
+    # Arrange
+    prompts: List[str] = []
+    patch_instructor(monkeypatch, prompts)
+    s = ClusterSummarizer(model="openai/gpt-5", concurrency=1)
+
+    clusters_data = [
+        (0, ["python pandas dataframe indexing", "numpy vectorize loop"]),
+        (1, ["pandas loc keyerror fix", "python typeerror add int str"]),
+        (2, ["how to cook pasta", "boil water add salt"]),
+    ]
+
+    # Act
+    res = s.generate_batch_summaries(
+        clusters_data,
+        max_queries=5,
+        concurrency=1,
+        rpm=None,
+        contrast_neighbors=2,
+        contrast_examples=1,
+        contrast_mode="neighbors",
+    )
+
+    # Assert outputs shape
+    assert set(res.keys()) == {0, 1, 2}
+    for v in res.values():
+        assert "title" in v and "description" in v and "sample_queries" in v
+
+    # Assert prompts captured and include contrast section with neighbor IDs
+    assert len(prompts) == 3
+    p0 = prompts[0]
+    assert "CONTRASTIVE NEIGHBORS" in p0
+    # Neighbor blocks should mention "Neighbor (Cluster" and some cluster ids
+    assert "Neighbor (Cluster" in p0
+    # Target cluster queries header present
+    assert "TARGET CLUSTER QUERIES:" in p0
+
+
+def test_summarizer_prompt_keywords_mode(fake_embeddings, monkeypatch):
+    prompts: List[str] = []
+    patch_instructor(monkeypatch, prompts)
+    s = ClusterSummarizer(model="openai/gpt-5", concurrency=1)
+
+    clusters_data = [
+        (10, ["nginx reverse proxy 502", "docker image too big"]),
+        (11, ["kubernetes secret mount", "crashloopbackoff logs"]),
+        (12, ["translate text to spanish", "preserve html tags"]),
+    ]
+
+    res = s.generate_batch_summaries(
+        clusters_data,
+        max_queries=5,
+        concurrency=1,
+        rpm=None,
+        contrast_neighbors=1,
+        contrast_examples=0,  # force keywords mode to render keywords only
+        contrast_mode="keywords",
+    )
+
+    assert set(res.keys()) == {10, 11, 12}
+    assert len(prompts) == 3
+    assert any("keywords:" in p for p in prompts)
+
+
+def test_summarizer_prompt_no_contrast(fake_embeddings, monkeypatch):
+    prompts: List[str] = []
+    patch_instructor(monkeypatch, prompts)
+    s = ClusterSummarizer(model="openai/gpt-5", concurrency=1)
+
+    clusters_data = [
+        (100, ["hello", "hi there"]),
+        (101, ["ciao", "hola"]),
+    ]
+
+    res = s.generate_batch_summaries(
+        clusters_data,
+        max_queries=5,
+        concurrency=1,
+        rpm=None,
+        contrast_neighbors=0,
+        contrast_examples=0,
+        contrast_mode="neighbors",
+    )
+
+    assert set(res.keys()) == {100, 101}
+    # Prompts should not include contrast block
+    assert all("CONTRASTIVE NEIGHBORS" not in p for p in prompts)

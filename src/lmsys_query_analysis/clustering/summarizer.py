@@ -5,7 +5,7 @@ optional rate limiting to speed up large runs safely.
 """
 
 from typing import List, Optional, Dict, Tuple
-from math import ceil
+ 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -109,7 +109,7 @@ class ClusterSummarizer:
 
     def __init__(
         self,
-        model: str = "openai/gpt-5",
+        model: str = "anthropic/sonnet-4.5-latest",
         api_key: Optional[str] = None,
         concurrency: int = 4,
         rpm: Optional[int] = None,
@@ -117,8 +117,9 @@ class ClusterSummarizer:
         """Initialize the summarizer.
 
         Args:
-            model: Model in format "provider/model_name" (e.g., "openai/gpt-5",
-                   "openai/gpt-4", "groq/llama-3.1-8b-instant")
+            model: Model in format "provider/model_name" (e.g.,
+                   "anthropic/sonnet-4.5-latest", "openai/gpt-5",
+                   "groq/llama-3.1-8b-instant")
             api_key: API key for the provider (or set env var ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
             concurrency: Number of concurrent LLM requests
             rpm: Optional requests-per-minute rate limit (global across tasks)
@@ -142,6 +143,7 @@ class ClusterSummarizer:
         cluster_queries: List[str],
         cluster_id: int,
         max_queries: int = 50,
+        contrast_block: str = "",
     ) -> dict:
         """Generate title and description for a cluster.
 
@@ -167,8 +169,10 @@ Sample queries shown: {len(sampled)}
 
 {EXAMPLES_PROMPT}
 
-QUERIES:
+TARGET CLUSTER QUERIES:
 {queries_text}
+
+{contrast_block}
 
 Analyze these queries and provide:
 1) SHORT TITLE (5-10 words):
@@ -299,16 +303,44 @@ Write concise, specific, and informative outputs focused on what makes this clus
         for cid, qtexts in clusters_data:
             sampled_map[cid] = self._select_representative_queries(qtexts, max_queries)
 
-        # Build TF-IDF centroids per cluster for neighbor similarity
+        # Compute neighbor similarity using embeddings; optionally TF-IDF for keywords mode
         id_list = [cid for cid, _ in clusters_data]
         docs = ["\n".join(sampled_map[cid]) for cid in id_list]
+        sizes_map: Dict[int, int] = {cid: len(qs) for cid, qs in clusters_data}
         sim_matrix = None
         Xc = None
         vec = None
         if len(docs) >= 2 and contrast_neighbors > 0:
-            vec = TfidfVectorizer(max_features=8000, ngram_range=(1, 2), min_df=1, max_df=0.95)
-            Xc = vec.fit_transform(docs)
-            sim_matrix = cosine_similarity(Xc, Xc)
+            # Prefer embeddings for neighbor selection
+            try:
+                import os
+                from .embeddings import EmbeddingGenerator
+
+                provider = "openai" if os.getenv("OPENAI_API_KEY") else "sentence-transformers"
+                model_name = (
+                    "text-embedding-3-small" if provider == "openai" else "all-MiniLM-L6-v2"
+                )
+                eg = EmbeddingGenerator(
+                    model_name=model_name,
+                    provider=provider,
+                    concurrency=self.concurrency,
+                )
+                emb = eg.generate_embeddings(docs, show_progress=False)
+                sim_matrix = cosine_similarity(emb, emb)
+            except Exception:
+                # Fallback to TF-IDF similarity if embeddings fail
+                vec = TfidfVectorizer(
+                    max_features=8000, ngram_range=(1, 2), min_df=1, max_df=0.95
+                )
+                Xc = vec.fit_transform(docs)
+                sim_matrix = cosine_similarity(Xc, Xc)
+
+            # If keywords mode requested, build TF-IDF matrix for keyword extraction
+            if vec is None and Xc is None and contrast_mode == "keywords":
+                vec = TfidfVectorizer(
+                    max_features=8000, ngram_range=(1, 2), min_df=1, max_df=0.95
+                )
+                Xc = vec.fit_transform(docs)
 
         # Prepare neighbor context per cluster
         neighbor_context: Dict[int, str] = {}
@@ -328,7 +360,7 @@ Write concise, specific, and informative outputs focused on what makes this clus
             block_lines.append("CONTRASTIVE NEIGHBORS (do not summarize these; use only to clarify distinctions):")
             for j in nbr_idx:
                 nid = id_list[j]
-                nsize = len([q for c, q in clusters_data if c == nid][0])
+                nsize = sizes_map.get(nid, 0)
                 if use_neighbors:
                     exs = sampled_map.get(nid, [])[: max(0, int(contrast_examples))]
                     exs_fmt = []
@@ -406,6 +438,7 @@ Write concise, specific, and informative outputs focused on what makes this clus
         cluster_queries: List[str],
         cluster_id: int,
         max_queries: int = 50,
+        contrast_block: str = "",
     ) -> dict:
         """Async variant of single-cluster summarization using AsyncInstructor."""
         # Select a representative and diverse sample of queries
@@ -420,8 +453,10 @@ Sample queries shown: {len(sampled)}
 
 {EXAMPLES_PROMPT}
 
-QUERIES:
+TARGET CLUSTER QUERIES:
 {queries_text}
+
+{contrast_block}
 
 Analyze these queries and provide:
 1) SHORT TITLE (5-10 words):
@@ -489,9 +524,9 @@ Write concise, specific, and informative outputs focused on what makes this clus
         )
         X = vectorizer.fit_transform(originals)
 
-        # Centroid relevance
-        centroid = X.mean(axis=0)
-        rel = cosine_similarity(X, centroid).ravel()
+        # Centroid relevance (ensure dense ndarray, not np.matrix)
+        centroid = np.asarray(X.mean(axis=0)).ravel()
+        rel = cosine_similarity(X, centroid.reshape(1, -1)).ravel()
 
         # MMR selection
         lambda_param = 0.7
