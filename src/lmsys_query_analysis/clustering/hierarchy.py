@@ -434,15 +434,9 @@ async def merge_clusters_hierarchical(
     # Initialize LLM client
     logger.info(f"Initializing LLM: {llm_provider}/{llm_model}")
 
-    # Create async instructor client based on provider
-    if llm_provider == "anthropic":
-        client = instructor.from_anthropic(llm_model, async_client=True)
-    elif llm_provider == "openai":
-        client = instructor.from_openai(llm_model, async_client=True)
-    elif llm_provider == "groq":
-        client = instructor.from_groq(llm_model, async_client=True)
-    else:
-        client = instructor.from_provider(llm_model, async_client=True)
+    # Build full model string for instructor (e.g., "openai/gpt-4o-mini")
+    full_model = f"{llm_provider}/{llm_model}"
+    client = instructor.from_provider(full_model, async_client=True)
 
     # Rate limiter
     limiter = None
