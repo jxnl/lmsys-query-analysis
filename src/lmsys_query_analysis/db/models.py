@@ -109,3 +109,40 @@ class ClusterSummary(SQLModel, table=True):
 
     # Relationship
     run: Optional[ClusteringRun] = Relationship(back_populates="cluster_summaries")
+
+
+class ClusterHierarchy(SQLModel, table=True):
+    """Table storing hierarchical relationships between clusters.
+
+    Supports multi-level hierarchies where clusters can be organized into
+    parent-child relationships, enabling drill-down navigation from broad
+    categories to specific topics.
+    """
+
+    __tablename__ = "cluster_hierarchies"
+    __table_args__ = (
+        UniqueConstraint("hierarchy_run_id", "cluster_id", name="uq_hierarchy_run_cluster"),
+        Index("ix_cluster_hierarchies_hierarchy_run_id", "hierarchy_run_id"),
+        Index("ix_cluster_hierarchies_cluster_id", "cluster_id"),
+        Index("ix_cluster_hierarchies_parent_cluster_id", "parent_cluster_id"),
+        Index("ix_cluster_hierarchies_level", "level"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    run_id: str = Field(
+        sa_column=Column(
+            "run_id",
+            ForeignKey("clustering_runs.run_id", ondelete="CASCADE"),
+        ),
+    )
+    hierarchy_run_id: str  # Unique ID for this hierarchy run (e.g., "hier-20251004-123456")
+    cluster_id: int  # The cluster being organized (can be virtual for merged clusters)
+    parent_cluster_id: Optional[int] = None  # Parent cluster ID (null for top level)
+    level: int  # 0=leaf (base clusters), 1=first merge, 2=second merge, etc.
+    children_ids: Optional[list] = Field(default=None, sa_column=Column(JSON))  # List of child cluster IDs
+    title: Optional[str] = None  # Title for merged/parent clusters
+    description: Optional[str] = None  # Description for merged/parent clusters
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationship
+    run: Optional[ClusteringRun] = Relationship()

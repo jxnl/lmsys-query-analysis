@@ -1223,5 +1223,135 @@ def backfill_chroma(
         raise typer.Exit(1)
 
 
+@app.command("merge-clusters")
+def merge_clusters_cmd(
+    run_id: str = typer.Argument(..., help="Clustering run ID to create hierarchy from"),
+    db_path: str = typer.Option(None, help="Database path"),
+    llm_provider: str = typer.Option(
+        "anthropic", help="LLM provider: anthropic, openai, groq"
+    ),
+    llm_model: str = typer.Option(
+        "claude-sonnet-4-5-20250929", help="LLM model for merging"
+    ),
+    embedding_model: str = typer.Option(
+        "all-mpnet-base-v2", help="Sentence transformer for cluster embeddings"
+    ),
+    target_levels: int = typer.Option(
+        3, help="Number of hierarchy levels (1=flat, 2=one merge, 3=two merges, etc.)"
+    ),
+    merge_ratio: float = typer.Option(
+        0.2, help="Target merge ratio per level (0.2 = 200->40->8)"
+    ),
+    neighborhood_size: int = typer.Option(
+        40, help="Average clusters per neighborhood (for LLM context)"
+    ),
+    concurrency: int = typer.Option(
+        8, help="Max concurrent LLM requests"
+    ),
+    rpm: int = typer.Option(
+        None, help="Optional rate limit (requests per minute)"
+    ),
+):
+    """Create hierarchical organization of clusters using LLM-driven merging.
+
+    Follows Anthropic's Clio approach:
+    1. Embed cluster summaries
+    2. Group into neighborhoods
+    3. LLM generates higher-level categories
+    4. Deduplicate and assign children to parents
+    5. Refine parent names based on children
+    6. Repeat for multiple hierarchy levels
+
+    Example:
+        uv run lmsys merge-clusters kmeans-100-20251004-170442 --target-levels 3
+    """
+    try:
+        import anyio
+        from ..db.models import ClusterSummary, ClusterHierarchy
+        from sqlmodel import select
+        from ..clustering.hierarchy import merge_clusters_hierarchical
+
+        db = get_db(db_path)
+
+        with db.get_session() as session:
+            # Load base cluster summaries
+            console.print(f"[cyan]Loading cluster summaries for run: {run_id}[/cyan]")
+
+            summaries = session.exec(
+                select(ClusterSummary)
+                .where(ClusterSummary.run_id == run_id)
+                .order_by(ClusterSummary.cluster_id)
+            ).all()
+
+            if not summaries:
+                console.print(f"[red]No summaries found for run {run_id}[/red]")
+                console.print("[yellow]Run 'lmsys summarize <run_id>' first[/yellow]")
+                raise typer.Exit(1)
+
+            base_clusters = [
+                {
+                    "cluster_id": s.cluster_id,
+                    "title": s.title or f"Cluster {s.cluster_id}",
+                    "description": s.description or "No description"
+                }
+                for s in summaries
+            ]
+
+            console.print(f"[green]Found {len(base_clusters)} base clusters[/green]")
+
+            # Run hierarchical merging
+            console.print(f"[cyan]Starting hierarchical merging with {target_levels} levels[/cyan]")
+
+            async def run_merge():
+                return await merge_clusters_hierarchical(
+                    base_clusters,
+                    run_id,
+                    embedding_model=embedding_model,
+                    llm_provider=llm_provider,
+                    llm_model=llm_model,
+                    target_levels=target_levels,
+                    merge_ratio=merge_ratio,
+                    neighborhood_size=neighborhood_size,
+                    concurrency=concurrency,
+                    rpm=rpm
+                )
+
+            hierarchy_run_id, hierarchy_data = anyio.run(run_merge)
+
+            # Save hierarchy to database
+            console.print(f"[cyan]Saving hierarchy to database...[/cyan]")
+
+            for h in hierarchy_data:
+                hierarchy_entry = ClusterHierarchy(**h)
+                session.add(hierarchy_entry)
+
+            session.commit()
+
+            # Display summary
+            levels = {}
+            for h in hierarchy_data:
+                level = h["level"]
+                if level not in levels:
+                    levels[level] = 0
+                levels[level] += 1
+
+            summary = Table(title=f"Hierarchy Summary: {hierarchy_run_id}")
+            summary.add_column("Level", style="cyan")
+            summary.add_column("Clusters", style="green")
+            summary.add_column("Description", style="yellow")
+
+            for level in sorted(levels.keys()):
+                desc = "Leaf clusters" if level == 0 else f"Merge level {level}"
+                summary.add_row(str(level), str(levels[level]), desc)
+
+            console.print(summary)
+            console.print(f"\n[green]✓ Hierarchy saved: {hierarchy_run_id}[/green]")
+            console.print(f"[dim]Use 'lmsys inspect-hierarchy {hierarchy_run_id}' to explore[/dim]")
+
+    except Exception as e:
+        logger.exception("Hierarchy merging failed: %s", e)
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()
