@@ -354,8 +354,6 @@ Follow the Pydantic schema rules exactly.""",
             messages=messages,
         )
 
-        self.logger.info("Generated summary for cluster %d: %s", cluster_id, response.title)
-
         return {
             "title": response.title,
             "description": response.description,

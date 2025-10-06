@@ -507,7 +507,7 @@ async def merge_clusters_hierarchical(
             # Call async batch directly since we're already in async context
             emb_list = await embedder._async_cohere_batches(texts, batch_size=96, progress_task=None, progress=None)
             embeddings = np.array(emb_list)
-            logger.info(f"  Embedded {n_current} summaries in {time.time() - step_start:.1f}s")
+            logger.debug(f"  Embedded {n_current} summaries in {time.time() - step_start:.1f}s")
 
             # Step 2: Create neighborhoods
             step_start = time.time()
@@ -518,7 +518,7 @@ async def merge_clusters_hierarchical(
                 f"(avg size: {avg_neighborhood_size:.1f} clusters)"
             )
             neighborhood_labels = create_neighborhoods(embeddings, n_neighborhoods)
-            logger.info(f"  Created neighborhoods in {time.time() - step_start:.1f}s")
+            logger.debug(f"  Created neighborhoods in {time.time() - step_start:.1f}s")
 
             # Step 3: Generate higher-level categories per neighborhood
             all_candidates = []
@@ -541,9 +541,19 @@ async def merge_clusters_hierarchical(
                     )
 
                 all_candidates.extend(categories.categories)
-                logger.info(f"Neighborhood {neigh_id}: Generated {len(categories.categories)} candidates")
+                logger.debug(
+                    f"  Neighborhood {neigh_id}/{n_neighborhoods-1} ({len(neigh_clusters)} clusters): "
+                    f"Generated {len(categories.categories)} candidates"
+                )
+                # Show the generated category names (debug only)
+                for cat_name in categories.categories:
+                    logger.debug(f"    → {cat_name}")
 
-            logger.info(f"  Generated {len(all_candidates)} total candidates in {time.time() - step_start:.1f}s")
+            logger.info(
+                f"  Generated {len(all_candidates)} total candidates "
+                f"({len(all_candidates) / n_neighborhoods:.1f} per neighborhood)"
+            )
+            logger.debug(f"  Generation took {time.time() - step_start:.1f}s")
 
             # Step 4: Deduplicate globally
             step_start = time.time()
@@ -563,13 +573,17 @@ async def merge_clusters_hierarchical(
 
             parent_names = dedup_result.clusters
             logger.info(
-                f"  Deduplicated to {len(parent_names)} parent clusters in {time.time() - step_start:.1f}s "
+                f"  Deduplicated to {len(parent_names)} parent clusters "
                 f"({len(all_candidates) - len(parent_names)} duplicates removed)"
             )
+            logger.debug(f"  Deduplication took {time.time() - step_start:.1f}s")
+            # Show parent names at debug level (can be a long list)
             for parent_name in parent_names:
-                logger.info(f"    ✓ {parent_name}")
+                logger.debug(f"    ✓ {parent_name}")
 
             # Step 5: Assign children to parents (sequential for now - TODO: parallelize properly)
+            step_start = time.time()
+            logger.info(f"Assigning {n_current} children to {len(parent_names)} parents...")
             parent_children = {name: [] for name in parent_names}
             assignment_errors = []
 
@@ -606,8 +620,16 @@ async def merge_clusters_hierarchical(
             if assignment_errors:
                 logger.warning(f"Found {len(assignment_errors)} invalid assignments out of {len(current_clusters)}")
                 logger.warning("Assignment errors: " + str(assignment_errors[:5]))  # Show first 5
+            
+            logger.debug(f"  Completed assignments in {time.time() - step_start:.1f}s")
+            
+            # Show assignment summary
+            avg_children = sum(len(children) for children in parent_children.values()) / len(parent_names)
+            logger.debug(f"  Average children per parent: {avg_children:.1f}")
 
             # Step 6: Refine parent names based on children
+            step_start = time.time()
+            logger.info(f"Refining {len(parent_names)} parent clusters based on their children...")
             next_level_clusters = []
 
             for parent_name in parent_names:
@@ -628,6 +650,12 @@ async def merge_clusters_hierarchical(
 
                 parent_cluster_id = next_cluster_id
                 next_cluster_id += 1
+                
+                # Log the merge (summary at INFO, details at DEBUG)
+                logger.info(f"  Merged {len(child_titles)} clusters → '{refined.title}'")
+                # Show all child titles at debug level (can be verbose)
+                for i, child_title in enumerate(child_titles, 1):
+                    logger.debug(f"    {i}. {child_title}")
 
                 # Add to hierarchy
                 hierarchy.append({
@@ -668,7 +696,18 @@ async def merge_clusters_hierarchical(
                     "description": refined.summary
                 })
 
-                logger.info(f"Created parent cluster {parent_cluster_id}: '{refined.title}' with {len(child_ids)} children")
+            logger.debug(
+                f"  Completed refinement in {time.time() - step_start:.1f}s "
+                f"(created {len(next_level_clusters)} parent clusters)"
+            )
+            
+            # Level complete summary
+            level_time = time.time() - level_start_time
+            logger.info(
+                f"Level {current_level} -> {current_level + 1} complete: "
+                f"{level_time:.1f}s total"
+            )
+            logger.debug(f"  Average: {level_time / n_current:.2f}s per cluster")
 
             # Move to next level
             current_clusters = next_level_clusters

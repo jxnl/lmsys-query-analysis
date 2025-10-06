@@ -213,7 +213,7 @@ class ChromaManager:
             ]
             enriched_metadata = [
                 {
-                    **meta,
+                    **{k: v for k, v in meta.items() if v is not None},  # Filter out None values
                     "run_id": run_id,
                     "cluster_id": int(cid),
                     "title": title,
@@ -226,11 +226,16 @@ class ChromaManager:
         else:
             documents = summaries
             enriched_metadata = [
-                {**meta, "run_id": run_id, "cluster_id": int(cid)}
+                {
+                    **{k: v for k, v in meta.items() if v is not None},  # Filter out None values
+                    "run_id": run_id,
+                    "cluster_id": int(cid)
+                }
                 for meta, cid in zip(metadata_list, cluster_ids)
             ]
 
-        self.summaries_collection.add(
+        # Use upsert to update existing entries or create new ones
+        self.summaries_collection.upsert(
             ids=chroma_ids,
             embeddings=embeddings.tolist(),
             documents=documents,
