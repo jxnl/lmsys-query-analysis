@@ -13,6 +13,7 @@ from ..semantic import ClustersClient
 app = typer.Typer(help="LMSYS Query Analysis CLI")
 cluster_app = typer.Typer(help="Clustering commands")
 chroma_app = typer.Typer(help="ChromaDB utilities")
+verify_app = typer.Typer(help="Verification and consistency checks")
 console = Console()
 logger = logging.getLogger("lmsys")
 
@@ -244,6 +245,7 @@ def cluster_hdbscan(
 
 app.add_typer(cluster_app, name="cluster")
 app.add_typer(chroma_app, name="chroma")
+app.add_typer(verify_app, name="verify")
 
 
 @app.command()
@@ -1310,100 +1312,90 @@ def chroma_info(
         raise typer.Exit(1)
 
 
-@chroma_app.command("verify")
-def chroma_verify(
+def _verify_sync_impl(run_id: str, chroma_path: str | None, db_path: str | None, json_out: bool):
+    from sqlmodel import select
+    from ..db.models import ClusteringRun, ClusterSummary
+
+    db = get_db(db_path)
+    with db.get_session() as s:
+        run = s.exec(select(ClusteringRun).where(ClusteringRun.run_id == run_id)).first()
+        if not run:
+            console.print(f"[red]Run not found: {run_id}[/red]")
+            raise typer.Exit(1)
+
+        params = run.parameters or {}
+        provider = params.get("embedding_provider", "openai")
+        model = params.get("embedding_model", "text-embedding-3-small")
+        dim = params.get("embedding_dimension")
+        if provider == "cohere" and dim is None:
+            dim = 256
+
+        sqlite_summary_count = len(
+            s.exec(select(ClusterSummary).where(ClusterSummary.run_id == run_id)).all()
+        )
+
+    chroma = get_chroma(chroma_path, model, provider, dim)
+    chroma_summary_count = chroma.count_summaries(run_id=run_id)
+    known_runs = chroma.list_runs_in_summaries()
+
+    issues = []
+    if run_id not in known_runs:
+        issues.append(f"run_id {run_id} not present in Chroma summaries collection")
+    if sqlite_summary_count != chroma_summary_count:
+        issues.append(
+            f"summary count mismatch (sqlite={sqlite_summary_count}, chroma={chroma_summary_count})"
+        )
+
+    status = "ok" if not issues else "mismatch"
+    report = {
+        "run_id": run_id,
+        "space": {
+            "embedding_provider": provider,
+            "embedding_model": model,
+            "embedding_dimension": dim,
+        },
+        "sqlite": {"summary_count": sqlite_summary_count},
+        "chroma": {
+            "summary_count": chroma_summary_count,
+            "runs_in_summaries": known_runs,
+            "summaries_collection": chroma.summaries_collection.name,
+        },
+        "status": status,
+        "issues": issues,
+    }
+
+    if json_out:
+        console.print_json(data=report)
+        return
+
+    table = Table(title=f"Verify Sync: {run_id}")
+    table.add_column("Field", style="cyan")
+    table.add_column("Value", style="white")
+    table.add_row("Provider", report["space"]["embedding_provider"])
+    table.add_row("Model", report["space"]["embedding_model"])
+    table.add_row("Dimension", str(report["space"]["embedding_dimension"] or ""))
+    table.add_row("SQLite summaries", str(report["sqlite"]["summary_count"]))
+    table.add_row("Chroma summaries", str(report["chroma"]["summary_count"]))
+    table.add_row("Chroma collection", report["chroma"]["summaries_collection"])
+    table.add_row("Known runs", ", ".join(report["chroma"]["runs_in_summaries"]) or "-")
+    table.add_row("Status", report["status"])
+    if report["issues"]:
+        table.add_row("Issues", " | ".join(report["issues"]))
+    console.print(table)
+
+
+@verify_app.command("sync")
+def verify_sync(
     run_id: str = typer.Argument(..., help="Clustering run ID to verify"),
     chroma_path: str = typer.Option(None, help="ChromaDB path"),
     db_path: str = typer.Option(None, help="SQLite DB path"),
     json_out: bool = typer.Option(False, "--json", help="Emit JSON output"),
 ):
-    """Verify Chroma summaries for a run match SQLite and vector space config.
-
-    Checks:
-    - Vector space alignment: provider/model/dimension from run parameters
-    - Summary counts: SQLite cluster_summaries vs Chroma summaries filtered by run_id
-    """
+    """Verify Chroma summaries for a run match SQLite and vector space config."""
     try:
-        from sqlmodel import select
-        from ..db.models import ClusteringRun, ClusterSummary
-
-        db = get_db(db_path)
-        with db.get_session() as s:
-            run = s.exec(select(ClusteringRun).where(ClusteringRun.run_id == run_id)).first()
-            if not run:
-                console.print(f"[red]Run not found: {run_id}[/red]")
-                raise typer.Exit(1)
-
-            params = run.parameters or {}
-            provider = params.get("embedding_provider", "openai")
-            model = params.get("embedding_model", "text-embedding-3-small")
-            dim = params.get("embedding_dimension")
-            if provider == "cohere" and dim is None:
-                dim = 256
-
-            # Counts from SQLite
-            sqlite_summaries = s.exec(
-                select(ClusterSummary).where(ClusterSummary.run_id == run_id)
-            ).all()
-            sqlite_summary_count = len(sqlite_summaries)
-
-        # Chroma in same vector space
-        chroma = get_chroma(
-            chroma_path,
-            model,
-            provider,
-            dim,
-        )
-        chroma_summary_count = chroma.count_summaries(run_id=run_id)
-        known_runs = chroma.list_runs_in_summaries()
-
-        issues = []
-        if run_id not in known_runs:
-            issues.append(f"run_id {run_id} not present in Chroma summaries collection")
-        if sqlite_summary_count != chroma_summary_count:
-            issues.append(
-                f"summary count mismatch (sqlite={sqlite_summary_count}, chroma={chroma_summary_count})"
-            )
-
-        status = "ok" if not issues else "mismatch"
-        report = {
-            "run_id": run_id,
-            "space": {
-                "embedding_provider": provider,
-                "embedding_model": model,
-                "embedding_dimension": dim,
-            },
-            "sqlite": {"summary_count": sqlite_summary_count},
-            "chroma": {
-                "summary_count": chroma_summary_count,
-                "runs_in_summaries": known_runs,
-                "summaries_collection": chroma.summaries_collection.name,
-            },
-            "status": status,
-            "issues": issues,
-        }
-
-        if json_out:
-            console.print_json(data=report)
-            return
-
-        table = Table(title=f"Chroma Verify: {run_id}")
-        table.add_column("Field", style="cyan")
-        table.add_column("Value", style="white")
-        table.add_row("Provider", provider)
-        table.add_row("Model", model)
-        table.add_row("Dimension", str(dim or ""))
-        table.add_row("SQLite summaries", str(sqlite_summary_count))
-        table.add_row("Chroma summaries", str(chroma_summary_count))
-        table.add_row("Chroma collection", report["chroma"]["summaries_collection"])
-        table.add_row("Known runs", ", ".join(known_runs) or "-")
-        table.add_row("Status", status)
-        if issues:
-            table.add_row("Issues", " | ".join(issues))
-        console.print(table)
-
+        _verify_sync_impl(run_id, chroma_path, db_path, json_out)
     except Exception as e:
-        logger.exception("chroma verify failed: %s", e)
+        logger.exception("verify sync failed: %s", e)
         raise typer.Exit(1)
 
 

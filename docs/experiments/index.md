@@ -4,6 +4,49 @@
 
 This document captures learnings from experiments in generating high-quality cluster titles and descriptions for the LMSYS query analysis project.
 
+## Semantic Search Workflow (New)
+
+To accelerate hypothesis testing during experiments, we added a run‑aware semantic search workflow over both cluster summaries and raw queries. This lets you find representative clusters quickly and then drill down to concrete examples, all with JSON outputs suitable for `jq` and notebook ingestion.
+
+Key commands:
+
+- `lmsys search-cluster <text>`: Search cluster titles + descriptions (summaries)
+  - Filters: `--run-id`, `--alias`, `--summary-run-id`
+  - Options: `--top-k`, `--json`
+- `lmsys search <text>`: Search queries with optional two‑stage conditioning
+  - Filters: `--run-id`, `--cluster-ids`
+  - Conditioning: `--within-clusters "<semantic>" [--top-clusters N]`
+  - Aggregations: `--by cluster|language|model` or `--facets cluster,language,model`
+  - Output: `--json` for machine‑readable results
+
+Examples used in analysis sessions:
+
+```bash
+# 1) Find thematic clusters related to vector databases, then drill down to queries
+lmsys search-cluster "vector databases" --run-id <RUN_ID> --json | jq .
+
+lmsys search "hybrid search" --run-id <RUN_ID> \
+  --within-clusters "vector databases" --top-clusters 5 \
+  --n-results 50 --facets cluster --json | jq .
+
+# 2) Compare language distribution for a semantic slice
+lmsys search "rag" --run-id <RUN_ID> --facets language --json | jq .
+
+# 3) Restrict to explicit cluster IDs (e.g., based on prior selection)
+lmsys search "sql" --run-id <RUN_ID> --cluster-ids 12,27,44 --json | jq .
+```
+
+Provenance and validity:
+
+- All searches are run‑aware: specifying `--run-id` resolves the correct embedding provider/model/dimension so you never mix vector spaces.
+- Query membership is always enforced via SQLite joins on `query_clusters`; Chroma is used only for retrieval.
+- Cluster facets include `meta.title` for each bucket when `--run-id` is set, which simplifies downstream visualization.
+
+Operational checks:
+
+- `lmsys chroma info` lists all collections, vector space metadata, and counts.
+- `lmsys verify sync <RUN_ID>` checks that SQLite `cluster_summaries` and Chroma summaries are in sync for a given run and that the vector space matches the run parameters.
+
 ## Experiment 1: Initial Summarization (2025-10-04)
 
 ### Setup

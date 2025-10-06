@@ -248,28 +248,30 @@ uv run lmsys list-clusters <RUN_ID> --limit 20
 uv run lmsys list-clusters <RUN_ID> --show-examples 3
 ```
 
-### Semantic Search
+### Semantic Search (Clusters + Queries)
+
+Two high-level commands with JSON-friendly outputs for piping into `jq`.
 
 ```bash
-# Search cluster summaries
-uv run lmsys search "python programming" --search-type clusters \
-  --run-id <RUN_ID> --embedding-model all-MiniLM-L6-v2 \
-  --embedding-provider sentence-transformers
+# Cluster discovery (summaries)
+uv run lmsys search-cluster "vector databases" --run-id <RUN_ID> --top-k 20 --json | jq .
 
-# Search within specific run
-uv run lmsys search "machine learning" --search-type clusters --run-id <RUN_ID>
+# Query discovery with semantic conditioning
+uv run lmsys search "hybrid search" --run-id <RUN_ID> \
+  --within-clusters "vector databases" --top-clusters 5 \
+  --n-results 50 --facets cluster --json | jq .
 
-# Search individual queries (if loaded with --use-chroma)
-uv run lmsys search "how to build neural network" --search-type queries \
-  --n-results 20 --embedding-model all-MiniLM-L6-v2 \
-  --embedding-provider sentence-transformers
+# Grouped counts and additional facets
+uv run lmsys search "vector" --run-id <RUN_ID> --by cluster --json | jq .
+uv run lmsys search "rag" --run-id <RUN_ID> --facets language,model --json | jq .
 
-# Search with Cohere vectors
-uv run lmsys search "retrieval augmented generation" --search-type clusters \
-  --run-id <RUN_ID> --embedding-model embed-v4.0 --embedding-provider cohere
+# Direct cluster filters
+uv run lmsys search "sql" --run-id <RUN_ID> --cluster-ids 12,27,44 --json | jq .
 ```
 
-Search uses explicit query embeddings to ensure consistency with stored vectors. Use an embedding model that matches the vectors in Chroma (the model used during load/cluster).
+Notes
+- With `--run-id`, the CLI resolves the correct embedding provider/model/dimension from the run to prevent cross‑space mix‑ups.
+- Queries are always filtered by `query_clusters` in SQLite; Chroma is used for retrieval only. Cluster facets include `meta.title` when `--run-id` is set.
 
 ## Architecture
 
@@ -336,6 +338,16 @@ Note: Chroma collections are model/provider-specific. Names are suffixed by
 - ID format: `cluster_{run_id}_{cluster_id}`
 - Metadata: run_id, cluster_id, title, description, num_queries
 - Document: Combined title + description for semantic search
+
+### Chroma Utilities and Verification
+
+```bash
+# List collections and vector space metadata
+uv run lmsys chroma info --json | jq .
+
+# Verify SQLite↔Chroma sync for a run and vector space alignment
+uv run lmsys verify sync <RUN_ID> --json | jq .
+```
 
 ## Development
 
