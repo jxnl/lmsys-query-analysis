@@ -8,6 +8,7 @@ This repository provides **terminal-based CLI tools for agents to perform compre
 
 - **Data Loading**: Download and process the LMSYS-1M dataset from Hugging Face
 - **Clustering Analysis**: Group similar queries using embeddings and clustering algorithms (KMeans, HDBSCAN)
+- **Hierarchical Organization**: Create multi-level topic hierarchies using LLM-driven merging (Anthropic Clio methodology)
 - **Cluster Investigation**: Explore and summarize query clusters to identify patterns and usage trends
 - **Contrastive Analysis**: Highlight what makes each cluster unique compared to neighbors
 - **Semantic Search**: Navigate queries and clusters using natural language
@@ -23,7 +24,7 @@ Agents can use this tool to:
 4. **Form Hypotheses**: Systematically explore data to develop testable hypotheses
 5. **Export Findings**: Save analysis results for further investigation
 
-All capabilities are accessible through the `lmsys` CLI command in a composable workflow: `load → cluster → summarize → search → export`
+All capabilities are accessible through the `lmsys` CLI command in a composable workflow: `load → cluster → summarize → merge-clusters → search → export`
 
 ### Extensibility
 
@@ -32,11 +33,12 @@ If agents identify gaps in functionality or need additional tools to enhance the
 ## Project Structure & Modules
 
 - `src/lmsys_query_analysis/`: Core Python package.
-  - `cli/`: Typer CLI (`main.py`) with commands: `load`, `cluster kmeans`, `cluster hdbscan`, `runs`, `list`, `list-clusters`, `summarize`, `inspect`, `export`, `search`, `clear`, `backfill-chroma`.
+  - `cli/`: Typer CLI (`main.py`) with commands: `load`, `cluster kmeans`, `cluster hdbscan`, `merge-clusters`, `runs`, `list`, `list-clusters`, `summarize`, `inspect`, `export`, `search`, `clear`, `backfill-chroma`.
   - `db/`: Persistence layer (`models.py`, `connection.py`, `loader.py`, `chroma.py`).
-  - `clustering/`: Embeddings + KMeans/HDBSCAN and LLM summarization.
+  - `clustering/`: Embeddings, KMeans/HDBSCAN clustering, hierarchical merging (`hierarchy.py`), and LLM summarization.
 - `tests/`: Pytest suite covering CLI and data layer.
 - `pyproject.toml`: Project metadata, dependencies, and console script (`lmsys`).
+- `docs/experiments/`: Documentation of clustering experiments and findings.
 
 ## Build, Test, and Dev Commands
 

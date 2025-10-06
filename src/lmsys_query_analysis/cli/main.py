@@ -1353,5 +1353,81 @@ def merge_clusters_cmd(
         raise typer.Exit(1)
 
 
+@app.command("show-hierarchy")
+def show_hierarchy_cmd(
+    hierarchy_run_id: str = typer.Argument(..., help="Hierarchy run ID to visualize"),
+    db_path: str = typer.Option(None, help="Path to SQLite database"),
+):
+    """Display hierarchical cluster structure as a tree."""
+    console = Console()
+
+    try:
+        from sqlmodel import select
+        from ..db.models import ClusterHierarchy
+
+        db = get_db(db_path)
+        session = db.get_session()
+
+        try:
+            # Get all hierarchy nodes
+            hierarchy_nodes = session.exec(
+                select(ClusterHierarchy)
+                .where(ClusterHierarchy.hierarchy_run_id == hierarchy_run_id)
+                .order_by(ClusterHierarchy.level, ClusterHierarchy.cluster_id)
+            ).all()
+
+            if not hierarchy_nodes:
+                console.print(f"[red]No hierarchy found with ID: {hierarchy_run_id}[/red]")
+                raise typer.Exit(1)
+
+            # Build tree structure
+            from collections import defaultdict
+            nodes_by_id = {node.cluster_id: node for node in hierarchy_nodes}
+            children_by_parent = defaultdict(list)
+            root_nodes = []
+
+            for node in hierarchy_nodes:
+                if node.parent_cluster_id is None:
+                    root_nodes.append(node)
+                else:
+                    children_by_parent[node.parent_cluster_id].append(node)
+
+            def print_tree(node, prefix="", is_last=True):
+                """Recursively print tree structure."""
+                connector = "└── " if is_last else "├── "
+                title = node.title or f"Cluster {node.cluster_id}"
+
+                # Color coding by level
+                if node.level == 0:
+                    color = "cyan"
+                elif node.level == 1:
+                    color = "yellow"
+                else:
+                    color = "green"
+
+                console.print(f"{prefix}{connector}[{color}]{title}[/{color}] [dim](ID: {node.cluster_id}, Level: {node.level})[/dim]")
+
+                # Get children
+                children = children_by_parent.get(node.cluster_id, [])
+                for i, child in enumerate(sorted(children, key=lambda x: x.cluster_id)):
+                    extension = "    " if is_last else "│   "
+                    print_tree(child, prefix + extension, i == len(children) - 1)
+
+            console.print(f"\n[bold]Hierarchy: {hierarchy_run_id}[/bold]\n")
+
+            # Print each root and its subtree
+            for i, root in enumerate(sorted(root_nodes, key=lambda x: x.cluster_id)):
+                print_tree(root, "", i == len(root_nodes) - 1)
+
+            console.print()
+
+        finally:
+            session.close()
+
+    except Exception as e:
+        logger.exception("Failed to display hierarchy: %s", e)
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()

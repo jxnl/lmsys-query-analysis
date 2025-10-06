@@ -203,7 +203,7 @@ First, use a <scratchpad> to analyze themes (keep brief, 1-2 paragraphs).
 Then provide your category names."""
 
     response = await client.chat.completions.create(
-        model="gpt-4o-mini",  # Will be overridden by AutoInstructor
+        model="gpt-5o",  # Will be overridden by AutoInstructor
         response_model=NeighborhoodCategories,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -252,7 +252,7 @@ Task:
 Output roughly {target_count} final cluster names."""
 
     response = await client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5",
         response_model=DeduplicatedClusters,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -306,7 +306,7 @@ Steps:
 Use <scratchpad> for reasoning (2-4 sentences), then provide the exact parent cluster name."""
 
     response = await client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5",
         response_model=ClusterAssignment,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -367,7 +367,7 @@ Example bad titles:
 """
 
     response = await client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5",
         response_model=RefinedClusterSummary,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -386,8 +386,8 @@ async def merge_clusters_hierarchical(
     base_clusters: List[Dict],
     run_id: str,
     embedding_model: str = "all-mpnet-base-v2",
-    llm_provider: str = "anthropic",
-    llm_model: str = "claude-sonnet-4-5-20250929",
+    llm_provider: str = "openai",
+    llm_model: str = "gpt-5",
     target_levels: int = 3,
     merge_ratio: float = 0.2,
     neighborhood_size: int = 40,
@@ -531,6 +531,7 @@ async def merge_clusters_hierarchical(
 
             # Step 5: Assign children to parents (sequential for now - TODO: parallelize properly)
             parent_children = {name: [] for name in parent_names}
+            assignment_errors = []
 
             for cluster in current_clusters:
                 if limiter:
@@ -539,10 +540,32 @@ async def merge_clusters_hierarchical(
                 else:
                     assignment = await assign_to_parent_cluster(client, cluster, parent_names)
 
-                if assignment.assigned_cluster in parent_children:
+                # Validate assignment
+                if assignment.assigned_cluster not in parent_children:
+                    error_msg = (
+                        f"Invalid assignment for cluster {cluster['cluster_id']} ('{cluster['title']}'): "
+                        f"LLM returned '{assignment.assigned_cluster}' which is not in parent list. "
+                        f"Valid parents: {parent_names}"
+                    )
+                    logger.error(error_msg)
+                    assignment_errors.append({
+                        "cluster_id": cluster["cluster_id"],
+                        "cluster_title": cluster["title"],
+                        "invalid_parent": assignment.assigned_cluster,
+                        "valid_parents": parent_names
+                    })
+                    # Assign to first parent as fallback
+                    parent_children[parent_names[0]].append(cluster["cluster_id"])
+                    logger.warning(f"Falling back to parent '{parent_names[0]}' for cluster {cluster['cluster_id']}")
+                else:
                     parent_children[assignment.assigned_cluster].append(cluster["cluster_id"])
 
                 progress.update(task, advance=1)
+
+            # Report assignment validation results
+            if assignment_errors:
+                logger.warning(f"Found {len(assignment_errors)} invalid assignments out of {len(current_clusters)}")
+                logger.warning("Assignment errors: " + str(assignment_errors[:5]))  # Show first 5
 
             # Step 6: Refine parent names based on children
             next_level_clusters = []
@@ -578,12 +601,25 @@ async def merge_clusters_hierarchical(
                     "description": refined.summary
                 })
 
-                # Update children's parent_id
+                # Update children's parent_id with validation
+                children_found = 0
                 for child_id in child_ids:
+                    child_found = False
                     for h in hierarchy:
                         if h["cluster_id"] == child_id and h["level"] == current_level:
                             h["parent_cluster_id"] = parent_cluster_id
+                            children_found += 1
+                            child_found = True
                             break
+                    if not child_found:
+                        logger.error(f"Child cluster {child_id} not found in hierarchy at level {current_level}")
+
+                # Validate all children were found
+                if children_found != len(child_ids):
+                    logger.warning(
+                        f"Parent cluster {parent_cluster_id} expected {len(child_ids)} children "
+                        f"but only found {children_found} in hierarchy"
+                    )
 
                 # Add to next level
                 next_level_clusters.append({
@@ -602,5 +638,57 @@ async def merge_clusters_hierarchical(
                 logger.info("Reached single top-level cluster, stopping")
                 break
 
+    # Final validation: Check hierarchy integrity
+    logger.info("Validating hierarchy integrity...")
+    validation_errors = []
+
+    # Check 1: All base clusters have parents (except top level)
+    base_clusters_without_parents = [
+        h for h in hierarchy
+        if h["level"] == 0 and h["parent_cluster_id"] is None
+    ]
+    if base_clusters_without_parents and current_level > 0:
+        validation_errors.append(
+            f"Found {len(base_clusters_without_parents)} leaf clusters without parents"
+        )
+
+    # Check 2: All parent references are valid
+    cluster_ids = {h["cluster_id"] for h in hierarchy}
+    for h in hierarchy:
+        if h["parent_cluster_id"] is not None and h["parent_cluster_id"] not in cluster_ids:
+            validation_errors.append(
+                f"Cluster {h['cluster_id']} references non-existent parent {h['parent_cluster_id']}"
+            )
+
+    # Check 3: Children lists match actual parent assignments
+    for h in hierarchy:
+        if h["children_ids"]:
+            actual_children = {
+                child["cluster_id"]
+                for child in hierarchy
+                if child["parent_cluster_id"] == h["cluster_id"]
+            }
+            expected_children = set(h["children_ids"])
+            if actual_children != expected_children:
+                validation_errors.append(
+                    f"Cluster {h['cluster_id']} children mismatch: "
+                    f"expected {expected_children}, found {actual_children}"
+                )
+
+    # Check 4: Level consistency
+    levels_found = {h["level"] for h in hierarchy}
+    expected_levels = set(range(current_level + 1))
+    if levels_found != expected_levels:
+        validation_errors.append(
+            f"Level gaps detected: expected {expected_levels}, found {levels_found}"
+        )
+
+    if validation_errors:
+        logger.error(f"Hierarchy validation failed with {len(validation_errors)} errors:")
+        for error in validation_errors:
+            logger.error(f"  - {error}")
+        raise ValueError(f"Hierarchy validation failed: {validation_errors}")
+
     logger.info(f"Hierarchy complete: {len(hierarchy)} total nodes across {current_level + 1} levels")
+    logger.info("✓ Hierarchy validation passed")
     return hierarchy_run_id, hierarchy

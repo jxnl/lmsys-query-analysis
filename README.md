@@ -14,13 +14,14 @@ Enable terminal-based agents to:
 - **Form Hypotheses**: Systematically explore data to develop testable hypotheses about user behavior
 - **Navigate Semantically**: Search queries and clusters using natural language
 
-All through a composable CLI workflow: `load → cluster → summarize → search → export`
+All through a composable CLI workflow: `load → cluster → summarize → merge-clusters → search → export`
 
 ## Features
 
 - **Data Loading**: Extract first user queries from LMSYS-1M dataset (1M conversations)
 - **SQLite Storage**: Efficient indexing and querying with SQLModel
 - **Clustering**: MiniBatchKMeans (scales well) and HDBSCAN (density-based)
+- **Hierarchical Organization**: LLM-driven merging to create multi-level topic hierarchies (following Anthropic's Clio methodology)
 - **ChromaDB Integration**: Semantic search across queries and cluster summaries
 - **LLM Summarization**: Generate titles and descriptions for clusters using any LLM provider
 - **Contrastive Analysis**: Highlight what makes each cluster unique vs. neighbors
@@ -143,6 +144,76 @@ uv run lmsys summarize <RUN_ID> --concurrency 8 --rpm 60
 # Note: --use-chroma flag has been removed. Summaries are stored in SQLite only.
 ```
 
+### Hierarchical Organization
+
+After summarizing clusters, you can organize them into a multi-level hierarchy using LLM-driven merging (following Anthropic's Clio methodology):
+
+```bash
+# Create 3-level hierarchy from 100 base clusters
+# Level 0: 100 leaf clusters → Level 1: 20 parents → Level 2: 4 top categories
+uv run lmsys merge-clusters kmeans-100-20251004-170442 \
+  --target-levels 3 \
+  --merge-ratio 0.2
+
+# Customize hierarchy parameters
+uv run lmsys merge-clusters <RUN_ID> \
+  --target-levels 2 \              # Number of hierarchy levels (2 = one merge)
+  --merge-ratio 0.5 \              # Merge aggressiveness (0.5 = 100->50->25)
+  --llm-provider anthropic \       # Provider for merging (anthropic/openai/groq)
+  --llm-model claude-sonnet-4-5-20250929 \
+  --concurrency 8 \                # Parallel LLM requests
+  --neighborhood-size 40           # Clusters per LLM context (Clio default)
+
+# Use faster/cheaper models for experimentation
+uv run lmsys merge-clusters <RUN_ID> \
+  --llm-provider openai --llm-model gpt-4o-mini
+
+# Example: 200 clusters → 40 → 8 top-level categories
+uv run lmsys merge-clusters kmeans-200-20251004-005043 \
+  --target-levels 3 --merge-ratio 0.2
+```
+
+**How it works:**
+1. **Neighborhood Formation**: Groups similar clusters using embeddings (manageable LLM context)
+2. **Category Generation**: LLM proposes broader category names for each neighborhood
+3. **Deduplication**: Merges similar categories globally to create distinct parents
+4. **Assignment**: LLM assigns each child cluster to best-fit parent using semantic matching
+5. **Refinement**: LLM refines parent names based on actual assigned children
+6. **Iteration**: Repeats process for multiple levels
+
+**Output:**
+- Hierarchies stored in `cluster_hierarchies` table with parent-child relationships
+- Navigate from broad categories → specific topics
+- Hierarchy ID format: `hier-<run_id>-<timestamp>`
+
+**Example Hierarchy** (20 leaf clusters → 10 parent categories):
+
+```
+Multilingual User Engagement and Assistance (4 children)
+├── German Language User Engagement
+├── Multilingual Assistance and Queries
+├── Chinese Language Interaction
+└── Spanish and Portuguese Language Interactions
+
+Python Problem Solving and Task Descriptions (2 children)
+├── Python Programming Task Descriptions
+└── Technical Problem Solving Queries
+
+Business Management and Academic Inquiry Strategies (2 children)
+├── Business and Academic Inquiry Responses
+└── Business Management and Consulting Practices
+
+US Sanction Analysis and Legal Entity Recognition (2 children)
+├── Detailed US Sanction Types
+└── Named Entity Recognition for Legal Statements
+```
+
+**Key Benefits:**
+- **Semantic grouping**: LLM identifies thematic relationships (language, domain, task type)
+- **Multi-perspective navigation**: Same content organized by different dimensions
+- **Content isolation**: Sensitive topics automatically separated for moderation
+- **Flexible granularity**: 1:1 mappings indicate optimal abstraction level
+
 ### Viewing Results
 
 ```bash
@@ -208,6 +279,12 @@ Search uses explicit query embeddings to ensure consistency with stored vectors.
 - `model` (LLM used), `parameters` (JSON - summarization settings)
 - `generated_at`
 
+**cluster_hierarchies** - Multi-level topic hierarchies (Clio-style organization)
+- `hierarchy_run_id` (unique per hierarchy), `run_id`, `cluster_id`
+- `parent_cluster_id` (null for top level), `level` (0=leaf, 1=first merge, etc.)
+- `children_ids` (JSON array), `title`, `description`
+- `created_at`
+
 ### ChromaDB Collections
 
 **queries** - All user queries with embeddings (optional)
@@ -269,14 +346,14 @@ src/lmsys_query_analysis/
 └── clustering/
     ├── embeddings.py        # Sentence-transformers wrapper
     ├── kmeans.py            # MiniBatchKMeans clustering (streaming)
+    ├── hdbscan_clustering.py # HDBSCAN density-based clustering
+    ├── hierarchy.py         # LLM-driven hierarchical merging (Clio-style)
     └── summarizer.py        # LLM summarization with instructor
 
 tests/                       # Test suite with 20+ tests
+utils/
+    └── logging.py           # Rich-backed logging setup
 ```
-
-Additional files
-- `src/lmsys_query_analysis/clustering/hdbscan_clustering.py` — HDBSCAN clustering
-- `src/lmsys_query_analysis/utils/logging.py` — Rich-backed logging setup
 
 ## Configuration
 

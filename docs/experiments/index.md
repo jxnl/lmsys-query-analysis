@@ -441,6 +441,265 @@ After observing mixed cluster quality with KMeans-20, we hypothesized that:
 - Updated `hdbscan_clustering.py` line 230: `int(int(np.sum(...)))`
 - Updated `chroma.py` lines 154, 165: `cluster_id: int(cid)`
 
+## Experiment 4: Hierarchical Cluster Merging (2025-10-05)
+
+### Motivation
+
+Experiment 3 revealed that flat clustering has fundamental limitations for LMSYS data:
+- **Heterogeneous clusters**: Even with 100 clusters, many still contained mixed content
+- **No natural boundaries**: The dataset spans multiple dimensions (language, domain, task, style)
+- **Template vs creative split**: Some queries cluster well (templates), others don't (open-ended)
+
+**Key insight from user**: "This really suggests that we should be thinking of doing some hierarchical clustering where we do a bunch of clusters and then merge them."
+
+### Solution: LLM-Driven Hierarchical Merging (Clio Methodology)
+
+Following Anthropic's Clio paper approach for building multi-level topic hierarchies using LLMs.
+
+#### Implementation Overview
+
+**Core Algorithm** (`src/lmsys_query_analysis/clustering/hierarchy.py`):
+
+1. **Neighborhood Formation**: Group similar clusters using embeddings (MiniBatchKMeans)
+   - Typical size: 40 clusters per neighborhood (Clio default)
+   - Ensures manageable LLM context windows
+   - Uses all-mpnet-base-v2 for cluster embeddings
+
+2. **Category Generation**: LLM proposes broader category names
+   - Input: Cluster titles + descriptions from neighborhood
+   - Output: 8-15 broader parent category names
+   - Uses instructor library with Pydantic models for structured responses
+
+3. **Deduplication**: Merge similar categories globally
+   - Combines similar names across all neighborhoods
+   - Creates distinct parent clusters
+   - Avoids redundant top-level categories
+
+4. **Assignment**: LLM assigns each child to best-fit parent
+   - Semantic matching based on content
+   - Scratchpad reasoning for transparency
+   - Exact name matching enforced
+
+5. **Refinement**: LLM refines parent names based on actual children
+   - Two-sentence summary in past tense
+   - Concise title (≤10 words)
+   - Reflects actual assigned content
+
+6. **Iteration**: Repeat for multiple levels
+   - Level 0: Base clusters (e.g., 200 leaf clusters)
+   - Level 1: First merge (e.g., 40 parents with 0.2 ratio)
+   - Level 2: Second merge (e.g., 8 top categories)
+
+#### Pydantic Models (Instructor-based)
+
+```python
+class NeighborhoodCategories(BaseModel):
+    scratchpad: str = Field(description="Brief analysis of themes")
+    categories: List[str] = Field(
+        description="8-15 broader category names",
+        min_length=8,
+        max_length=15
+    )
+
+class DeduplicatedClusters(BaseModel):
+    clusters: List[str] = Field(
+        description="Deduplicated distinct cluster names"
+    )
+
+class ClusterAssignment(BaseModel):
+    scratchpad: str = Field(description="Step-by-step reasoning")
+    assigned_cluster: str = Field(description="Exact parent cluster name")
+
+class RefinedClusterSummary(BaseModel):
+    summary: str = Field(description="Two-sentence summary in past tense")
+    title: str = Field(description="Concise title (≤10 words)", max_length=100)
+```
+
+#### Database Schema
+
+**cluster_hierarchies** table tracks parent-child relationships:
+
+```sql
+CREATE TABLE cluster_hierarchies (
+    id INTEGER PRIMARY KEY,
+    run_id TEXT REFERENCES clustering_runs(run_id) ON DELETE CASCADE,
+    hierarchy_run_id TEXT,  -- e.g., "hier-kmeans-20-20251005-123456"
+    cluster_id INTEGER,
+    parent_cluster_id INTEGER,  -- NULL for top level
+    level INTEGER,  -- 0=leaf, 1=first merge, 2=second merge
+    children_ids JSON,  -- List of child cluster IDs
+    title TEXT,
+    description TEXT,
+    created_at TIMESTAMP
+);
+```
+
+### CLI Usage
+
+```bash
+# Create 3-level hierarchy from 200 base clusters
+# Level 0: 200 leaf → Level 1: 40 parents → Level 2: 8 top categories
+uv run lmsys merge-clusters kmeans-200-20251004-005043 \
+  --target-levels 3 \
+  --merge-ratio 0.2
+
+# Customize parameters
+uv run lmsys merge-clusters <RUN_ID> \
+  --target-levels 2 \              # Number of hierarchy levels
+  --merge-ratio 0.5 \              # Aggressiveness (0.5 = 100->50->25)
+  --llm-provider anthropic \       # anthropic/openai/groq
+  --llm-model claude-sonnet-4-5-20250929 \
+  --concurrency 8 \                # Parallel LLM requests
+  --neighborhood-size 40           # Clusters per LLM context (Clio default)
+
+# Use faster/cheaper models for experimentation
+uv run lmsys merge-clusters <RUN_ID> \
+  --llm-provider openai --llm-model gpt-4o-mini
+```
+
+### Results
+
+**Test Run**: `kmeans-20-20251004-165542` → 2-level hierarchy (20 leaf → 10 parents)
+
+**Hierarchy ID**: `hier-kmeans-20-20251004-165542-20251004-224423`
+
+**Generated Parent Categories with Children:**
+
+1. **Creative Writing and Interactive Roleplay Exercises** (2 children)
+   - Creative Writing Prompts
+   - Sentence Verification and Roleplay
+
+2. **Multilingual User Engagement and Assistance** (4 children)
+   - German Language User Engagement
+   - Multilingual Assistance and Queries
+   - Chinese Language Interaction
+   - Spanish and Portuguese Language Interactions
+
+3. **Python Problem Solving and Task Descriptions** (2 children)
+   - Python Programming Task Descriptions
+   - Technical Problem Solving Queries
+
+4. **Toxic Statement Analysis by Demographic Group** (1 child)
+   - Toxic Statements by Demographic Groups
+
+5. **Business Management and Academic Inquiry Strategies** (2 children)
+   - Business and Academic Inquiry Responses
+   - Business Management and Consulting Practices
+
+6. **Fact-Checking Consistency Evaluations** (1 child)
+   - Fact-Checking Consistency Evaluations
+
+7. **Russian Language Communication and Engagement** (1 child)
+   - Russian Language Interactions
+
+8. **US Sanction Analysis and Legal Entity Recognition** (2 children)
+   - Detailed US Sanction Types
+   - Named Entity Recognition for Legal Statements
+
+9. **Erotic Story Generation Requests** (1 child)
+   - Erotic Story Generation Requests
+
+10. **Multilingual Text Completion and Introductions** (4 children)
+    - General Text Completion Tasks
+    - English Greetings and Introductions
+    - Chemical Industry Company Introductions
+    - Russian Language Summarization Tasks
+
+**Quality Assessment:**
+- ✅ Successfully grouped **semantically related clusters** (e.g., all multilingual interactions, Python-related queries)
+- ✅ Created **meaningful parent categories** that capture broader themes
+- ✅ Balanced distribution: 1-4 children per parent (avg 2.0)
+- ⚠️ Some parent categories map 1:1 with children (e.g., Fact-Checking, Russian Language) - indicates these may already be optimal groupings
+- ✅ No "Diverse/Various" generic names appeared in this run (improvement from initial tests)
+
+### Key Learnings
+
+1. **Semantic Grouping Works Well**: LLM successfully identifies thematic relationships
+   - **Language-based clustering**: All German, Chinese, Spanish/Portuguese queries grouped under "Multilingual User Engagement"
+   - **Domain clustering**: Python queries separated from general technical queries
+   - **Task-based grouping**: Text completion tasks grouped together regardless of language
+
+2. **1:1 Parent-Child Mappings Indicate Optimal Granularity**:
+   - When a parent has only 1 child with identical/similar name, it suggests:
+     - The base cluster is already at the right abstraction level
+     - Or the dataset has insufficient related clusters to merge
+   - Example: "Fact-Checking Consistency Evaluations" (parent) → "Fact-Checking Consistency Evaluations" (child)
+   - **Recommendation**: These can stay as-is or skip merging in future iterations
+
+3. **Merge Ratio Affects Distribution**:
+   - With 0.5 ratio: 20 clusters → 10 parents (exactly 50%)
+   - Actual distribution: 1-4 children per parent (not uniform)
+   - LLM intelligently groups based on semantics, not just quantity
+   - **Implication**: Trust LLM's semantic judgment over forcing uniform distribution
+
+4. **Multilingual Content Naturally Clusters by Language First**:
+   - Observed 2 separate multilingual parent categories:
+     - "Multilingual User Engagement and Assistance" (active interactions)
+     - "Multilingual Text Completion and Introductions" (passive tasks)
+   - Even within language clusters, task type creates sub-groupings
+   - **Best practice**: Consider language as a primary dimension for clustering
+
+5. **Sensitive Content Handling**:
+   - LLM correctly isolates sensitive categories:
+     - "Toxic Statement Analysis by Demographic Group"
+     - "Erotic Story Generation Requests"
+   - Useful for content moderation and safety analysis
+   - Avoids mixing harmful content with benign queries
+
+6. **Hierarchy Enables Multi-Perspective Navigation**:
+   - Same cluster can be understood through different parent lenses
+   - Example: Russian queries split into:
+     - "Russian Language Communication" (language focus)
+     - "Multilingual Text Completion" (task focus)
+   - Supports different user mental models for exploration
+
+### Technical Challenges & Solutions
+
+**Challenge 1: Async/Concurrency**
+- Problem: Need to call LLM hundreds of times efficiently
+- Solution: Async functions with semaphore-based concurrency control
+- Result: 8 concurrent requests with optional RPM limiting
+
+**Challenge 2: Type Mismatches (numpy int64 vs Python int)**
+- Problem: ChromaDB rejects numpy.int64 types
+- Solution: Double cast `int(int(np.sum(...)))` to ensure Python int
+- Files: `hdbscan_clustering.py:230`, `chroma.py:154,165`
+
+**Challenge 3: Instructor Model Selection**
+- Problem: Different providers need different initialization
+- Solution: Use `instructor.from_provider(f"{provider}/{model}")` pattern
+- Matches pattern from `summarizer.py`
+
+### Future Improvements
+
+1. **Iterative Refinement**:
+   - Allow user feedback on parent names
+   - Re-run assignment with corrected names
+   - Build golden dataset for fine-tuning
+
+2. **Quality Metrics**:
+   - Measure parent cluster coherence
+   - Track generic word usage at each level
+   - Compare hierarchy depth vs cluster quality
+
+3. **Alternative Approaches**:
+   - Try agglomerative clustering for comparison
+   - Experiment with different embedding models for neighborhoods
+   - Test with larger neighborhood sizes (60-80 clusters)
+
+4. **Visualization**:
+   - Export hierarchy as tree/graph structure
+   - Interactive navigation UI
+   - Drill-down from top categories to individual queries
+
+### References
+
+- **Anthropic Clio Paper**: Multi-level concept hierarchies for interpretability
+- **OpenClio Implementation**: https://github.com/clio-lang/clio-exploitation
+- **Test Run**: `kmeans-20-20251004-165542` → `hier-kmeans-20-20251005-...`
+- **Code**: `src/lmsys_query_analysis/clustering/hierarchy.py`
+- **Models Used**: `openai/gpt-4o-mini`, `anthropic/claude-sonnet-4-5-20250929`
+
 ## References
 
 - **Experiment 1 Run**: `kmeans-200-20251004-005043`
@@ -449,5 +708,6 @@ After observing mixed cluster quality with KMeans-20, we hypothesized that:
   - `kmeans-50-20251004-170427`
   - `kmeans-100-20251004-170442`
   - `hdbscan-30-20251004-170645`
+- **Experiment 4 Run**: `kmeans-20-20251004-165542` (hierarchical merging)
 - **Model Used**: `openai/gpt-4o-mini`
-- **Code**: `src/lmsys_query_analysis/clustering/summarizer.py`
+- **Code**: `src/lmsys_query_analysis/clustering/summarizer.py`, `src/lmsys_query_analysis/clustering/hierarchy.py`
