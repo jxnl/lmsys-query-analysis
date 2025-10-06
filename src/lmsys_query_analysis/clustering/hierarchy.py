@@ -305,6 +305,7 @@ Steps:
 
 Use <scratchpad> for reasoning (2-4 sentences), then provide the exact parent cluster name."""
 
+    logger.info(f"Assigning to parent cluster: {child_cluster['title']}")
     response = await client.chat.completions.create(
         response_model=ClusterAssignment,
         messages=[
@@ -601,6 +602,7 @@ async def merge_clusters_hierarchical(
                 async with semaphore:
                     if limiter:
                         async with limiter:
+                            
                             assignment = await assign_to_parent_cluster(client, cluster, parent_names)
                     else:
                         assignment = await assign_to_parent_cluster(client, cluster, parent_names)
