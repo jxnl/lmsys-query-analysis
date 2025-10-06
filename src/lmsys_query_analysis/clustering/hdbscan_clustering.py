@@ -164,17 +164,15 @@ def run_hdbscan_clustering(
                 offset += len(rows)
 
         eg = EmbeddingGenerator(model_name=embedding_model, provider=embedding_provider)
-        eg.load_model()
         all_ids: List[int] = []
         all_embs: List[np.ndarray] = []
         for chunk in iter_query_chunks():
             texts = [q.query_text for q in chunk]
             ids = [q.id for q in chunk]
-            embs = eg.model.encode(
+            embs = eg.generate_embeddings(
                 texts,
                 batch_size=embed_batch_size,
-                show_progress_bar=False,
-                convert_to_numpy=True,
+                show_progress=False,
             )
             all_ids.extend(ids)
             all_embs.append(embs)
@@ -199,7 +197,7 @@ def run_hdbscan_clustering(
             algorithm="hdbscan",
             parameters={
                 "embedding_model": embedding_model,
-                "provider": embedding_provider,
+                "embedding_provider": embedding_provider,
                 "min_cluster_size": min_cluster_size,
                 "min_samples": min_samples or min_cluster_size,
                 "cluster_selection_epsilon": cluster_selection_epsilon,

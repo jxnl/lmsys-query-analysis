@@ -71,6 +71,7 @@ def run_kmeans_clustering(
             parameters={
                 "n_clusters": n_clusters,
                 "embedding_model": embedding_model,
+                "embedding_provider": embedding_provider,
                 "random_state": random_state,
                 "kmeans": "MiniBatchKMeans",
                 "encode_batch_size": embed_batch_size,
@@ -135,13 +136,11 @@ def run_kmeans_clustering(
                                     model_name=embedding_model,
                                     provider=embedding_provider,
                                 )
-                                embedding_gen.load_model()
                             # Compute all embeddings then compose full array
-                            all_emb = embedding_gen.model.encode(
+                            all_emb = embedding_gen.generate_embeddings(
                                 texts,
                                 batch_size=embed_batch_size,
-                                show_progress_bar=False,
-                                convert_to_numpy=True,
+                                show_progress=False,
                             )
                             # Backfill map and Chroma for missing
                             for qid, emb in zip(ids, all_emb):
@@ -178,12 +177,10 @@ def run_kmeans_clustering(
                         embedding_gen = EmbeddingGenerator(
                             model_name=embedding_model, provider=embedding_provider
                         )
-                        embedding_gen.load_model()
-                    chunk_embeddings = embedding_gen.model.encode(
+                    chunk_embeddings = embedding_gen.generate_embeddings(
                         texts,
                         batch_size=embed_batch_size,
-                        show_progress_bar=False,
-                        convert_to_numpy=True,
+                        show_progress=False,
                     )
 
                 mbk.partial_fit(chunk_embeddings)
@@ -229,12 +226,10 @@ def run_kmeans_clustering(
                             embedding_gen = EmbeddingGenerator(
                                 model_name=embedding_model, provider=embedding_provider
                             )
-                            embedding_gen.load_model()
-                        all_emb = embedding_gen.model.encode(
+                        all_emb = embedding_gen.generate_embeddings(
                             texts,
                             batch_size=embed_batch_size,
-                            show_progress_bar=False,
-                            convert_to_numpy=True,
+                            show_progress=False,
                         )
                         for qid, emb in zip(ids, all_emb):
                             if qid not in emb_map:
@@ -266,12 +261,10 @@ def run_kmeans_clustering(
                         embedding_gen = EmbeddingGenerator(
                             model_name=embedding_model, provider=embedding_provider
                         )
-                        embedding_gen.load_model()
-                    chunk_embeddings = embedding_gen.model.encode(
+                    chunk_embeddings = embedding_gen.generate_embeddings(
                         texts,
                         batch_size=embed_batch_size,
-                        show_progress_bar=False,
-                        convert_to_numpy=True,
+                        show_progress=False,
                     )
 
                 labels = mbk.predict(chunk_embeddings)

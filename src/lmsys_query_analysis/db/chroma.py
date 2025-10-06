@@ -1,44 +1,98 @@
-"""ChromaDB manager for semantic search and vector storage."""
+"""ChromaDB manager for semantic search and vector storage.
+
+Supports multiple embedding models by using model-specific collection names.
+Collections are named: queries_{provider}_{model} and summaries_{provider}_{model}
+"""
 
 from pathlib import Path
 from typing import List, Optional
 import chromadb
 from chromadb.config import Settings
 import numpy as np
+import re
 
 
 DEFAULT_CHROMA_PATH = Path.home() / ".lmsys-query-analysis" / "chroma"
 
 
-class ChromaManager:
-    """Manages ChromaDB collections for queries and cluster summaries."""
+def sanitize_collection_name(name: str) -> str:
+    """Sanitize collection name to meet ChromaDB requirements.
 
-    def __init__(self, persist_directory: str | Path | None = None):
+    Collection names must:
+    - Be 3-63 characters long
+    - Start and end with alphanumeric
+    - Only contain alphanumeric, underscores, or hyphens
+    """
+    # Replace dots, slashes, and invalid chars with underscores
+    name = re.sub(r'[^a-zA-Z0-9_-]', '_', name)
+    # Remove consecutive underscores
+    name = re.sub(r'_+', '_', name)
+    # Ensure starts/ends with alphanumeric
+    name = name.strip('_-')
+    # Truncate if too long
+    if len(name) > 63:
+        name = name[:63].rstrip('_-')
+    # Ensure minimum length
+    if len(name) < 3:
+        name = name + '_default'
+    return name
+
+
+class ChromaManager:
+    """Manages ChromaDB collections for queries and cluster summaries.
+
+    Supports multiple embedding models by using model-specific collection names.
+    """
+
+    def __init__(
+        self,
+        persist_directory: str | Path | None = None,
+        embedding_model: str = "text-embedding-3-small",
+        embedding_provider: str = "openai",
+    ):
         """Initialize ChromaDB manager.
 
         Args:
             persist_directory: Directory to persist ChromaDB data
+            embedding_model: Embedding model name for collection naming
+            embedding_provider: Embedding provider (openai, cohere, sentence-transformers)
         """
         if persist_directory is None:
             persist_directory = DEFAULT_CHROMA_PATH
 
         self.persist_directory = Path(persist_directory)
         self.persist_directory.mkdir(parents=True, exist_ok=True)
+        self.embedding_model = embedding_model
+        self.embedding_provider = embedding_provider
 
         self.client = chromadb.PersistentClient(
             path=str(self.persist_directory),
             settings=Settings(anonymized_telemetry=False),
         )
 
-        # Collection for all queries (no run_id filtering here)
+        # Create model-specific collection names
+        model_suffix = sanitize_collection_name(f"{embedding_provider}_{embedding_model}")
+        queries_name = f"queries_{model_suffix}"
+        summaries_name = f"summaries_{model_suffix}"
+
+        # Collection for all queries (model-specific)
         self.queries_collection = self.client.get_or_create_collection(
-            name="queries", metadata={"description": "All user queries with embeddings"}
+            name=queries_name,
+            metadata={
+                "description": f"User queries with {embedding_provider}/{embedding_model} embeddings",
+                "embedding_model": embedding_model,
+                "embedding_provider": embedding_provider,
+            },
         )
 
-        # Collection for cluster summaries (filtered by run_id in metadata)
+        # Collection for cluster summaries (model-specific, filtered by run_id in metadata)
         self.summaries_collection = self.client.get_or_create_collection(
-            name="cluster_summaries",
-            metadata={"description": "Cluster summaries with run_id segmentation"},
+            name=summaries_name,
+            metadata={
+                "description": f"Cluster summaries with {embedding_provider}/{embedding_model} embeddings",
+                "embedding_model": embedding_model,
+                "embedding_provider": embedding_provider,
+            },
         )
 
     def add_queries_batch(
@@ -317,7 +371,52 @@ class ChromaManager:
             return len(results["ids"]) if results["ids"] else 0
         return self.summaries_collection.count()
 
+    def list_all_collections(self) -> List[dict]:
+        """List all collections in ChromaDB with their metadata.
 
-def get_chroma(persist_directory: str | Path | None = None) -> ChromaManager:
-    """Get ChromaDB manager instance."""
-    return ChromaManager(persist_directory)
+        Returns:
+            List of dicts with collection name and metadata
+        """
+        collections = self.client.list_collections()
+        return [
+            {
+                "name": col.name,
+                "metadata": col.metadata,
+                "count": col.count(),
+            }
+            for col in collections
+        ]
+
+    def get_collection_info(self) -> dict:
+        """Get info about the current model-specific collections.
+
+        Returns:
+            Dict with queries and summaries collection info
+        """
+        return {
+            "embedding_model": self.embedding_model,
+            "embedding_provider": self.embedding_provider,
+            "queries": {
+                "name": self.queries_collection.name,
+                "count": self.queries_collection.count(),
+            },
+            "summaries": {
+                "name": self.summaries_collection.name,
+                "count": self.summaries_collection.count(),
+            },
+        }
+
+
+def get_chroma(
+    persist_directory: str | Path | None = None,
+    embedding_model: str = "text-embedding-3-small",
+    embedding_provider: str = "openai",
+) -> ChromaManager:
+    """Get ChromaDB manager instance.
+
+    Args:
+        persist_directory: Directory to persist ChromaDB data
+        embedding_model: Embedding model name for collection naming
+        embedding_provider: Embedding provider (openai, cohere, sentence-transformers)
+    """
+    return ChromaManager(persist_directory, embedding_model, embedding_provider)

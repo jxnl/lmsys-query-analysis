@@ -1,12 +1,13 @@
-"""Embeddings generation using sentence-transformers or OpenAI.
+"""Embeddings generation using sentence-transformers, OpenAI, or Cohere.
 
 Optimizations:
 - Default to OpenAI embeddings for quality and consistency
-- Async OpenAI requests with anyio + AsyncOpenAI client
+- Async OpenAI/Cohere requests with anyio + async clients
 - Concurrency-limited batch requests with ordered assembly
+- Cohere embed-v4.0 supports Matryoshka output dimensions
 """
 
-from typing import List, Optional
+from typing import List, Optional, Literal
 import os
 import time
 import logging
@@ -21,9 +22,15 @@ from rich.progress import (
     TaskProgressColumn,
 )
 
+# Type definitions for Cohere models
+CohereModel = Literal["embed-v4.0"]
+
+# Matryoshka embedding dimensions for Cohere v4
+CohereOutputDimension = Literal[256, 512, 1024, 1536]
+
 
 class EmbeddingGenerator:
-    """Generate embeddings for text using sentence-transformers or OpenAI."""
+    """Generate embeddings for text using sentence-transformers, OpenAI, or Cohere."""
 
     def __init__(
         self,
@@ -32,14 +39,16 @@ class EmbeddingGenerator:
         api_key: Optional[str] = None,
         concurrency: int = 100,
         request_timeout: float = 30.0,
+        output_dimension: Optional[int] = None,
     ):
         """Initialize embedding generator.
 
         Args:
             model_name: Model name (default: all-MiniLM-L6-v2 for sentence-transformers,
-                       text-embedding-3-small for openai)
-            provider: "sentence-transformers" or "openai"
-            api_key: API key for OpenAI (or set OPENAI_API_KEY env var)
+                       text-embedding-3-small for openai, embed-v4.0 for cohere)
+            provider: "sentence-transformers", "openai", or "cohere"
+            api_key: API key for OpenAI/Cohere (or set OPENAI_API_KEY/COHERE_API_KEY env var)
+            output_dimension: For Cohere v4, use 512 or 1024 (Matryoshka dimensions)
         """
         self.model_name = model_name
         self.provider = provider
@@ -48,6 +57,7 @@ class EmbeddingGenerator:
         self._async_client = None
         self.concurrency = max(1, int(concurrency))
         self.request_timeout = float(request_timeout)
+        self.output_dimension = output_dimension
 
         if provider == "openai":
             from openai import OpenAI, AsyncOpenAI
@@ -55,6 +65,23 @@ class EmbeddingGenerator:
             self.openai_client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
             self._async_client = AsyncOpenAI(
                 api_key=api_key or os.getenv("OPENAI_API_KEY")
+            )
+        elif provider == "cohere":
+            import cohere
+
+            # Validate Cohere v4 model and dimensions
+            if model_name not in ["embed-v4.0"]:
+                raise ValueError("Only Cohere v4 supported: model='embed-v4.0'")
+            if output_dimension and output_dimension not in [256, 512, 1024, 1536]:
+                raise ValueError(
+                    f"Cohere v4 output_dimension must be one of 256, 512, 1024, 1536. Got: {output_dimension}"
+                )
+            # Default to 1024 if not specified
+            if not output_dimension:
+                self.output_dimension = 1024
+
+            self._async_client = cohere.AsyncClientV2(
+                api_key=api_key or os.getenv("COHERE_API_KEY")
             )
 
     def load_model(self):
@@ -81,6 +108,11 @@ class EmbeddingGenerator:
         if self.provider == "openai":
             # Use async path for OpenAI to parallelize batch requests
             return self._generate_openai_embeddings_async(
+                texts, batch_size, show_progress
+            )
+        elif self.provider == "cohere":
+            # Use async path for Cohere to parallelize batch requests
+            return self._generate_cohere_embeddings_async(
                 texts, batch_size, show_progress
             )
         else:
@@ -223,6 +255,97 @@ class EmbeddingGenerator:
             )
         return np.array(all_embeddings)
 
+    async def _async_cohere_batches(
+        self, texts: List[str], batch_size: int, progress_task, progress
+    ) -> List[List[float]]:
+        """Run Cohere embedding requests concurrently preserving order."""
+        assert self._async_client is not None
+
+        # Split into batches with original indices
+        batches: list[tuple[int, List[str]]] = []
+        for i in range(0, len(texts), batch_size):
+            batches.append((i, texts[i : i + batch_size]))
+
+        results: list[Optional[List[List[float]]]] = [None] * len(batches)
+        semaphore = anyio.Semaphore(self.concurrency)
+
+        async def worker(idx: int, payload: List[str]):
+            backoff = 1.0
+            for attempt in range(5):
+                try:
+                    async with semaphore:
+                        resp = await self._async_client.embed(
+                            texts=payload,
+                            model=self.model_name,
+                            input_type="clustering",  # Optimize for clustering
+                            embedding_types=["float"],
+                            output_dimension=self.output_dimension,
+                        )
+                    embeddings = resp.embeddings.float
+                    results[idx] = embeddings
+                    if progress_task is not None:
+                        progress.update(progress_task, advance=len(payload))
+                    return
+                except Exception:
+                    # Simple exponential backoff
+                    await anyio.sleep(backoff)
+                    backoff = min(backoff * 2, 8.0)
+            # If all retries fail, raise
+            raise
+
+        async with anyio.create_task_group() as tg:
+            for j, (start, payload) in enumerate(batches):
+                tg.start_soon(worker, j, payload)
+
+        # Flatten preserving original order
+        flat: list[List[float]] = []
+        for r in results:
+            if r is not None:
+                flat.extend(r)
+        return flat
+
+    def _generate_cohere_embeddings_async(
+        self,
+        texts: List[str],
+        batch_size: int,
+        show_progress: bool,
+    ) -> np.ndarray:
+        """Generate embeddings using Cohere API with anyio concurrency."""
+        logger = logging.getLogger("lmsys")
+        start = time.perf_counter()
+
+        if show_progress:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+            ) as progress:
+                task = progress.add_task(
+                    f"[cyan]Generating embeddings with Cohere {self.model_name}...",
+                    total=len(texts),
+                )
+                all_embeddings = anyio.run(
+                    self._async_cohere_batches, texts, batch_size, task, progress
+                )
+        else:
+            all_embeddings = anyio.run(
+                self._async_cohere_batches, texts, batch_size, None, None
+            )
+
+        elapsed = time.perf_counter() - start
+        if len(texts) > 0:
+            rate = len(texts) / elapsed if elapsed > 0 else float("inf")
+            logger.info(
+                "Embeddings(Cohere): %s texts in %.2fs (%.1f/s) using %s (concurrency=%s)",
+                len(texts),
+                elapsed,
+                rate,
+                self.model_name,
+                self.concurrency,
+            )
+        return np.array(all_embeddings)
+
     def get_embedding_dim(self) -> int:
         """Get the dimension of embeddings from this model."""
         if self.provider == "openai":
@@ -235,6 +358,9 @@ class EmbeddingGenerator:
                 return 1536
             else:
                 return 1536  # Default
+        elif self.provider == "cohere":
+            # Return the configured output dimension for Cohere v4
+            return self.output_dimension if self.output_dimension else 1024
         else:
             self.load_model()
             return self.model.get_sentence_embedding_dimension()

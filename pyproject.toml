@@ -26,6 +26,7 @@ dependencies = [
     "jinja2>=3.1.0",
     "aiolimiter>=1.1.0",
     "tenacity>=8.0.0",
+    "cohere>=5.0.0",
 ]
 
 [dependency-groups]
@@ -45,3 +46,7 @@ lmsys = "lmsys_query_analysis.cli.main:app"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+[tool.pytest.ini_options]
+markers = [
+    "smoke: quick smoke tests that may hit external APIs",
+]

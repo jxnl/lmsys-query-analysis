@@ -44,13 +44,14 @@ huggingface-cli login
 # Accept terms at: https://huggingface.co/datasets/lmsys/lmsys-chat-1m
 ```
 
-### 2. LLM API Key (Optional, for summarization)
+### 2. LLM / Embedding API Keys (Optional)
 
 Set environment variable for your chosen provider:
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."  # For Anthropic Claude
 export OPENAI_API_KEY="sk-..."          # For OpenAI GPT
+export COHERE_API_KEY="sk-cohere-..."   # For Cohere Embed v4 / Chat
 ```
 
 ## Quick Start
@@ -110,6 +111,12 @@ uv run lmsys cluster hdbscan --use-chroma \
 # Notes
 # - With --use-chroma, clustering reuses existing query embeddings from Chroma and backfills missing ones.
 # - Tune throughput with --embed-batch-size, --mb-batch-size, and --chunk-size.
+
+# Use Cohere embed-v4.0 for embeddings (Matryoshka 1024 by default)
+uv run lmsys load --limit 10000 --use-chroma \
+  --embedding-provider cohere --embedding-model embed-v4.0
+uv run lmsys cluster kmeans --n-clusters 200 --use-chroma \
+  --embedding-provider cohere --embedding-model embed-v4.0
 ```
 
 ### LLM Summarization
@@ -141,7 +148,9 @@ uv run lmsys summarize <RUN_ID> --max-queries 100
 # Speed up with concurrency and optional rate limiting
 uv run lmsys summarize <RUN_ID> --concurrency 8 --rpm 60
 
-# Note: --use-chroma flag has been removed. Summaries are stored in SQLite only.
+# Notes:
+# - With --use-chroma, summaries are also embedded and written to Chroma using the
+#   same embedding model/provider recorded on the clustering run.
 ```
 
 ### Hierarchical Organization
@@ -244,14 +253,20 @@ uv run lmsys list-clusters <RUN_ID> --show-examples 3
 ```bash
 # Search cluster summaries
 uv run lmsys search "python programming" --search-type clusters \
-  --run-id <RUN_ID> --embedding-model all-MiniLM-L6-v2
+  --run-id <RUN_ID> --embedding-model all-MiniLM-L6-v2 \
+  --embedding-provider sentence-transformers
 
 # Search within specific run
 uv run lmsys search "machine learning" --search-type clusters --run-id <RUN_ID>
 
 # Search individual queries (if loaded with --use-chroma)
 uv run lmsys search "how to build neural network" --search-type queries \
-  --n-results 20 --embedding-model all-MiniLM-L6-v2
+  --n-results 20 --embedding-model all-MiniLM-L6-v2 \
+  --embedding-provider sentence-transformers
+
+# Search with Cohere vectors
+uv run lmsys search "retrieval augmented generation" --search-type clusters \
+  --run-id <RUN_ID> --embedding-model embed-v4.0 --embedding-provider cohere
 ```
 
 Search uses explicit query embeddings to ensure consistency with stored vectors. Use an embedding model that matches the vectors in Chroma (the model used during load/cluster).
@@ -286,6 +301,9 @@ Search uses explicit query embeddings to ensure consistency with stored vectors.
 - `created_at`
 
 ### ChromaDB Collections
+
+Note: Chroma collections are model/provider-specific. Names are suffixed by
+`{provider}_{model}` to avoid mixing vector spaces.
 
 **queries** - All user queries with embeddings (optional)
 - ID format: `query_{id}`
@@ -324,6 +342,17 @@ SMOKE_OFFLINE=1 bash smoketest.sh # seed minimal data if load fails (offline)
 
 The smoke test will: load or seed data, run clustering, list/inspect clusters, export CSV/JSON, and try semantic search when Chroma data is available.
 
+### Embedding Smoke Tests
+
+Quick online checks for embedding providers (requires API keys):
+
+```bash
+export OPENAI_API_KEY=... # optional
+export COHERE_API_KEY=... # optional
+uv run pytest -q -m smoke
+```
+These tests create a few embeddings and assert non-zero vectors and expected shapes.
+
 ### Logging
 
 All commands support verbose logging:
@@ -361,6 +390,7 @@ utils/
 
 - `ANTHROPIC_API_KEY` - For Claude models
 - `OPENAI_API_KEY` - For GPT models
+- `COHERE_API_KEY` - For Cohere embed-v4.0 models
 - `GROQ_API_KEY` - For Groq models
 - `HUGGINGFACE_TOKEN` - For dataset access
 

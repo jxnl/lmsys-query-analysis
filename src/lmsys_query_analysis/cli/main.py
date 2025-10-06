@@ -39,7 +39,7 @@ def load(
         "text-embedding-3-small", help="Embedding model for ChromaDB"
     ),
     embedding_provider: str = typer.Option(
-        "openai", help="Embedding provider: 'openai' or 'sentence-transformers'"
+        "openai", help="Embedding provider: 'openai', 'cohere', or 'sentence-transformers'"
     ),
     db_batch_size: int = typer.Option(5000, help="DB insert batch size"),
     streaming: bool = typer.Option(False, help="Use streaming dataset iteration"),
@@ -59,7 +59,11 @@ def load(
             force_reload,
         )
         db = get_db(db_path)
-        chroma = get_chroma(chroma_path) if use_chroma else None
+        chroma = (
+            get_chroma(chroma_path, embedding_model, embedding_provider)
+            if use_chroma
+            else None
+        )
 
         stats = load_lmsys_dataset(
             db,
@@ -103,7 +107,7 @@ def cluster_kmeans(
         "text-embedding-3-small", help="Embedding model"
     ),
     embedding_provider: str = typer.Option(
-        "openai", help="'sentence-transformers' or 'openai'"
+        "openai", help="Embedding provider: 'sentence-transformers', 'openai', or 'cohere'"
     ),
     embed_batch_size: int = typer.Option(32, help="Embedding encode batch size"),
     chunk_size: int = typer.Option(5000, help="DB iteration chunk size"),
@@ -116,7 +120,11 @@ def cluster_kmeans(
         from ..clustering.kmeans import run_kmeans_clustering
 
         db = get_db(db_path)
-        chroma = get_chroma(chroma_path) if use_chroma else None
+        chroma = (
+            get_chroma(chroma_path, embedding_model, embedding_provider)
+            if use_chroma
+            else None
+        )
 
         logger.info(
             "Running clustering: algo=kmeans, n_clusters=%s, model=%s, provider=%s, use_chroma=%s",
@@ -157,7 +165,7 @@ def cluster_hdbscan(
     db_path: str = typer.Option(None, help="Database path"),
     embedding_model: str = typer.Option("all-MiniLM-L6-v2", help="Embedding model"),
     embedding_provider: str = typer.Option(
-        "sentence-transformers", help="'sentence-transformers' or 'openai'"
+        "sentence-transformers", help="Embedding provider: 'sentence-transformers', 'openai', or 'cohere'"
     ),
     embed_batch_size: int = typer.Option(32, help="Embedding encode batch size"),
     chunk_size: int = typer.Option(5000, help="DB iteration chunk size"),
@@ -177,7 +185,11 @@ def cluster_hdbscan(
         from ..clustering.hdbscan_clustering import run_hdbscan_clustering
 
         db = get_db(db_path)
-        chroma = get_chroma(chroma_path) if use_chroma else None
+        chroma = (
+            get_chroma(chroma_path, embedding_model, embedding_provider)
+            if use_chroma
+            else None
+        )
 
         logger.info(
             "Running clustering: algo=hdbscan, model=%s, provider=%s, use_chroma=%s",
@@ -646,12 +658,16 @@ def summarize(
                 logger.info("Storing summaries in ChromaDB...")
                 console.print("[cyan]Generating embeddings for summaries...[/cyan]")
 
-                chroma = get_chroma(chroma_path)
+                # Use the same embedding space as the clustering run if available
+                embed_model = run.parameters.get("embedding_model") if (run and run.parameters) else "text-embedding-3-small"
+                embed_provider = run.parameters.get("embedding_provider") if (run and run.parameters) else "openai"
 
-                # Initialize embedding generator (use same defaults as load command)
+                chroma = get_chroma(chroma_path, embed_model, embed_provider)
+
+                # Initialize embedding generator to match run embedding space
                 embedding_gen = EmbeddingGenerator(
-                    model_name="text-embedding-3-small",
-                    provider="openai",
+                    model_name=embed_model,
+                    provider=embed_provider,
                 )
 
                 # Prepare data for batch storage
@@ -909,21 +925,22 @@ def search(
     embedding_model: str = typer.Option(
         "all-MiniLM-L6-v2", help="Embedding model to embed the query for search"
     ),
+    embedding_provider: str = typer.Option(
+        "sentence-transformers", help="Embedding provider: 'sentence-transformers', 'openai', or 'cohere'"
+    ),
 ):
     """Semantic search across queries or cluster summaries using ChromaDB."""
     try:
-        chroma = get_chroma(chroma_path)
+        chroma = get_chroma(chroma_path, embedding_model, embedding_provider)
 
         if search_type == "queries":
             logger.info("Searching queries: n_results=%s", n_results)
             # Explicitly embed query to ensure consistency with stored vectors
             from ..clustering.embeddings import EmbeddingGenerator
 
-            eg = EmbeddingGenerator(model_name=embedding_model)
-            eg.load_model()
-            q_emb = eg.model.encode(
-                [query], batch_size=1, show_progress_bar=False, convert_to_numpy=True
-            )[0]
+            eg = EmbeddingGenerator(model_name=embedding_model, provider=embedding_provider)
+            # Use unified generate_embeddings to support all providers
+            q_emb = eg.generate_embeddings([query], batch_size=1, show_progress=False)[0]
             results = chroma.search_queries(
                 query, n_results=n_results, query_embedding=q_emb
             )
@@ -970,22 +987,25 @@ def search(
             from sqlmodel import select
 
             search_model = embedding_model
+            search_provider = embedding_provider
             if run_id:
                 db = get_db(None)
                 with db.get_session() as s:
                     run = s.exec(
                         select(ClusteringRun).where(ClusteringRun.run_id == run_id)
                     ).first()
-                    if run and run.parameters and run.parameters.get("embedding_model"):
-                        search_model = run.parameters["embedding_model"]
+                    if run and run.parameters:
+                        if run.parameters.get("embedding_model"):
+                            search_model = run.parameters["embedding_model"]
+                        if run.parameters.get("embedding_provider"):
+                            search_provider = run.parameters["embedding_provider"]
 
             from ..clustering.embeddings import EmbeddingGenerator
 
-            eg = EmbeddingGenerator(model_name=search_model)
-            eg.load_model()
-            q_emb = eg.model.encode(
-                [query], batch_size=1, show_progress_bar=False, convert_to_numpy=True
-            )[0]
+            eg = EmbeddingGenerator(model_name=search_model, provider=search_provider)
+            q_emb = eg.generate_embeddings([query], batch_size=1, show_progress=False)[0]
+            # Ensure we query the matching model/provider collection
+            chroma = get_chroma(chroma_path, search_model, search_provider)
             results = chroma.search_cluster_summaries(
                 query, run_id=run_id, n_results=n_results, query_embedding=q_emb
             )
@@ -1043,6 +1063,7 @@ def clear(
 
     try:
         db = get_db(db_path)
+        # Use defaults; this just selects the directory, not specific collections
         chroma = get_chroma(chroma_path)
 
         # Show what will be deleted
@@ -1089,7 +1110,7 @@ def backfill_chroma(
     db_path: str = typer.Option(None, help="Database path"),
     chroma_path: str = typer.Option(None, help="ChromaDB path"),
     embedding_provider: str = typer.Option(
-        "openai", help="Embedding provider: 'openai' or 'sentence-transformers'"
+        "openai", help="Embedding provider: 'openai', 'cohere', or 'sentence-transformers'"
     ),
     embedding_model: str = typer.Option(
         "text-embedding-3-small", help="Embedding model to use"
@@ -1113,7 +1134,7 @@ def backfill_chroma(
         )
 
         db = get_db(db_path)
-        chroma = get_chroma(chroma_path)
+        chroma = get_chroma(chroma_path, embedding_model, embedding_provider)
 
         with db.get_session() as session:
             # Count total queries for progress
@@ -1140,12 +1161,7 @@ def backfill_chroma(
                     yield rows
                     offset += len(rows)
 
-            eg = EmbeddingGenerator(
-                model_name=embedding_model, provider=embedding_provider
-            )
-            # Load local model early if sentence-transformers
-            if embedding_provider == "sentence-transformers":
-                eg.load_model()
+            eg = EmbeddingGenerator(model_name=embedding_model, provider=embedding_provider)
 
             backfilled = 0
             scanned = 0
