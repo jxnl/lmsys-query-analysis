@@ -73,6 +73,32 @@ uv run lmsys list-clusters <RUN_ID>
 uv run lmsys search "python programming" --search-type clusters
 ```
 
+### Quick 5k End-to-End (Local, no API keys)
+
+```bash
+# Load 5k with local sentence-transformers embeddings
+uv run lmsys load --limit 5000 --use-chroma \
+  --embedding-provider sentence-transformers --embedding-model all-MiniLM-L6-v2
+
+# Cluster into 50 groups and write centroids to Chroma
+uv run lmsys cluster kmeans --n-clusters 50 --use-chroma \
+  --embedding-provider sentence-transformers --embedding-model all-MiniLM-L6-v2
+
+# Get latest run_id
+uv run lmsys runs --latest
+
+# Cluster discovery (JSON)
+uv run lmsys search-cluster "vector databases" --run-id <RUN_ID> --json | jq .
+
+# Query discovery conditioned on found clusters (JSON)
+uv run lmsys search "hybrid search" --run-id <RUN_ID> \
+  --within-clusters "vector databases" --top-clusters 5 \
+  --n-results 50 --facets cluster --json | jq .
+
+# Verify Chroma↔SQLite sync for the run
+uv run lmsys verify sync <RUN_ID> --json | jq .
+```
+
 ## Commands
 
 ### Data Loading
@@ -272,6 +298,12 @@ uv run lmsys search "sql" --run-id <RUN_ID> --cluster-ids 12,27,44 --json | jq .
 Notes
 - With `--run-id`, the CLI resolves the correct embedding provider/model/dimension from the run to prevent cross‑space mix‑ups.
 - Queries are always filtered by `query_clusters` in SQLite; Chroma is used for retrieval only. Cluster facets include `meta.title` when `--run-id` is set.
+
+JSON output shapes
+- search-cluster:
+  - `{ text, run_id, results: [{ cluster_id, distance, title, description, num_queries }] }`
+- search (queries):
+  - `{ text, run_id, applied_clusters: [{ cluster_id, title, description, num_queries, distance }], results: [{ query_id, distance, snippet, model, language, cluster_id }], facets: { clusters: [{ cluster_id, count, meta: { title } }], language: [{ key, count }], model: [{ key, count }] } }`
 
 ## Architecture
 

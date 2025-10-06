@@ -236,9 +236,9 @@ def load_lmsys_dataset(
                         stmt = select(Query.conversation_id).where(
                             Query.conversation_id.in_(c)
                         )
-                        existing_ids.update(
-                            [cid for (cid,) in session.exec(stmt).all()]
-                        )
+                        # Use scalars() to get flat list of conversation_id
+                        rows = session.exec(stmt).all()
+                        existing_ids.update(rows)
 
                     if existing_ids:
                         filtered_rows = [

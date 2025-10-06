@@ -183,6 +183,9 @@ def run_kmeans_clustering(
                         show_progress=False,
                     )
 
+                # Ensure sklearn receives float64 arrays
+                if chunk_embeddings.dtype != np.float64:
+                    chunk_embeddings = chunk_embeddings.astype(np.float64, copy=False)
                 mbk.partial_fit(chunk_embeddings)
                 total_fit += len(texts)
             progress.update(task, completed=True)
@@ -267,6 +270,9 @@ def run_kmeans_clustering(
                         show_progress=False,
                     )
 
+                # Ensure sklearn receives float64 arrays
+                if chunk_embeddings.dtype != np.float64:
+                    chunk_embeddings = chunk_embeddings.astype(np.float64, copy=False)
                 labels = mbk.predict(chunk_embeddings)
                 total_pred += len(texts)
 
