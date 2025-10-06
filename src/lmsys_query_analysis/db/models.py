@@ -1,6 +1,7 @@
 """Database models for LMSYS query analysis using SQLModel."""
 
 from datetime import datetime
+import uuid
 from typing import Optional
 from sqlmodel import SQLModel, Field, Relationship, Column, JSON
 from sqlalchemy import UniqueConstraint, ForeignKey, Index
@@ -96,7 +97,8 @@ class ClusterSummary(SQLModel, table=True):
         ),
     )
     cluster_id: int
-    summary_run_id: str  # Unique ID for this summarization run
+    # Unique ID for this summarization run; default to timestamp-based if not provided
+    summary_run_id: str = Field(default_factory=lambda: f"summary-{datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f')}")
     alias: Optional[str] = None  # Friendly name for this summary run (e.g., "claude-v1", "gpt4-test")
     title: Optional[str] = None  # LLM-generated short title
     description: Optional[str] = None  # LLM-generated description

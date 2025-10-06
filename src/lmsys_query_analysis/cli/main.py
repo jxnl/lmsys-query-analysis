@@ -60,7 +60,12 @@ def load(
         )
         db = get_db(db_path)
         chroma = (
-            get_chroma(chroma_path, embedding_model, embedding_provider)
+            get_chroma(
+                chroma_path,
+                embedding_model,
+                embedding_provider,
+                256 if embedding_provider == "cohere" else None,
+            )
             if use_chroma
             else None
         )
@@ -121,7 +126,12 @@ def cluster_kmeans(
 
         db = get_db(db_path)
         chroma = (
-            get_chroma(chroma_path, embedding_model, embedding_provider)
+            get_chroma(
+                chroma_path,
+                embedding_model,
+                embedding_provider,
+                256 if embedding_provider == "cohere" else None,
+            )
             if use_chroma
             else None
         )
@@ -186,7 +196,12 @@ def cluster_hdbscan(
 
         db = get_db(db_path)
         chroma = (
-            get_chroma(chroma_path, embedding_model, embedding_provider)
+            get_chroma(
+                chroma_path,
+                embedding_model,
+                embedding_provider,
+                256 if embedding_provider == "cohere" else None,
+            )
             if use_chroma
             else None
         )
@@ -386,23 +401,11 @@ def list_clusters(
                 )
             )
 
-            # Filter by summary_run_id or alias if provided
+            # Filter by summary_run_id or alias if provided; otherwise show all summaries for the run
             if summary_run_id:
                 statement = statement.where(ClusterSummary.summary_run_id == summary_run_id)
             elif alias:
                 statement = statement.where(ClusterSummary.alias == alias)
-            else:
-                # If no summary_run_id or alias specified, get the most recent one
-                from sqlalchemy import func
-                latest_stmt = (
-                    select(ClusterSummary.summary_run_id)
-                    .where(ClusterSummary.run_id == run_id)
-                    .order_by(ClusterSummary.generated_at.desc())
-                    .limit(1)
-                )
-                latest_summary_run = session.exec(latest_stmt).first()
-                if latest_summary_run:
-                    statement = statement.where(ClusterSummary.summary_run_id == latest_summary_run)
 
             if limit:
                 statement = statement.limit(limit)
@@ -662,7 +665,12 @@ def summarize(
                 embed_model = run.parameters.get("embedding_model") if (run and run.parameters) else "text-embedding-3-small"
                 embed_provider = run.parameters.get("embedding_provider") if (run and run.parameters) else "openai"
 
-                chroma = get_chroma(chroma_path, embed_model, embed_provider)
+                chroma = get_chroma(
+                    chroma_path,
+                    embed_model,
+                    embed_provider,
+                    256 if embed_provider == "cohere" else None,
+                )
 
                 # Initialize embedding generator to match run embedding space
                 embedding_gen = EmbeddingGenerator(
@@ -931,7 +939,12 @@ def search(
 ):
     """Semantic search across queries or cluster summaries using ChromaDB."""
     try:
-        chroma = get_chroma(chroma_path, embedding_model, embedding_provider)
+        chroma = get_chroma(
+            chroma_path,
+            embedding_model,
+            embedding_provider,
+            256 if embedding_provider == "cohere" else None,
+        )
 
         if search_type == "queries":
             logger.info("Searching queries: n_results=%s", n_results)
@@ -1005,7 +1018,12 @@ def search(
             eg = EmbeddingGenerator(model_name=search_model, provider=search_provider)
             q_emb = eg.generate_embeddings([query], batch_size=1, show_progress=False)[0]
             # Ensure we query the matching model/provider collection
-            chroma = get_chroma(chroma_path, search_model, search_provider)
+            chroma = get_chroma(
+                chroma_path,
+                search_model,
+                search_provider,
+                256 if search_provider == "cohere" else None,
+            )
             results = chroma.search_cluster_summaries(
                 query, run_id=run_id, n_results=n_results, query_embedding=q_emb
             )

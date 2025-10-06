@@ -76,9 +76,9 @@ class EmbeddingGenerator:
                 raise ValueError(
                     f"Cohere v4 output_dimension must be one of 256, 512, 1024, 1536. Got: {output_dimension}"
                 )
-            # Default to 1024 if not specified
+            # Default to 256 if not specified (Matryoshka)
             if not output_dimension:
-                self.output_dimension = 1024
+                self.output_dimension = 256
 
             self._async_client = cohere.AsyncClientV2(
                 api_key=api_key or os.getenv("COHERE_API_KEY")
@@ -360,7 +360,7 @@ class EmbeddingGenerator:
                 return 1536  # Default
         elif self.provider == "cohere":
             # Return the configured output dimension for Cohere v4
-            return self.output_dimension if self.output_dimension else 1024
+            return self.output_dimension if self.output_dimension else 256
         else:
             self.load_model()
             return self.model.get_sentence_embedding_dimension()

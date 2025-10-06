@@ -112,7 +112,7 @@ uv run lmsys cluster hdbscan --use-chroma \
 # - With --use-chroma, clustering reuses existing query embeddings from Chroma and backfills missing ones.
 # - Tune throughput with --embed-batch-size, --mb-batch-size, and --chunk-size.
 
-# Use Cohere embed-v4.0 for embeddings (Matryoshka 1024 by default)
+# Use Cohere embed-v4.0 for embeddings (Matryoshka 256 by default)
 uv run lmsys load --limit 10000 --use-chroma \
   --embedding-provider cohere --embedding-model embed-v4.0
 uv run lmsys cluster kmeans --n-clusters 200 --use-chroma \

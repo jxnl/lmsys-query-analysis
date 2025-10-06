@@ -49,6 +49,7 @@ class ChromaManager:
         persist_directory: str | Path | None = None,
         embedding_model: str = "text-embedding-3-small",
         embedding_provider: str = "openai",
+        embedding_dimension: int | None = None,
     ):
         """Initialize ChromaDB manager.
 
@@ -64,6 +65,7 @@ class ChromaManager:
         self.persist_directory.mkdir(parents=True, exist_ok=True)
         self.embedding_model = embedding_model
         self.embedding_provider = embedding_provider
+        self.embedding_dimension = embedding_dimension
 
         self.client = chromadb.PersistentClient(
             path=str(self.persist_directory),
@@ -71,7 +73,9 @@ class ChromaManager:
         )
 
         # Create model-specific collection names
-        model_suffix = sanitize_collection_name(f"{embedding_provider}_{embedding_model}")
+        # Optionally include dimension in suffix (useful for Cohere Matryoshka)
+        dim_part = f"_{embedding_dimension}" if (embedding_provider == "cohere" and embedding_dimension) else ""
+        model_suffix = sanitize_collection_name(f"{embedding_provider}_{embedding_model}{dim_part}")
         queries_name = f"queries_{model_suffix}"
         summaries_name = f"summaries_{model_suffix}"
 
@@ -411,6 +415,7 @@ def get_chroma(
     persist_directory: str | Path | None = None,
     embedding_model: str = "text-embedding-3-small",
     embedding_provider: str = "openai",
+    embedding_dimension: int | None = None,
 ) -> ChromaManager:
     """Get ChromaDB manager instance.
 
@@ -419,4 +424,4 @@ def get_chroma(
         embedding_model: Embedding model name for collection naming
         embedding_provider: Embedding provider (openai, cohere, sentence-transformers)
     """
-    return ChromaManager(persist_directory, embedding_model, embedding_provider)
+    return ChromaManager(persist_directory, embedding_model, embedding_provider, embedding_dimension)
