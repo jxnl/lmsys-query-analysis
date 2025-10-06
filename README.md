@@ -78,21 +78,25 @@ uv run lmsys search "python programming" --search-type clusters
 ```bash
 # Load 5k with local sentence-transformers embeddings
 uv run lmsys load --limit 5000 --use-chroma \
-  --embedding-provider sentence-transformers --embedding-model all-MiniLM-L6-v2
+  --embedding-provider cohere --embedding-model embed-v4.0
 
 # Cluster into 50 groups and write centroids to Chroma
 uv run lmsys cluster kmeans --n-clusters 50 --use-chroma \
-  --embedding-provider sentence-transformers --embedding-model all-MiniLM-L6-v2
+  --embedding-provider cohere --embedding-model embed-v4.0
 
 # Get latest run_id
 uv run lmsys runs --latest
 
-# Generate summaries
-lmsys summarize <RUN_ID> --alias v1
---use-chroma --max-queries 80 --concurrency 6
+# Generate summaries (requires OPENAI_API_KEY or other LLM provider)
+uv run lmsys summarize <RUN_ID> --alias v1 \
+  --use-chroma --max-queries 80 --concurrency 6
 
-# Merge clusters
-uv run lmsys merge-clusters <RUN_ID> --target-levels 3 --merge-ratio 0.2
+# Merge clusters into hierarchy (uses gpt-4o-mini by default)
+uv run lmsys merge-clusters <RUN_ID> \
+  --target-levels 3 \
+  --merge-ratio 0.2 \
+  --embedding-provider cohere \
+  --embedding-model embed-v4.0
 
 # Cluster discovery (JSON)
 uv run lmsys search-cluster "vector databases" --run-id <RUN_ID> --json | jq .
@@ -128,8 +132,8 @@ uv run lmsys load --limit 10000 --use-chroma
 ```bash
 # Run KMeans with 200 clusters (recommended for fine-grained analysis)
 uv run lmsys cluster kmeans --n-clusters 200 --use-chroma \
-  --embedding-model all-MiniLM-L6-v2 \
-  --embedding-provider sentence-transformers \
+  --embedding-model embed-v4.0 \
+  --embedding-provider cohere \
   --embed-batch-size 64 --mb-batch-size 8192 --chunk-size 10000 \
   --description "Fine-grained clustering"
 
@@ -138,7 +142,7 @@ uv run lmsys cluster kmeans --n-clusters 50 --use-chroma
 
 # HDBSCAN (finds natural clusters; excludes noise)
 uv run lmsys cluster hdbscan --use-chroma \
-  --embedding-model all-MiniLM-L6-v2 --embedding-provider sentence-transformers \
+  --embedding-model embed-v4.0 --embedding-provider cohere \
   --embed-batch-size 64 --chunk-size 10000
 
 # Notes
@@ -166,7 +170,7 @@ Each summary run is uniquely identified by a `summary_run_id` (auto-generated as
 uv run lmsys summarize <RUN_ID> --alias "claude-v1"
 
 # Use different LLM models (creates separate summary runs)
-uv run lmsys summarize <RUN_ID> --model "openai/gpt-4" --alias "gpt4-test"
+uv run lmsys summarize <RUN_ID> --model "openai/gpt-4o-mini" --alias "gpt4o-test"
 uv run lmsys summarize <RUN_ID> --model "groq/llama-3.1-8b-instant" --alias "llama-fast"
 
 # Custom summary run ID for easy reference
@@ -213,9 +217,9 @@ uv run lmsys merge-clusters <RUN_ID> \
   --concurrency 8 \                # Parallel LLM requests
   --neighborhood-size 40           # Clusters per LLM context (Clio default)
 
-# Use Claude for higher quality merging
+# Use Claude for higher quality merging, this gets summaries from the summary-run-id which is used in merging
 uv run lmsys merge-clusters <RUN_ID> \
-  --llm-provider anthropic --llm-model claude-sonnet-4-5-20250929
+  --llm-provider anthropic --llm-model claude-3-5-sonnet-20241022
 
 # Example: 200 clusters → 40 → 8 top-level categories
 uv run lmsys merge-clusters kmeans-200-20251004-005043 \
@@ -286,6 +290,15 @@ uv run lmsys list-clusters <RUN_ID> --limit 20
 
 # Show example queries per cluster
 uv run lmsys list-clusters <RUN_ID> --show-examples 3
+
+# Inspect a specific cluster in detail
+uv run lmsys inspect <RUN_ID> <CLUSTER_ID>
+
+# Show more or fewer queries
+uv run lmsys inspect <RUN_ID> <CLUSTER_ID> --show-queries 20
+
+# View hierarchy structure as a tree
+uv run lmsys show-hierarchy <HIERARCHY_RUN_ID>
 ```
 
 ### Semantic Search (Clusters + Queries)
@@ -515,9 +528,9 @@ uv run lmsys runs
 uv run lmsys summarize <RUN_ID> \
   --model "anthropic/claude-3-haiku-20240307" --use-chroma
 
-# GPT-4 (OpenAI) - Highest quality
+# GPT-4o-mini (OpenAI) - Recommended
 uv run lmsys summarize <RUN_ID> \
-  --model "openai/gpt-4" --use-chroma
+  --model "openai/gpt-4o-mini" --use-chroma
 
 # Llama via Groq - Fast inference
 uv run lmsys summarize <RUN_ID> \
