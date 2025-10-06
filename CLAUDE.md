@@ -70,5 +70,5 @@ If agents identify gaps in functionality or need additional tools to enhance the
 ## Security & Config Tips
 
 - Hugging Face: `huggingface-cli login` and accept LMSYS-1M terms before `load`.
-- API keys (LLM): set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GROQ_API_KEY` in your shell, not in code.
+- API keys: set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `COHERE_API_KEY`, or `GROQ_API_KEY` in your shell, not in code.
 - Defaults: SQLite at `~/.lmsys-query-analysis/queries.db`; Chroma at `~/.lmsys-query-analysis/chroma`.

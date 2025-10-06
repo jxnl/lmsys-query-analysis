@@ -192,23 +192,30 @@ After summarizing clusters, you can organize them into a multi-level hierarchy u
 
 ```bash
 # Create 3-level hierarchy from 100 base clusters
+# Uses latest summary run by default
 # Level 0: 100 leaf clusters → Level 1: 20 parents → Level 2: 4 top categories
 uv run lmsys merge-clusters kmeans-100-20251004-170442 \
   --target-levels 3 \
   --merge-ratio 0.2
 
+# Specify a particular summary run if you have multiple
+uv run lmsys merge-clusters <RUN_ID> \
+  --summary-run-id "summary-gpt-4o-mini-20251006-155519"
+
 # Customize hierarchy parameters
 uv run lmsys merge-clusters <RUN_ID> \
   --target-levels 2 \              # Number of hierarchy levels (2 = one merge)
   --merge-ratio 0.5 \              # Merge aggressiveness (0.5 = 100->50->25)
-  --llm-provider anthropic \       # Provider for merging (anthropic/openai/groq)
-  --llm-model claude-sonnet-4-5-20250929 \
+  --llm-provider openai \          # Provider for merging (openai/anthropic/groq)
+  --llm-model gpt-4o-mini \        # LLM model (default: gpt-4o-mini)
+  --embedding-provider cohere \    # Provider for cluster embeddings (cohere/openai/sentence-transformers)
+  --embedding-model embed-v4.0 \   # Embedding model (default: embed-v4.0 for cohere)
   --concurrency 8 \                # Parallel LLM requests
   --neighborhood-size 40           # Clusters per LLM context (Clio default)
 
-# Use faster/cheaper models for experimentation
+# Use Claude for higher quality merging
 uv run lmsys merge-clusters <RUN_ID> \
-  --llm-provider openai --llm-model gpt-4o-mini
+  --llm-provider anthropic --llm-model claude-sonnet-4-5-20250929
 
 # Example: 200 clusters → 40 → 8 top-level categories
 uv run lmsys merge-clusters kmeans-200-20251004-005043 \

@@ -1589,14 +1589,18 @@ def backfill_chroma(
 def merge_clusters_cmd(
     run_id: str = typer.Argument(..., help="Clustering run ID to create hierarchy from"),
     db_path: str = typer.Option(None, help="Database path"),
+    summary_run_id: str = typer.Option(None, help="Specific summary run ID to merge (defaults to latest)"),
     llm_provider: str = typer.Option(
-        "anthropic", help="LLM provider: anthropic, openai, groq"
+        "openai", help="LLM provider: anthropic, openai, groq"
     ),
     llm_model: str = typer.Option(
-        "claude-sonnet-4-5-20250929", help="LLM model for merging"
+        "gpt-4o-mini", help="LLM model for merging"
     ),
     embedding_model: str = typer.Option(
-        "all-mpnet-base-v2", help="Sentence transformer for cluster embeddings"
+        "embed-v4.0", help="Embedding model for cluster embeddings"
+    ),
+    embedding_provider: str = typer.Option(
+        "cohere", help="Embedding provider: 'sentence-transformers', 'openai', or 'cohere'"
     ),
     target_levels: int = typer.Option(
         3, help="Number of hierarchy levels (1=flat, 2=one merge, 3=two merges, etc.)"
@@ -1636,17 +1640,35 @@ def merge_clusters_cmd(
         db = get_db(db_path)
 
         with db.get_session() as session:
+            # If summary_run_id not provided, find the latest one
+            if not summary_run_id:
+                latest = session.exec(
+                    select(ClusterSummary.summary_run_id)
+                    .where(ClusterSummary.run_id == run_id)
+                    .order_by(ClusterSummary.summary_run_id.desc())
+                    .limit(1)
+                ).first()
+
+                if not latest:
+                    console.print(f"[red]No summaries found for run {run_id}[/red]")
+                    console.print("[yellow]Run 'lmsys summarize <run_id>' first[/yellow]")
+                    raise typer.Exit(1)
+
+                summary_run_id = latest
+                console.print(f"[cyan]Using latest summary run: {summary_run_id}[/cyan]")
+
             # Load base cluster summaries
-            console.print(f"[cyan]Loading cluster summaries for run: {run_id}[/cyan]")
+            console.print(f"[cyan]Loading cluster summaries for run: {run_id}, summary: {summary_run_id}[/cyan]")
 
             summaries = session.exec(
                 select(ClusterSummary)
                 .where(ClusterSummary.run_id == run_id)
+                .where(ClusterSummary.summary_run_id == summary_run_id)
                 .order_by(ClusterSummary.cluster_id)
             ).all()
 
             if not summaries:
-                console.print(f"[red]No summaries found for run {run_id}[/red]")
+                console.print(f"[red]No summaries found for run {run_id} with summary_run_id {summary_run_id}[/red]")
                 console.print("[yellow]Run 'lmsys summarize <run_id>' first[/yellow]")
                 raise typer.Exit(1)
 
@@ -1669,6 +1691,7 @@ def merge_clusters_cmd(
                     base_clusters,
                     run_id,
                     embedding_model=embedding_model,
+                    embedding_provider=embedding_provider,
                     llm_provider=llm_provider,
                     llm_model=llm_model,
                     target_levels=target_levels,

@@ -6,6 +6,7 @@ This repository provides agents with the ability to perform comprehensive data a
 
 - **Data Loading**: Download and process the LMSYS-1M dataset from Hugging Face
 - **Clustering Analysis**: Group similar queries using embeddings and clustering algorithms (KMeans, HDBSCAN)
+- **Hierarchical Organization**: Create multi-level cluster hierarchies using LLM-driven merging (Anthropic Clio methodology)
 - **Cluster Investigation**: Explore and summarize query clusters to identify patterns and usage trends
 - **Hypothesis Generation**: Discover interesting insights about user behavior, query patterns, and system interactions
 
@@ -18,9 +19,9 @@ If agents identify gaps in functionality or need additional tools to enhance the
 ## Project Structure & Modules
 
 - `src/lmsys_query_analysis/`: Core Python package.
-  - `cli/`: Typer CLI (`main.py`) with commands: `load`, `cluster kmeans`, `cluster hdbscan`, `runs`, `list`, `list-clusters`, `summarize`, `inspect`, `export`, `search`, `clear`, `backfill-chroma`.
+  - `cli/`: Typer CLI (`main.py`) with commands: `load`, `cluster kmeans`, `cluster hdbscan`, `merge-clusters`, `runs`, `list`, `list-clusters`, `summarize`, `inspect`, `export`, `search`, `clear`, `backfill-chroma`.
   - `db/`: Persistence layer (`models.py`, `connection.py`, `loader.py`, `chroma.py`).
-  - `clustering/`: Embeddings + KMeans/HDBSCAN and LLM summarization.
+  - `clustering/`: Embeddings, KMeans/HDBSCAN clustering, hierarchical merging (`hierarchy.py`), and LLM summarization.
 - `tests/`: Pytest suite covering CLI and data layer.
 - `pyproject.toml`: Project metadata, dependencies, and console script (`lmsys`).
 

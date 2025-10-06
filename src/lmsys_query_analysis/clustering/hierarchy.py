@@ -433,14 +433,21 @@ async def merge_clusters_hierarchical(
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     hierarchy_run_id = f"hier-{run_id}-{timestamp}"
 
-    # Initialize embedding model (use Cohere v4 with 256 dims by default)
-    logger.info(f"Loading embedding model: {embedding_provider}/{embedding_model} (256 dims)")
-    embedder = EmbeddingGenerator(
-        model_name=embedding_model,
-        provider=embedding_provider,
-        output_dimension=256, # default for Cohere v4
-        concurrency=100
-    )
+    # Initialize embedding model
+    logger.info(f"Loading embedding model: {embedding_provider}/{embedding_model}")
+    if embedding_provider == "cohere":
+        embedder = EmbeddingGenerator(
+            model_name=embedding_model,
+            provider=embedding_provider,
+            output_dimension=256,  # Cohere v4 with 256 dims
+            concurrency=100
+        )
+    else:
+        embedder = EmbeddingGenerator(
+            model_name=embedding_model,
+            provider=embedding_provider,
+            concurrency=100
+        )
 
     # Initialize LLM client
     logger.info(f"Initializing LLM: {llm_provider}/{llm_model}")
@@ -581,20 +588,32 @@ async def merge_clusters_hierarchical(
             for parent_name in parent_names:
                 logger.debug(f"    ✓ {parent_name}")
 
-            # Step 5: Assign children to parents (sequential for now - TODO: parallelize properly)
+            # Step 5: Assign children to parents (parallelized)
             step_start = time.time()
-            logger.info(f"Assigning {n_current} children to {len(parent_names)} parents...")
+            logger.info(f"Assigning {n_current} children to {len(parent_names)} parents (concurrency={concurrency})...")
             parent_children = {name: [] for name in parent_names}
             assignment_errors = []
+            semaphore = anyio.Semaphore(concurrency)
+            assignments = []
 
-            for cluster in current_clusters:
-                if limiter:
-                    async with limiter:
+            # Worker function for parallel assignments
+            async def assign_worker(cluster):
+                async with semaphore:
+                    if limiter:
+                        async with limiter:
+                            assignment = await assign_to_parent_cluster(client, cluster, parent_names)
+                    else:
                         assignment = await assign_to_parent_cluster(client, cluster, parent_names)
-                else:
-                    assignment = await assign_to_parent_cluster(client, cluster, parent_names)
+                    assignments.append((cluster, assignment))
+                    progress.update(task, advance=1)
 
-                # Validate assignment
+            # Run all assignments in parallel
+            async with anyio.create_task_group() as tg:
+                for cluster in current_clusters:
+                    tg.start_soon(assign_worker, cluster)
+
+            # Validate and organize assignments
+            for cluster, assignment in assignments:
                 if assignment.assigned_cluster not in parent_children:
                     error_msg = (
                         f"Invalid assignment for cluster {cluster['cluster_id']} ('{cluster['title']}'): "
@@ -614,8 +633,6 @@ async def merge_clusters_hierarchical(
                 else:
                     parent_children[assignment.assigned_cluster].append(cluster["cluster_id"])
 
-                progress.update(task, advance=1)
-
             # Report assignment validation results
             if assignment_errors:
                 logger.warning(f"Found {len(assignment_errors)} invalid assignments out of {len(current_clusters)}")
@@ -627,35 +644,50 @@ async def merge_clusters_hierarchical(
             avg_children = sum(len(children) for children in parent_children.values()) / len(parent_names)
             logger.debug(f"  Average children per parent: {avg_children:.1f}")
 
-            # Step 6: Refine parent names based on children
+            # Step 6: Refine parent names based on children (parallelized)
             step_start = time.time()
-            logger.info(f"Refining {len(parent_names)} parent clusters based on their children...")
+            logger.info(f"Refining {len(parent_names)} parent clusters based on their children (concurrency={concurrency})...")
             next_level_clusters = []
+            refinement_results = []
+            refine_semaphore = anyio.Semaphore(concurrency)
 
-            for parent_name in parent_names:
-                child_ids = parent_children[parent_name]
+            # Worker function for parallel refinements
+            async def refine_worker(parent_name, child_ids):
                 if not child_ids:
                     logger.warning(f"Parent '{parent_name}' has no children, skipping")
-                    continue
+                    return None
 
                 child_titles = [
                     c["title"] for c in current_clusters if c["cluster_id"] in child_ids
                 ]
 
-                if limiter:
-                    async with limiter:
+                async with refine_semaphore:
+                    if limiter:
+                        async with limiter:
+                            refined = await refine_parent_cluster(client, child_titles)
+                    else:
                         refined = await refine_parent_cluster(client, child_titles)
-                else:
-                    refined = await refine_parent_cluster(client, child_titles)
 
-                parent_cluster_id = next_cluster_id
-                next_cluster_id += 1
-                
-                # Log the merge (summary at INFO, details at DEBUG)
                 logger.info(f"  Merged {len(child_titles)} clusters → '{refined.title}'")
                 # Show all child titles at debug level (can be verbose)
                 for i, child_title in enumerate(child_titles, 1):
                     logger.debug(f"    {i}. {child_title}")
+
+                refinement_results.append((parent_name, child_ids, child_titles, refined))
+
+            # Run all refinements in parallel
+            async with anyio.create_task_group() as tg:
+                for parent_name in parent_names:
+                    child_ids = parent_children[parent_name]
+                    tg.start_soon(refine_worker, parent_name, child_ids)
+
+            # Process results and build hierarchy
+            for parent_name, child_ids, child_titles, refined in refinement_results:
+                if refined is None:
+                    continue
+
+                parent_cluster_id = next_cluster_id
+                next_cluster_id += 1
 
                 # Add to hierarchy
                 hierarchy.append({
