@@ -39,10 +39,10 @@ def load(
         None, help="ChromaDB path (default: ~/.lmsys-query-analysis/chroma)"
     ),
     embedding_model: str = typer.Option(
-        "text-embedding-3-small", help="Embedding model for ChromaDB"
+        "embed-v4.0", help="Embedding model for ChromaDB"
     ),
     embedding_provider: str = typer.Option(
-        "openai", help="Embedding provider: 'openai', 'cohere', or 'sentence-transformers'"
+        "cohere", help="Embedding provider: 'cohere', 'openai', or 'sentence-transformers'"
     ),
     db_batch_size: int = typer.Option(5000, help="DB insert batch size"),
     streaming: bool = typer.Option(False, help="Use streaming dataset iteration"),
@@ -111,11 +111,9 @@ def cluster_kmeans(
     n_clusters: int = typer.Option(200, help="Number of clusters"),
     description: str = typer.Option("", help="Description of this clustering run"),
     db_path: str = typer.Option(None, help="Database path"),
-    embedding_model: str = typer.Option(
-        "text-embedding-3-small", help="Embedding model"
-    ),
+    embedding_model: str = typer.Option("embed-v4.0", help="Embedding model"),
     embedding_provider: str = typer.Option(
-        "openai", help="Embedding provider: 'sentence-transformers', 'openai', or 'cohere'"
+        "cohere", help="Embedding provider: 'cohere', 'sentence-transformers', or 'openai'"
     ),
     embed_batch_size: int = typer.Option(32, help="Embedding encode batch size"),
     chunk_size: int = typer.Option(5000, help="DB iteration chunk size"),
@@ -176,9 +174,9 @@ def cluster_kmeans(
 def cluster_hdbscan(
     description: str = typer.Option("", help="Description of this clustering run"),
     db_path: str = typer.Option(None, help="Database path"),
-    embedding_model: str = typer.Option("all-MiniLM-L6-v2", help="Embedding model"),
+    embedding_model: str = typer.Option("embed-v4.0", help="Embedding model"),
     embedding_provider: str = typer.Option(
-        "sentence-transformers", help="Embedding provider: 'sentence-transformers', 'openai', or 'cohere'"
+        "cohere", help="Embedding provider: 'cohere', 'sentence-transformers', or 'openai'"
     ),
     embed_batch_size: int = typer.Option(32, help="Embedding encode batch size"),
     chunk_size: int = typer.Option(5000, help="DB iteration chunk size"),
@@ -950,10 +948,10 @@ def search(
         None, help="ChromaDB path (default: ~/.lmsys-query-analysis/chroma)"
     ),
     embedding_model: str = typer.Option(
-        "all-MiniLM-L6-v2", help="Embedding model (used if --run-id not provided)"
+        "embed-v4.0", help="Embedding model (used if --run-id not provided)"
     ),
     embedding_provider: str = typer.Option(
-        "sentence-transformers", help="Embedding provider: 'sentence-transformers', 'openai', or 'cohere' (used if --run-id not provided)"
+        "cohere", help="Embedding provider: 'cohere', 'sentence-transformers', or 'openai' (used if --run-id not provided)"
     ),
 ):
     """Semantic search across queries or cluster summaries using ChromaDB.
@@ -1193,8 +1191,8 @@ def search_cluster(
     top_k: int = typer.Option(20, help="Number of cluster hits"),
     json_out: bool = typer.Option(False, "--json", help="Emit JSON output"),
     chroma_path: str = typer.Option(None, help="ChromaDB path"),
-    embedding_model: str = typer.Option("all-MiniLM-L6-v2", help="Embedding model when no --run-id"),
-    embedding_provider: str = typer.Option("sentence-transformers", help="Embedding provider when no --run-id"),
+    embedding_model: str = typer.Option("embed-v4.0", help="Embedding model when no --run-id"),
+    embedding_provider: str = typer.Option("cohere", help="Embedding provider when no --run-id"),
 ):
     """Search cluster titles+descriptions (summaries)."""
     try:

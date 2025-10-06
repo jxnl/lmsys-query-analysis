@@ -87,6 +87,13 @@ uv run lmsys cluster kmeans --n-clusters 50 --use-chroma \
 # Get latest run_id
 uv run lmsys runs --latest
 
+# Generate summaries
+lmsys summarize <RUN_ID> --alias v1
+--use-chroma --max-queries 80 --concurrency 6
+
+# Merge clusters
+uv run lmsys merge-clusters <RUN_ID> --target-levels 3 --merge-ratio 0.2
+
 # Cluster discovery (JSON)
 uv run lmsys search-cluster "vector databases" --run-id <RUN_ID> --json | jq .
 

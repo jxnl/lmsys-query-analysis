@@ -12,6 +12,7 @@ Implements Anthropic's Clio-style hierarchical clustering approach:
 from typing import List, Optional, Dict, Tuple
 import logging
 from datetime import datetime
+import time
 
 import numpy as np
 import anyio
@@ -21,6 +22,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from sklearn.cluster import MiniBatchKMeans
 from sentence_transformers import SentenceTransformer
+from .embeddings import EmbeddingGenerator
 from aiolimiter import AsyncLimiter
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -203,7 +205,6 @@ First, use a <scratchpad> to analyze themes (keep brief, 1-2 paragraphs).
 Then provide your category names."""
 
     response = await client.chat.completions.create(
-        model="gpt-5o",  # Will be overridden by AutoInstructor
         response_model=NeighborhoodCategories,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -252,7 +253,6 @@ Task:
 Output roughly {target_count} final cluster names."""
 
     response = await client.chat.completions.create(
-        model="gpt-5",
         response_model=DeduplicatedClusters,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -306,7 +306,6 @@ Steps:
 Use <scratchpad> for reasoning (2-4 sentences), then provide the exact parent cluster name."""
 
     response = await client.chat.completions.create(
-        model="gpt-5",
         response_model=ClusterAssignment,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -367,7 +366,6 @@ Example bad titles:
 """
 
     response = await client.chat.completions.create(
-        model="gpt-5",
         response_model=RefinedClusterSummary,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -385,9 +383,10 @@ Example bad titles:
 async def merge_clusters_hierarchical(
     base_clusters: List[Dict],
     run_id: str,
-    embedding_model: str = "all-mpnet-base-v2",
+    embedding_model: str = "embed-v4.0",
+    embedding_provider: str = "cohere",
     llm_provider: str = "openai",
-    llm_model: str = "gpt-5",
+    llm_model: str = "gpt-4o-mini",
     target_levels: int = 3,
     merge_ratio: float = 0.2,
     neighborhood_size: int = 40,
@@ -421,15 +420,27 @@ async def merge_clusters_hierarchical(
         Tuple of (hierarchy_run_id, hierarchy_list)
         where hierarchy_list contains dicts with hierarchy metadata
     """
-    logger.info(f"Starting hierarchical merging: {len(base_clusters)} base clusters")
+    logger.info(
+        f"Starting hierarchical merging: {len(base_clusters)} base clusters "
+        f"→ {target_levels} levels with {merge_ratio:.1%} merge ratio per level"
+    )
+    logger.info(
+        f"Configuration: neighborhood_size={neighborhood_size}, "
+        f"concurrency={concurrency}, rpm={rpm or 'unlimited'}"
+    )
 
     # Create hierarchy run ID
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     hierarchy_run_id = f"hier-{run_id}-{timestamp}"
 
-    # Initialize embedding model
-    logger.info(f"Loading embedding model: {embedding_model}")
-    embedder = SentenceTransformer(embedding_model)
+    # Initialize embedding model (use Cohere v4 with 256 dims by default)
+    logger.info(f"Loading embedding model: {embedding_provider}/{embedding_model} (256 dims)")
+    embedder = EmbeddingGenerator(
+        model_name=embedding_model,
+        provider=embedding_provider,
+        output_dimension=256, # default for Cohere v4
+        concurrency=100
+    )
 
     # Initialize LLM client
     logger.info(f"Initializing LLM: {llm_provider}/{llm_model}")
@@ -474,10 +485,15 @@ async def merge_clusters_hierarchical(
     ) as progress:
 
         while current_level < target_levels - 1:
+            level_start_time = time.time()
             n_current = len(current_clusters)
             n_target = max(int(n_current * merge_ratio), 2)
+            actual_reduction = (1 - n_target / n_current) * 100
 
-            logger.info(f"Level {current_level} -> {current_level + 1}: {n_current} -> {n_target} clusters")
+            logger.info(
+                f"Level {current_level} -> {current_level + 1}: "
+                f"{n_current} -> {n_target} clusters ({actual_reduction:.1f}% reduction)"
+            )
 
             task = progress.add_task(
                 f"Merging level {current_level} -> {current_level + 1}",
@@ -485,12 +501,24 @@ async def merge_clusters_hierarchical(
             )
 
             # Step 1: Embed cluster summaries
+            step_start = time.time()
+            logger.info(f"Step 1/4: Embedding {n_current} cluster summaries...")
             texts = [f"{c['title']}: {c['description']}" for c in current_clusters]
-            embeddings = embedder.encode(texts, show_progress_bar=False)
+            # Call async batch directly since we're already in async context
+            emb_list = await embedder._async_cohere_batches(texts, batch_size=96, progress_task=None, progress=None)
+            embeddings = np.array(emb_list)
+            logger.info(f"  Embedded {n_current} summaries in {time.time() - step_start:.1f}s")
 
             # Step 2: Create neighborhoods
+            step_start = time.time()
             n_neighborhoods = max(n_current // neighborhood_size, 1)
+            avg_neighborhood_size = n_current / n_neighborhoods
+            logger.info(
+                f"Step 2/4: Creating {n_neighborhoods} neighborhoods "
+                f"(avg size: {avg_neighborhood_size:.1f} clusters)"
+            )
             neighborhood_labels = create_neighborhoods(embeddings, n_neighborhoods)
+            logger.info(f"  Created neighborhoods in {time.time() - step_start:.1f}s")
 
             # Step 3: Generate higher-level categories per neighborhood
             all_candidates = []
@@ -515,7 +543,14 @@ async def merge_clusters_hierarchical(
                 all_candidates.extend(categories.categories)
                 logger.info(f"Neighborhood {neigh_id}: Generated {len(categories.categories)} candidates")
 
+            logger.info(f"  Generated {len(all_candidates)} total candidates in {time.time() - step_start:.1f}s")
+
             # Step 4: Deduplicate globally
+            step_start = time.time()
+            logger.info(
+                f"Step 4/4: Deduplicating {len(all_candidates)} candidates "
+                f"→ ~{n_target} parent clusters..."
+            )
             if limiter:
                 async with limiter:
                     dedup_result = await deduplicate_cluster_names(
@@ -527,7 +562,12 @@ async def merge_clusters_hierarchical(
                 )
 
             parent_names = dedup_result.clusters
-            logger.info(f"Deduplicated to {len(parent_names)} parent clusters")
+            logger.info(
+                f"  Deduplicated to {len(parent_names)} parent clusters in {time.time() - step_start:.1f}s "
+                f"({len(all_candidates) - len(parent_names)} duplicates removed)"
+            )
+            for parent_name in parent_names:
+                logger.info(f"    ✓ {parent_name}")
 
             # Step 5: Assign children to parents (sequential for now - TODO: parallelize properly)
             parent_children = {name: [] for name in parent_names}

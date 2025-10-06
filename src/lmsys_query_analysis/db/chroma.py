@@ -47,9 +47,9 @@ class ChromaManager:
     def __init__(
         self,
         persist_directory: str | Path | None = None,
-        embedding_model: str = "text-embedding-3-small",
-        embedding_provider: str = "openai",
-        embedding_dimension: int | None = None,
+        embedding_model: str = "embed-v4.0",
+        embedding_provider: str = "cohere",
+        embedding_dimension: int | None = 256,
     ):
         """Initialize ChromaDB manager.
 
@@ -419,9 +419,9 @@ class ChromaManager:
 
 def get_chroma(
     persist_directory: str | Path | None = None,
-    embedding_model: str = "text-embedding-3-small",
-    embedding_provider: str = "openai",
-    embedding_dimension: int | None = None,
+    embedding_model: str = "embed-v4.0",
+    embedding_provider: str = "cohere",
+    embedding_dimension: int | None = 256,
 ) -> ChromaManager:
     """Get ChromaDB manager instance.
 

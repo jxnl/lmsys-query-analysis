@@ -54,5 +54,11 @@ If agents identify gaps in functionality or need additional tools to enhance the
 ## Security & Config Tips
 
 - Hugging Face: `huggingface-cli login` and accept LMSYS-1M terms before `load`.
-- API keys (LLM): set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GROQ_API_KEY` in your shell, not in code.
+- API keys (LLM): set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `COHERE_API_KEY`, or `GROQ_API_KEY` in your shell, not in code.
+- On this machine, API keys are exported in `~/.zshrc`. The CLI inherits them if you run via your shell (e.g., `uv run lmsys ...`). If running via another environment that doesn’t source `~/.zshrc`, explicitly export the keys in that session.
 - Defaults: SQLite at `~/.lmsys-query-analysis/queries.db`; Chroma at `~/.lmsys-query-analysis/chroma`.
+
+## Command Naming
+
+- Cluster summarization command is `summarize` (not `describe-clusters`). Example:
+  - `lmsys summarize <RUN_ID> --alias v1 --use-chroma`
