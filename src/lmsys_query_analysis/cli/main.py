@@ -8,9 +8,11 @@ from ..db.connection import get_db
 from ..db.chroma import get_chroma
 from ..db.loader import load_lmsys_dataset
 from ..utils.logging import setup_logging
+from ..semantic import ClustersClient
 
 app = typer.Typer(help="LMSYS Query Analysis CLI")
 cluster_app = typer.Typer(help="Clustering commands")
+chroma_app = typer.Typer(help="ChromaDB utilities")
 console = Console()
 logger = logging.getLogger("lmsys")
 
@@ -241,6 +243,7 @@ def cluster_hdbscan(
 
 
 app.add_typer(cluster_app, name="cluster")
+app.add_typer(chroma_app, name="chroma")
 
 
 @app.command()
@@ -928,90 +931,189 @@ def search(
     search_type: str = typer.Option(
         "queries", help="Search type: 'queries' or 'clusters'"
     ),
-    run_id: str = typer.Option(None, help="Filter cluster search by run_id"),
+    run_id: str = typer.Option(None, help="Restrict to a clustering run (provenance)"),
+    cluster_ids: str = typer.Option(
+        None, help="Comma-separated cluster IDs to filter (requires --run-id)"
+    ),
+    within_clusters: str = typer.Option(
+        None, help="Semantic filter: first find top clusters by this text"
+    ),
+    top_clusters: int = typer.Option(10, help="How many clusters to use with --within-clusters"),
     n_results: int = typer.Option(10, help="Number of results to return"),
+    n_candidates: int = typer.Option(250, help="Candidate over-fetch size from Chroma"),
+    by: str = typer.Option(None, help="Group counts by: cluster|language|model"),
+    facets: str = typer.Option(None, help="Compute facets for: cluster,language,model (comma-separated)"),
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON output"),
     chroma_path: str = typer.Option(
         None, help="ChromaDB path (default: ~/.lmsys-query-analysis/chroma)"
     ),
     embedding_model: str = typer.Option(
-        "all-MiniLM-L6-v2", help="Embedding model to embed the query for search"
+        "all-MiniLM-L6-v2", help="Embedding model (used if --run-id not provided)"
     ),
     embedding_provider: str = typer.Option(
-        "sentence-transformers", help="Embedding provider: 'sentence-transformers', 'openai', or 'cohere'"
+        "sentence-transformers", help="Embedding provider: 'sentence-transformers', 'openai', or 'cohere' (used if --run-id not provided)"
     ),
 ):
-    """Semantic search across queries or cluster summaries using ChromaDB."""
+    """Semantic search across queries or cluster summaries using ChromaDB.
+
+    For queries: supports provenance via --run-id, semantic conditioning via
+    --within-clusters, and grouped counts/facets. Use --json for machine output.
+    """
     try:
-        chroma = get_chroma(
-            chroma_path,
-            embedding_model,
-            embedding_provider,
-            256 if embedding_provider == "cohere" else None,
-        )
+        # Parse cluster_ids list
+        cluster_ids_list = None
+        if cluster_ids:
+            try:
+                cluster_ids_list = [int(x.strip()) for x in cluster_ids.split(",") if x.strip()]
+            except Exception:
+                console.print("[red]Invalid --cluster-ids. Use comma-separated integers.[/red]")
+                raise typer.Exit(1)
 
         if search_type == "queries":
             logger.info("Searching queries: n_results=%s", n_results)
-            # Explicitly embed query to ensure consistency with stored vectors
-            from ..clustering.embeddings import EmbeddingGenerator
-
-            # Resolve embedding space from run if provided
-            search_model = embedding_model
-            search_provider = embedding_provider
+            # Build SDK clients
+            db = get_db(None)
             if run_id:
-                from ..db.models import ClusteringRun
-                from sqlmodel import select
-                db = get_db(None)
-                with db.get_session() as s:
-                    run = s.exec(
-                        select(ClusteringRun).where(ClusteringRun.run_id == run_id)
-                    ).first()
-                    if run and run.parameters:
-                        search_model = run.parameters.get("embedding_model", search_model)
-                        search_provider = run.parameters.get("embedding_provider", search_provider)
+                from ..semantic import QueriesClient, ClustersClient
 
-            eg = EmbeddingGenerator(model_name=search_model, provider=search_provider)
-            # Use unified generate_embeddings to support all providers
-            q_emb = eg.generate_embeddings([text], batch_size=1, show_progress=False)[0]
+                qclient = QueriesClient.from_run(db, run_id, persist_dir=chroma_path)
+                cclient = ClustersClient.from_run(db, run_id, persist_dir=chroma_path)
+            else:
+                from ..semantic import QueriesClient, ClustersClient
+                from ..db.chroma import ChromaManager
+                from ..clustering.embeddings import EmbeddingGenerator
 
-            # Query matching model/provider collection
-            chroma_q = get_chroma(
-                chroma_path,
-                search_model,
-                search_provider,
-                256 if search_provider == "cohere" else None,
+                chroma = ChromaManager(
+                    persist_directory=chroma_path or None,
+                    embedding_model=embedding_model,
+                    embedding_provider=embedding_provider,
+                    embedding_dimension=256 if embedding_provider == "cohere" else None,
+                )
+                embedder = EmbeddingGenerator(
+                    model_name=embedding_model,
+                    provider=embedding_provider,
+                    output_dimension=256 if embedding_provider == "cohere" else None,
+                )
+                qclient = QueriesClient(db, chroma, embedder)
+                cclient = ClustersClient(db, chroma, embedder)
+
+            # Optionally compute applied clusters for JSON when using within-clusters
+            applied_clusters = []
+            if within_clusters:
+                applied_clusters = [
+                    {
+                        "cluster_id": h.cluster_id,
+                        "title": h.title,
+                        "description": h.description,
+                        "num_queries": h.num_queries,
+                        "distance": h.distance,
+                    }
+                    for h in cclient.find(
+                        text=within_clusters,
+                        run_id=run_id,
+                        top_k=top_clusters,
+                    )
+                ]
+
+            # Fetch query hits
+            hits = qclient.find(
+                text=text,
+                run_id=run_id,
+                cluster_ids=cluster_ids_list,
+                within_clusters=within_clusters,
+                top_clusters=top_clusters,
+                n_results=n_results,
+                n_candidates=n_candidates,
             )
-            results = chroma_q.search_queries(text, n_results=n_results, query_embedding=q_emb)
 
-            if results and results["ids"] and len(results["ids"][0]) > 0:
-                table = Table(title=f"Top {len(results['ids'][0])} Similar Queries")
+            # Aggregations
+            facets_spec = []
+            if facets:
+                facets_spec = [f.strip() for f in facets.split(",") if f.strip()]
+
+            facets_out = {}
+            if by:
+                # Map grouped counts to facets JSON shape under key 'clusters' when by=cluster
+                grouped = qclient.count(
+                    text=text,
+                    run_id=run_id,
+                    cluster_ids=cluster_ids_list,
+                    within_clusters=within_clusters,
+                    top_clusters=top_clusters,
+                    by=by,
+                )
+                if isinstance(grouped, dict):
+                    key = "clusters" if by == "cluster" else by
+                    facets_out[key] = [
+                        {"cluster_id": k, "count": v} if by == "cluster" else {"key": k, "count": v}
+                        for k, v in grouped.items()
+                    ]
+
+            if facets_spec:
+                fac = qclient.facets(
+                    text=text,
+                    run_id=run_id,
+                    cluster_ids=cluster_ids_list,
+                    within_clusters=within_clusters,
+                    top_clusters=top_clusters,
+                    facet_by=facets_spec,
+                )
+                # Convert Pydantic objects to plain dicts
+                for facet_key, buckets in fac.items():
+                    if facet_key == "cluster":
+                        facets_out["clusters"] = [
+                            {"cluster_id": b.key, "count": b.count, **({} if not b.meta else {"meta": b.meta})}
+                            for b in buckets
+                        ]
+                    else:
+                        facets_out[facet_key] = [
+                            {"key": b.key, "count": b.count, **({} if not b.meta else {"meta": b.meta})}
+                            for b in buckets
+                        ]
+
+            if json_out:
+                payload = {
+                    "text": text,
+                    "run_id": run_id,
+                    "applied_clusters": applied_clusters,
+                    "results": [
+                        {
+                            "query_id": h.query_id,
+                            "distance": h.distance,
+                            "snippet": h.snippet,
+                            "model": h.model,
+                            "language": h.language,
+                            "cluster_id": h.cluster_id,
+                        }
+                        for h in hits
+                    ],
+                    "facets": facets_out,
+                }
+                console.print_json(data=payload)
+                return
+            else:
+                if not hits:
+                    console.print("[yellow]No results found[/yellow]")
+                    return
+
+                table = Table(title=f"Top {len(hits)} Similar Queries")
                 table.add_column("Rank", style="cyan", width=6)
                 table.add_column("Query ID", style="yellow", width=12)
                 table.add_column("Query Text", style="white", width=60)
                 table.add_column("Model", style="green", width=15)
                 table.add_column("Distance", style="magenta", width=10)
 
-                for rank, (qid, doc, meta, dist) in enumerate(
-                    zip(
-                        results["ids"][0],
-                        results["documents"][0],
-                        results["metadatas"][0],
-                        results["distances"][0],
-                    ),
-                    1,
-                ):
-                    # Extract query_id from "query_123" format
-                    query_id = qid.split("_")[1] if "_" in qid else qid
+                for rank, h in enumerate(hits, 1):
+                    doc = h.snippet
                     table.add_row(
                         str(rank),
-                        query_id,
+                        str(h.query_id),
                         doc[:60] + "..." if len(doc) > 60 else doc,
-                        meta.get("model", "unknown"),
-                        f"{dist:.4f}",
+                        h.model or "unknown",
+                        f"{h.distance:.4f}",
                     )
 
                 console.print(table)
-            else:
-                console.print("[yellow]No results found[/yellow]")
 
         elif search_type == "clusters":
             logger.info(
@@ -1019,77 +1121,289 @@ def search(
                 run_id,
                 n_results,
             )
-            # Use the run's embedding model if available
-            from ..db.models import ClusteringRun
-            from sqlmodel import select
-
-            search_model = embedding_model
-            search_provider = embedding_provider
+            # Use SDK for cluster summaries search too
+            db = get_db(None)
+            from ..semantic import ClustersClient
             if run_id:
-                db = get_db(None)
-                with db.get_session() as s:
-                    run = s.exec(
-                        select(ClusteringRun).where(ClusteringRun.run_id == run_id)
-                    ).first()
-                    if run and run.parameters:
-                        if run.parameters.get("embedding_model"):
-                            search_model = run.parameters["embedding_model"]
-                        if run.parameters.get("embedding_provider"):
-                            search_provider = run.parameters["embedding_provider"]
-
-            from ..clustering.embeddings import EmbeddingGenerator
-
-            eg = EmbeddingGenerator(model_name=search_model, provider=search_provider)
-            q_emb = eg.generate_embeddings([text], batch_size=1, show_progress=False)[0]
-            # Ensure we query the matching model/provider collection
-            chroma = get_chroma(
-                chroma_path,
-                search_model,
-                search_provider,
-                256 if search_provider == "cohere" else None,
-            )
-            results = chroma.search_cluster_summaries(
-                text, run_id=run_id, n_results=n_results, query_embedding=q_emb
-            )
-
-            if results and results["ids"] and len(results["ids"][0]) > 0:
-                table = Table(title=f"Top {len(results['ids'][0])} Similar Clusters")
-                table.add_column("Rank", style="cyan", width=6)
-                table.add_column("Run ID", style="yellow", width=25)
-                table.add_column("Cluster", style="green", width=10)
-                table.add_column("Summary", style="white", width=50)
-                table.add_column("Distance", style="magenta", width=10)
-
-                for rank, (cid, doc, meta, dist) in enumerate(
-                    zip(
-                        results["ids"][0],
-                        results["documents"][0],
-                        results["metadatas"][0],
-                        results["distances"][0],
-                    ),
-                    1,
-                ):
-                    table.add_row(
-                        str(rank),
-                        meta.get("run_id", "unknown"),
-                        str(meta.get("cluster_id", "?")),
-                        doc[:50] + "..." if len(doc) > 50 else doc,
-                        f"{dist:.4f}",
-                    )
-
-                console.print(table)
+                cclient = ClustersClient.from_run(db, run_id, persist_dir=chroma_path)
             else:
+                from ..db.chroma import ChromaManager
+                from ..clustering.embeddings import EmbeddingGenerator
+                chroma = ChromaManager(
+                    persist_directory=chroma_path or None,
+                    embedding_model=embedding_model,
+                    embedding_provider=embedding_provider,
+                    embedding_dimension=256 if embedding_provider == "cohere" else None,
+                )
+                embedder = EmbeddingGenerator(
+                    model_name=embedding_model,
+                    provider=embedding_provider,
+                    output_dimension=256 if embedding_provider == "cohere" else None,
+                )
+                cclient = ClustersClient(db, chroma, embedder)
+
+            chits = cclient.find(text=text, run_id=run_id, top_k=n_results)
+            if json_out:
+                payload = {
+                    "text": text,
+                    "run_id": run_id,
+                    "results": [
+                        {
+                            "cluster_id": h.cluster_id,
+                            "distance": h.distance,
+                            "title": h.title,
+                            "description": h.description,
+                            "num_queries": h.num_queries,
+                        }
+                        for h in chits
+                    ],
+                }
+                console.print_json(data=payload)
+                return
+            if not chits:
                 console.print("[yellow]No results found[/yellow]")
+                return
+            table = Table(title=f"Top {len(chits)} Similar Clusters")
+            table.add_column("Rank", style="cyan", width=6)
+            table.add_column("Cluster", style="green", width=10)
+            table.add_column("Title", style="yellow", width=40)
+            table.add_column("Distance", style="magenta", width=10)
+            for rank, h in enumerate(chits, 1):
+                table.add_row(str(rank), str(h.cluster_id), h.title or "(no title)", f"{h.distance:.4f}")
+            console.print(table)
 
         else:
             logger.error("Invalid search_type: %s", search_type)
             raise typer.Exit(1)
-
     except Exception as e:
         logger.exception("Search failed: %s", e)
         console.print(
             "[yellow]Make sure ChromaDB is initialized by running 'lmsys load --use-chroma' first[/yellow]"
         )
+        raise typer.Exit(1)
+
+@app.command("search-cluster")
+def search_cluster(
+    text: str = typer.Argument(..., help="Search text for cluster summaries"),
+    run_id: str = typer.Option(None, help="Restrict to a clustering run"),
+    alias: str = typer.Option(None, help="Filter by summary alias"),
+    summary_run_id: str = typer.Option(None, help="Filter by summary run id"),
+    top_k: int = typer.Option(20, help="Number of cluster hits"),
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON output"),
+    chroma_path: str = typer.Option(None, help="ChromaDB path"),
+    embedding_model: str = typer.Option("all-MiniLM-L6-v2", help="Embedding model when no --run-id"),
+    embedding_provider: str = typer.Option("sentence-transformers", help="Embedding provider when no --run-id"),
+):
+    """Search cluster titles+descriptions (summaries)."""
+    try:
+        db = get_db(None)
+        if run_id:
+            client = ClustersClient.from_run(db, run_id, persist_dir=chroma_path)
+        else:
+            from ..db.chroma import ChromaManager
+            from ..clustering.embeddings import EmbeddingGenerator
+            chroma = ChromaManager(
+                persist_directory=chroma_path or None,
+                embedding_model=embedding_model,
+                embedding_provider=embedding_provider,
+                embedding_dimension=256 if embedding_provider == "cohere" else None,
+            )
+            embedder = EmbeddingGenerator(
+                model_name=embedding_model,
+                provider=embedding_provider,
+                output_dimension=256 if embedding_provider == "cohere" else None,
+            )
+            client = ClustersClient(db, chroma, embedder)
+
+        hits = client.find(
+            text=text,
+            run_id=run_id,
+            top_k=top_k,
+            alias=alias,
+            summary_run_id=summary_run_id,
+        )
+
+        if json_out:
+            payload = {
+                "text": text,
+                "run_id": run_id,
+                "results": [
+                    {
+                        "cluster_id": h.cluster_id,
+                        "distance": h.distance,
+                        "title": h.title,
+                        "description": h.description,
+                        "num_queries": h.num_queries,
+                    }
+                    for h in hits
+                ],
+            }
+            console.print_json(data=payload)
+            return
+
+        if not hits:
+            console.print("[yellow]No results found[/yellow]")
+            return
+
+        table = Table(title=f"Top {len(hits)} Similar Clusters")
+        table.add_column("Rank", style="cyan", width=6)
+        table.add_column("Cluster", style="green", width=10)
+        table.add_column("Title", style="yellow", width=40)
+        table.add_column("Distance", style="magenta", width=10)
+        for rank, h in enumerate(hits, 1):
+            table.add_row(str(rank), str(h.cluster_id), h.title or "(no title)", f"{h.distance:.4f}")
+        console.print(table)
+
+    except Exception as e:
+        logger.exception("search-cluster failed: %s", e)
+        raise typer.Exit(1)
+
+
+@chroma_app.command("info")
+def chroma_info(
+    chroma_path: str = typer.Option(None, help="ChromaDB path"),
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON output"),
+):
+    """List all Chroma collections with metadata and counts."""
+    try:
+        chroma = get_chroma(chroma_path)
+        cols = chroma.list_all_collections()
+        # Enrich known metadata keys with defaults
+        normalized = []
+        for c in cols:
+            meta = c.get("metadata") or {}
+            normalized.append(
+                {
+                    "name": c.get("name"),
+                    "count": c.get("count"),
+                    "embedding_provider": meta.get("embedding_provider"),
+                    "embedding_model": meta.get("embedding_model"),
+                    "embedding_dimension": meta.get("embedding_dimension"),
+                    "description": meta.get("description"),
+                }
+            )
+
+        if json_out:
+            console.print_json(data={"collections": normalized})
+            return
+
+        table = Table(title="Chroma Collections")
+        table.add_column("Name", style="cyan")
+        table.add_column("Count", style="green")
+        table.add_column("Provider", style="yellow")
+        table.add_column("Model", style="white")
+        table.add_column("Dim", style="magenta")
+        table.add_column("Description", style="dim")
+        for c in normalized:
+            table.add_row(
+                str(c["name"]),
+                str(c["count"]),
+                str(c.get("embedding_provider") or ""),
+                str(c.get("embedding_model") or ""),
+                str(c.get("embedding_dimension") or ""),
+                (c.get("description") or "")[:60],
+            )
+        console.print(table)
+
+    except Exception as e:
+        logger.exception("chroma info failed: %s", e)
+        raise typer.Exit(1)
+
+
+@chroma_app.command("verify")
+def chroma_verify(
+    run_id: str = typer.Argument(..., help="Clustering run ID to verify"),
+    chroma_path: str = typer.Option(None, help="ChromaDB path"),
+    db_path: str = typer.Option(None, help="SQLite DB path"),
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON output"),
+):
+    """Verify Chroma summaries for a run match SQLite and vector space config.
+
+    Checks:
+    - Vector space alignment: provider/model/dimension from run parameters
+    - Summary counts: SQLite cluster_summaries vs Chroma summaries filtered by run_id
+    """
+    try:
+        from sqlmodel import select
+        from ..db.models import ClusteringRun, ClusterSummary
+
+        db = get_db(db_path)
+        with db.get_session() as s:
+            run = s.exec(select(ClusteringRun).where(ClusteringRun.run_id == run_id)).first()
+            if not run:
+                console.print(f"[red]Run not found: {run_id}[/red]")
+                raise typer.Exit(1)
+
+            params = run.parameters or {}
+            provider = params.get("embedding_provider", "openai")
+            model = params.get("embedding_model", "text-embedding-3-small")
+            dim = params.get("embedding_dimension")
+            if provider == "cohere" and dim is None:
+                dim = 256
+
+            # Counts from SQLite
+            sqlite_summaries = s.exec(
+                select(ClusterSummary).where(ClusterSummary.run_id == run_id)
+            ).all()
+            sqlite_summary_count = len(sqlite_summaries)
+
+        # Chroma in same vector space
+        chroma = get_chroma(
+            chroma_path,
+            model,
+            provider,
+            dim,
+        )
+        chroma_summary_count = chroma.count_summaries(run_id=run_id)
+        known_runs = chroma.list_runs_in_summaries()
+
+        issues = []
+        if run_id not in known_runs:
+            issues.append(f"run_id {run_id} not present in Chroma summaries collection")
+        if sqlite_summary_count != chroma_summary_count:
+            issues.append(
+                f"summary count mismatch (sqlite={sqlite_summary_count}, chroma={chroma_summary_count})"
+            )
+
+        status = "ok" if not issues else "mismatch"
+        report = {
+            "run_id": run_id,
+            "space": {
+                "embedding_provider": provider,
+                "embedding_model": model,
+                "embedding_dimension": dim,
+            },
+            "sqlite": {"summary_count": sqlite_summary_count},
+            "chroma": {
+                "summary_count": chroma_summary_count,
+                "runs_in_summaries": known_runs,
+                "summaries_collection": chroma.summaries_collection.name,
+            },
+            "status": status,
+            "issues": issues,
+        }
+
+        if json_out:
+            console.print_json(data=report)
+            return
+
+        table = Table(title=f"Chroma Verify: {run_id}")
+        table.add_column("Field", style="cyan")
+        table.add_column("Value", style="white")
+        table.add_row("Provider", provider)
+        table.add_row("Model", model)
+        table.add_row("Dimension", str(dim or ""))
+        table.add_row("SQLite summaries", str(sqlite_summary_count))
+        table.add_row("Chroma summaries", str(chroma_summary_count))
+        table.add_row("Chroma collection", report["chroma"]["summaries_collection"])
+        table.add_row("Known runs", ", ".join(known_runs) or "-")
+        table.add_row("Status", status)
+        if issues:
+            table.add_row("Issues", " | ".join(issues))
+        console.print(table)
+
+    except Exception as e:
+        logger.exception("chroma verify failed: %s", e)
         raise typer.Exit(1)
 
 

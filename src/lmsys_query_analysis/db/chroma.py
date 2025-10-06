@@ -80,23 +80,29 @@ class ChromaManager:
         summaries_name = f"summaries_{model_suffix}"
 
         # Collection for all queries (model-specific)
+        q_meta = {
+            "description": f"User queries with {embedding_provider}/{embedding_model} embeddings",
+            "embedding_model": embedding_model,
+            "embedding_provider": embedding_provider,
+        }
+        if embedding_dimension is not None:
+            q_meta["embedding_dimension"] = embedding_dimension
         self.queries_collection = self.client.get_or_create_collection(
             name=queries_name,
-            metadata={
-                "description": f"User queries with {embedding_provider}/{embedding_model} embeddings",
-                "embedding_model": embedding_model,
-                "embedding_provider": embedding_provider,
-            },
+            metadata=q_meta,
         )
 
         # Collection for cluster summaries (model-specific, filtered by run_id in metadata)
+        s_meta = {
+            "description": f"Cluster summaries with {embedding_provider}/{embedding_model} embeddings",
+            "embedding_model": embedding_model,
+            "embedding_provider": embedding_provider,
+        }
+        if embedding_dimension is not None:
+            s_meta["embedding_dimension"] = embedding_dimension
         self.summaries_collection = self.client.get_or_create_collection(
             name=summaries_name,
-            metadata={
-                "description": f"Cluster summaries with {embedding_provider}/{embedding_model} embeddings",
-                "embedding_model": embedding_model,
-                "embedding_provider": embedding_provider,
-            },
+            metadata=s_meta,
         )
 
     def add_queries_batch(
