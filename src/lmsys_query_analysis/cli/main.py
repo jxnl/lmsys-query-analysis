@@ -921,7 +921,7 @@ def export(
 
 @app.command()
 def search(
-    query: str = typer.Argument(..., help="Search query"),
+    text: str = typer.Argument(..., help="Search text"),
     search_type: str = typer.Option(
         "queries", help="Search type: 'queries' or 'clusters'"
     ),
@@ -953,9 +953,9 @@ def search(
 
             eg = EmbeddingGenerator(model_name=embedding_model, provider=embedding_provider)
             # Use unified generate_embeddings to support all providers
-            q_emb = eg.generate_embeddings([query], batch_size=1, show_progress=False)[0]
+            q_emb = eg.generate_embeddings([text], batch_size=1, show_progress=False)[0]
             results = chroma.search_queries(
-                query, n_results=n_results, query_embedding=q_emb
+                text, n_results=n_results, query_embedding=q_emb
             )
 
             if results and results["ids"] and len(results["ids"][0]) > 0:
@@ -1016,7 +1016,7 @@ def search(
             from ..clustering.embeddings import EmbeddingGenerator
 
             eg = EmbeddingGenerator(model_name=search_model, provider=search_provider)
-            q_emb = eg.generate_embeddings([query], batch_size=1, show_progress=False)[0]
+            q_emb = eg.generate_embeddings([text], batch_size=1, show_progress=False)[0]
             # Ensure we query the matching model/provider collection
             chroma = get_chroma(
                 chroma_path,
@@ -1025,7 +1025,7 @@ def search(
                 256 if search_provider == "cohere" else None,
             )
             results = chroma.search_cluster_summaries(
-                query, run_id=run_id, n_results=n_results, query_embedding=q_emb
+                text, run_id=run_id, n_results=n_results, query_embedding=q_emb
             )
 
             if results and results["ids"] and len(results["ids"][0]) > 0:

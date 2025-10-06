@@ -8,7 +8,7 @@ This repository provides **terminal-based CLI tools for agents to perform compre
 
 - **Data Loading**: Download and process the LMSYS-1M dataset from Hugging Face
 - **Clustering Analysis**: Group similar queries using embeddings and clustering algorithms (KMeans, HDBSCAN)
-- **Hierarchical Organization**: Create multi-level topic hierarchies using LLM-driven merging (Anthropic Clio methodology)
+- **Hierarchical Organization**: Create multi-level cluster hierarchies using LLM-driven merging (Anthropic Clio methodology)
 - **Cluster Investigation**: Explore and summarize query clusters to identify patterns and usage trends
 - **Contrastive Analysis**: Highlight what makes each cluster unique compared to neighbors
 - **Semantic Search**: Navigate queries and clusters using natural language

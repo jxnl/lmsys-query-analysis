@@ -133,7 +133,7 @@ def test_list_clusters_show_examples(tmp_path):
         s = ClusterSummary(
             run_id=run_id,
             cluster_id=7,
-            title="Mixed tech topics",
+            title="Mixed tech clusters",
             description="Mixed queries across Python, DevOps, and SQL",
             num_queries=42,
             representative_queries=reps,

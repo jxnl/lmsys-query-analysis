@@ -46,7 +46,7 @@ uv run lmsys list-clusters kmeans-100-20251003-123456 --show-examples 3
 
 ## Step 5: Semantic Search
 
-Find clusters related to specific topics:
+Find clusters related to specific themes:
 
 ```bash
 uv run lmsys search "python programming" --search-type clusters --run-id kmeans-100-20251003-123456

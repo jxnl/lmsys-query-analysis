@@ -21,7 +21,7 @@ All through a composable CLI workflow: `load → cluster → summarize → merge
 - **Data Loading**: Extract first user queries from LMSYS-1M dataset (1M conversations)
 - **SQLite Storage**: Efficient indexing and querying with SQLModel
 - **Clustering**: MiniBatchKMeans (scales well) and HDBSCAN (density-based)
-- **Hierarchical Organization**: LLM-driven merging to create multi-level topic hierarchies (following Anthropic's Clio methodology)
+- **Hierarchical Organization**: LLM-driven merging to create multi-level cluster hierarchies (following Anthropic's Clio methodology)
 - **ChromaDB Integration**: Semantic search across queries and cluster summaries
 - **LLM Summarization**: Generate titles and descriptions for clusters using any LLM provider
 - **Contrastive Analysis**: Highlight what makes each cluster unique vs. neighbors
@@ -220,7 +220,7 @@ US Sanction Analysis and Legal Entity Recognition (2 children)
 **Key Benefits:**
 - **Semantic grouping**: LLM identifies thematic relationships (language, domain, task type)
 - **Multi-perspective navigation**: Same content organized by different dimensions
-- **Content isolation**: Sensitive topics automatically separated for moderation
+- **Content isolation**: Sensitive clusters automatically separated for moderation
 - **Flexible granularity**: 1:1 mappings indicate optimal abstraction level
 
 ### Viewing Results
@@ -294,7 +294,7 @@ Search uses explicit query embeddings to ensure consistency with stored vectors.
 - `model` (LLM used), `parameters` (JSON - summarization settings)
 - `generated_at`
 
-**cluster_hierarchies** - Multi-level topic hierarchies (Clio-style organization)
+**cluster_hierarchies** - Multi-level cluster hierarchies (Clio-style organization)
 - `hierarchy_run_id` (unique per hierarchy), `run_id`, `cluster_id`
 - `parent_cluster_id` (null for top level), `level` (0=leaf, 1=first merge, etc.)
 - `children_ids` (JSON array), `title`, `description`
