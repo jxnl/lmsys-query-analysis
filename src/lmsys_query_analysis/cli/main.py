@@ -695,6 +695,9 @@ def summarize(
                     metadata_list.append({
                         "num_queries": sizes_map.get(cid, 0),
                         "model": model,
+                        # Include summary provenance for Chroma filtering
+                        "summary_run_id": summary_run_id,
+                        "alias": alias,
                     })
 
                 # Generate embeddings for summaries
@@ -951,12 +954,33 @@ def search(
             # Explicitly embed query to ensure consistency with stored vectors
             from ..clustering.embeddings import EmbeddingGenerator
 
-            eg = EmbeddingGenerator(model_name=embedding_model, provider=embedding_provider)
+            # Resolve embedding space from run if provided
+            search_model = embedding_model
+            search_provider = embedding_provider
+            if run_id:
+                from ..db.models import ClusteringRun
+                from sqlmodel import select
+                db = get_db(None)
+                with db.get_session() as s:
+                    run = s.exec(
+                        select(ClusteringRun).where(ClusteringRun.run_id == run_id)
+                    ).first()
+                    if run and run.parameters:
+                        search_model = run.parameters.get("embedding_model", search_model)
+                        search_provider = run.parameters.get("embedding_provider", search_provider)
+
+            eg = EmbeddingGenerator(model_name=search_model, provider=search_provider)
             # Use unified generate_embeddings to support all providers
             q_emb = eg.generate_embeddings([text], batch_size=1, show_progress=False)[0]
-            results = chroma.search_queries(
-                text, n_results=n_results, query_embedding=q_emb
+
+            # Query matching model/provider collection
+            chroma_q = get_chroma(
+                chroma_path,
+                search_model,
+                search_provider,
+                256 if search_provider == "cohere" else None,
             )
+            results = chroma_q.search_queries(text, n_results=n_results, query_embedding=q_emb)
 
             if results and results["ids"] and len(results["ids"][0]) > 0:
                 table = Table(title=f"Top {len(results['ids'][0])} Similar Queries")

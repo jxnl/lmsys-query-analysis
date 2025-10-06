@@ -300,6 +300,29 @@ Search uses explicit query embeddings to ensure consistency with stored vectors.
 - `children_ids` (JSON array), `title`, `description`
 - `created_at`
 
+### IDs and Provenance
+
+- `run_id` (Clustering Run):
+  - What: Unique ID for one clustering experiment (e.g., `kmeans-200-20251004-170442`).
+  - Stores: Algorithm, parameters, and the embedding space (`embedding_provider`, `embedding_model`, and dimension) in `clustering_runs.parameters`.
+  - Used for: Filtering query→cluster assignments, resolving the correct Chroma collections and embedding space, listing clusters, summarizing, and searching.
+  - Where: Primary key in `clustering_runs`; included in Chroma summaries metadata (`run_id`, `cluster_id`).
+
+- `summary_run_id` (Summary Pass) and `alias`:
+  - What: Identifies one LLM summarization pass over a run’s clusters; multiple can exist per run (e.g., different models or prompts). Auto-generated as `summary-<model>-<timestamp>` if not provided; `alias` is an optional human-friendly name (e.g., `claude-v1`).
+  - Used for: Selecting which titles/descriptions to view or search when multiple summary passes exist.
+  - Where: Columns on `cluster_summaries`; also stored in Chroma summaries metadata as `summary_run_id` and `alias` for filtering during semantic cluster search.
+
+- `hierarchy_run_id` (Hierarchy Run):
+  - What: Unique ID for one hierarchical merging run that organizes clusters into parent/child categories (e.g., `hier-<run_id>-<timestamp>`).
+  - Used for: Viewing and reusing a specific multi-level hierarchy separate from the base clustering.
+  - Where: Column on `cluster_hierarchies`; all nodes for a hierarchy share the same `hierarchy_run_id`.
+
+Provenance and safety:
+- A single `run_id` defines the vector space for semantic search; the CLI and SDK resolve provider/model/dimension from the run to avoid mixing spaces.
+- Queries in Chroma store stable metadata (query_id, model, language, conversation_id). Cluster membership is always joined from SQLite (`query_clusters`) to ensure correctness per-run.
+- Cluster summaries in Chroma store `run_id`, `cluster_id`, and summary provenance (`summary_run_id`, `alias`) so you can filter cluster search to a specific summary set.
+
 ### ChromaDB Collections
 
 Note: Chroma collections are model/provider-specific. Names are suffixed by
