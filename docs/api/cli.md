@@ -29,11 +29,14 @@ def load(
     limit: int | None = None,
     use_chroma: bool = False,
     chroma_path: str = DEFAULT_CHROMA_PATH,
-    embedding_model: str = "all-MiniLM-L6-v2",
-    embedding_provider: str = "sentence-transformers",
+    embedding_model: str = "cohere/embed-v4.0",
     batch_size: int = 32,
 ):
-    """Load queries from LMSYS-1M dataset."""
+    """Load queries from LMSYS-1M dataset.
+
+    Args:
+        embedding_model: Format is "provider/model" (e.g. "cohere/embed-v4.0")
+    """
 ```
 
 ### Cluster Commands
@@ -47,14 +50,17 @@ def cluster_kmeans(
     n_clusters: int = 100,
     use_chroma: bool = False,
     chroma_path: str = DEFAULT_CHROMA_PATH,
-    embedding_model: str = "all-MiniLM-L6-v2",
-    embedding_provider: str = "sentence-transformers",
+    embedding_model: str = "cohere/embed-v4.0",
     embed_batch_size: int = 32,
     mb_batch_size: int = 4096,
     chunk_size: int = 5000,
     description: str | None = None,
 ):
-    """Run MiniBatchKMeans clustering."""
+    """Run MiniBatchKMeans clustering.
+
+    Args:
+        embedding_model: Format is "provider/model" (e.g. "cohere/embed-v4.0")
+    """
 ```
 
 #### HDBSCAN
@@ -65,15 +71,18 @@ def cluster_hdbscan(
     db_path: str = DEFAULT_DB_PATH,
     use_chroma: bool = False,
     chroma_path: str = DEFAULT_CHROMA_PATH,
-    embedding_model: str = "all-MiniLM-L6-v2",
-    embedding_provider: str = "sentence-transformers",
+    embedding_model: str = "cohere/embed-v4.0",
     embed_batch_size: int = 32,
     chunk_size: int = 5000,
     min_cluster_size: int = 15,
     min_samples: int = 5,
     description: str | None = None,
 ):
-    """Run HDBSCAN density-based clustering."""
+    """Run HDBSCAN density-based clustering.
+
+    Args:
+        embedding_model: Format is "provider/model" (e.g. "cohere/embed-v4.0")
+    """
 ```
 
 ### Summarize Command

@@ -39,10 +39,7 @@ def load(
         None, help="ChromaDB path (default: ~/.lmsys-query-analysis/chroma)"
     ),
     embedding_model: str = typer.Option(
-        "embed-v4.0", help="Embedding model for ChromaDB"
-    ),
-    embedding_provider: str = typer.Option(
-        "cohere", help="Embedding provider: 'cohere', 'openai', or 'sentence-transformers'"
+        "cohere/embed-v4.0", help="Embedding model for ChromaDB"
     ),
     db_batch_size: int = typer.Option(5000, help="DB insert batch size"),
     streaming: bool = typer.Option(False, help="Use streaming dataset iteration"),
@@ -54,6 +51,7 @@ def load(
     ),
 ):
     """Download and load LMSYS-1M dataset into SQLite."""
+    model, provider = embedding_model.split("/")
     try:
         logger.info(
             "Starting data load: limit=%s, use_chroma=%s, force_reload=%s",
@@ -65,8 +63,8 @@ def load(
         chroma = (
             get_chroma(
                 chroma_path,
-                embedding_model,
-                embedding_provider,
+                model,
+                provider,
                 256 if embedding_provider == "cohere" else None,
             )
             if use_chroma
@@ -78,8 +76,8 @@ def load(
             limit=limit,
             skip_existing=not force_reload,
             chroma=chroma,
-            embedding_model=embedding_model,
-            embedding_provider=embedding_provider,
+            embedding_model=model,
+            embedding_provider=provider,
             batch_size=db_batch_size,
             use_streaming=streaming,
             apply_pragmas=not no_pragmas,
@@ -111,10 +109,7 @@ def cluster_kmeans(
     n_clusters: int = typer.Option(200, help="Number of clusters"),
     description: str = typer.Option("", help="Description of this clustering run"),
     db_path: str = typer.Option(None, help="Database path"),
-    embedding_model: str = typer.Option("embed-v4.0", help="Embedding model"),
-    embedding_provider: str = typer.Option(
-        "cohere", help="Embedding provider: 'cohere', 'sentence-transformers', or 'openai'"
-    ),
+    embedding_model: str = typer.Option("cohere/embed-v4.0", help="Embedding model"),
     embed_batch_size: int = typer.Option(32, help="Embedding encode batch size"),
     chunk_size: int = typer.Option(5000, help="DB iteration chunk size"),
     mb_batch_size: int = typer.Option(4096, help="MiniBatchKMeans batch_size"),
@@ -124,13 +119,13 @@ def cluster_kmeans(
     """Run MiniBatchKMeans clustering."""
     try:
         from ..clustering.kmeans import run_kmeans_clustering
-
+        model, provider = embedding_model.split("/")
         db = get_db(db_path)
         chroma = (
             get_chroma(
                 chroma_path,
-                embedding_model,
-                embedding_provider,
+                model,
+                provider,
                 256 if embedding_provider == "cohere" else None,
             )
             if use_chroma
@@ -140,19 +135,19 @@ def cluster_kmeans(
         logger.info(
             "Running clustering: algo=kmeans, n_clusters=%s, model=%s, provider=%s, use_chroma=%s",
             n_clusters,
-            embedding_model,
-            embedding_provider,
+            model,
+            provider,
             use_chroma,
         )
         run_id = run_kmeans_clustering(
             db=db,
             n_clusters=n_clusters,
             description=description,
-            embedding_model=embedding_model,
+            embedding_model=model,
             embed_batch_size=embed_batch_size,
             chunk_size=chunk_size,
             mb_batch_size=mb_batch_size,
-            embedding_provider=embedding_provider,
+            embedding_provider=provider,
             chroma=chroma,
         )
 
@@ -174,10 +169,7 @@ def cluster_kmeans(
 def cluster_hdbscan(
     description: str = typer.Option("", help="Description of this clustering run"),
     db_path: str = typer.Option(None, help="Database path"),
-    embedding_model: str = typer.Option("embed-v4.0", help="Embedding model"),
-    embedding_provider: str = typer.Option(
-        "cohere", help="Embedding provider: 'cohere', 'sentence-transformers', or 'openai'"
-    ),
+    embedding_model: str = typer.Option("cohere/embed-v4.0", help="Embedded model"),
     embed_batch_size: int = typer.Option(32, help="Embedding encode batch size"),
     chunk_size: int = typer.Option(5000, help="DB iteration chunk size"),
     min_cluster_size: int = typer.Option(25, help="HDBSCAN minimum cluster size"),
@@ -192,6 +184,7 @@ def cluster_hdbscan(
     chroma_path: str = typer.Option(None, help="ChromaDB path"),
 ):
     """Run HDBSCAN clustering."""
+    model, provider = embedding_model.split("/")
     try:
         from ..clustering.hdbscan_clustering import run_hdbscan_clustering
 
@@ -199,9 +192,9 @@ def cluster_hdbscan(
         chroma = (
             get_chroma(
                 chroma_path,
-                embedding_model,
-                embedding_provider,
-                256 if embedding_provider == "cohere" else None,
+                model,
+                provider,
+                256 if provider == "cohere" else None,
             )
             if use_chroma
             else None
@@ -209,17 +202,17 @@ def cluster_hdbscan(
 
         logger.info(
             "Running clustering: algo=hdbscan, model=%s, provider=%s, use_chroma=%s",
-            embedding_model,
-            embedding_provider,
+            model,
+            provider,
             use_chroma,
         )
         run_id = run_hdbscan_clustering(
             db=db,
             description=description,
-            embedding_model=embedding_model,
+            embedding_model=model,
             embed_batch_size=embed_batch_size,
             chunk_size=chunk_size,
-            embedding_provider=embedding_provider,
+            embedding_provider=provider,
             min_cluster_size=min_cluster_size,
             min_samples=min_samples,
             cluster_selection_epsilon=epsilon,
@@ -948,10 +941,7 @@ def search(
         None, help="ChromaDB path (default: ~/.lmsys-query-analysis/chroma)"
     ),
     embedding_model: str = typer.Option(
-        "embed-v4.0", help="Embedding model (used if --run-id not provided)"
-    ),
-    embedding_provider: str = typer.Option(
-        "cohere", help="Embedding provider: 'cohere', 'sentence-transformers', or 'openai' (used if --run-id not provided)"
+        "cohere/embed-v4.0", help="Embedding model (used if --run-id not provided)"
     ),
 ):
     """Semantic search across queries or cluster summaries using ChromaDB.
@@ -969,6 +959,10 @@ def search(
                 console.print("[red]Invalid --cluster-ids. Use comma-separated integers.[/red]")
                 raise typer.Exit(1)
 
+        # Parse embedding model if needed
+        if not run_id:
+            embedding_model_name, embedding_provider = embedding_model.split("/")
+
         if search_type == "queries":
             logger.info("Searching queries: n_results=%s", n_results)
             # Build SDK clients
@@ -985,12 +979,12 @@ def search(
 
                 chroma = ChromaManager(
                     persist_directory=chroma_path or None,
-                    embedding_model=embedding_model,
+                    embedding_model=embedding_model_name,
                     embedding_provider=embedding_provider,
                     embedding_dimension=256 if embedding_provider == "cohere" else None,
                 )
                 embedder = EmbeddingGenerator(
-                    model_name=embedding_model,
+                    model_name=embedding_model_name,
                     provider=embedding_provider,
                     output_dimension=256 if embedding_provider == "cohere" else None,
                 )
@@ -1131,12 +1125,12 @@ def search(
                 from ..clustering.embeddings import EmbeddingGenerator
                 chroma = ChromaManager(
                     persist_directory=chroma_path or None,
-                    embedding_model=embedding_model,
+                    embedding_model=embedding_model_name,
                     embedding_provider=embedding_provider,
                     embedding_dimension=256 if embedding_provider == "cohere" else None,
                 )
                 embedder = EmbeddingGenerator(
-                    model_name=embedding_model,
+                    model_name=embedding_model_name,
                     provider=embedding_provider,
                     output_dimension=256 if embedding_provider == "cohere" else None,
                 )
@@ -1191,8 +1185,7 @@ def search_cluster(
     top_k: int = typer.Option(20, help="Number of cluster hits"),
     json_out: bool = typer.Option(False, "--json", help="Emit JSON output"),
     chroma_path: str = typer.Option(None, help="ChromaDB path"),
-    embedding_model: str = typer.Option("embed-v4.0", help="Embedding model when no --run-id"),
-    embedding_provider: str = typer.Option("cohere", help="Embedding provider when no --run-id"),
+    embedding_model: str = typer.Option("cohere/embed-v4.0", help="Embedding model when no --run-id"),
 ):
     """Search cluster titles+descriptions (summaries)."""
     try:
@@ -1200,18 +1193,19 @@ def search_cluster(
         if run_id:
             client = ClustersClient.from_run(db, run_id, persist_dir=chroma_path)
         else:
+            model, provider = embedding_model.split("/")
             from ..db.chroma import ChromaManager
             from ..clustering.embeddings import EmbeddingGenerator
             chroma = ChromaManager(
                 persist_directory=chroma_path or None,
-                embedding_model=embedding_model,
-                embedding_provider=embedding_provider,
-                embedding_dimension=256 if embedding_provider == "cohere" else None,
+                embedding_model=model,
+                embedding_provider=provider,
+                embedding_dimension=256 if provider == "cohere" else None,
             )
             embedder = EmbeddingGenerator(
-                model_name=embedding_model,
-                provider=embedding_provider,
-                output_dimension=256 if embedding_provider == "cohere" else None,
+                model_name=model,
+                provider=provider,
+                output_dimension=256 if provider == "cohere" else None,
             )
             client = ClustersClient(db, chroma, embedder)
 
@@ -1455,16 +1449,14 @@ def clear(
 def backfill_chroma(
     db_path: str = typer.Option(None, help="Database path"),
     chroma_path: str = typer.Option(None, help="ChromaDB path"),
-    embedding_provider: str = typer.Option(
-        "openai", help="Embedding provider: 'openai', 'cohere', or 'sentence-transformers'"
-    ),
     embedding_model: str = typer.Option(
-        "text-embedding-3-small", help="Embedding model to use"
+        "openai/text-embedding-3-small", help="Embedding model (provider/model)"
     ),
     chunk_size: int = typer.Option(5000, help="DB iteration chunk size"),
     embed_batch_size: int = typer.Option(64, help="Embedding batch size"),
 ):
     """Backfill embeddings into ChromaDB for SQLite queries missing vectors."""
+    model, provider = embedding_model.split("/")
     try:
         import time
         from ..db.models import Query
@@ -1480,7 +1472,7 @@ def backfill_chroma(
         )
 
         db = get_db(db_path)
-        chroma = get_chroma(chroma_path, embedding_model, embedding_provider)
+        chroma = get_chroma(chroma_path, model, provider)
 
         with db.get_session() as session:
             # Count total queries for progress
@@ -1507,7 +1499,7 @@ def backfill_chroma(
                     yield rows
                     offset += len(rows)
 
-            eg = EmbeddingGenerator(model_name=embedding_model, provider=embedding_provider)
+            eg = EmbeddingGenerator(model_name=model, provider=provider)
 
             backfilled = 0
             scanned = 0
@@ -1590,17 +1582,11 @@ def merge_clusters_cmd(
     run_id: str = typer.Argument(..., help="Clustering run ID to create hierarchy from"),
     db_path: str = typer.Option(None, help="Database path"),
     summary_run_id: str = typer.Option(None, help="Specific summary run ID to merge (defaults to latest)"),
-    llm_provider: str = typer.Option(
-        "openai", help="LLM provider: anthropic, openai, groq"
-    ),
-    llm_model: str = typer.Option(
-        "gpt-4o-mini", help="LLM model for merging"
+    model: str = typer.Option(
+        "openai/gpt-4o-mini", help="LLM (provider/model) for merging"
     ),
     embedding_model: str = typer.Option(
-        "embed-v4.0", help="Embedding model for cluster embeddings"
-    ),
-    embedding_provider: str = typer.Option(
-        "cohere", help="Embedding provider: 'sentence-transformers', 'openai', or 'cohere'"
+        "cohere/embed-v4.0", help="Embedding model for cluster embeddings (provider/model)"
     ),
     target_levels: int = typer.Option(
         3, help="Number of hierarchy levels (1=flat, 2=one merge, 3=two merges, etc.)"
@@ -1636,10 +1622,12 @@ def merge_clusters_cmd(
         from ..db.models import ClusterSummary, ClusterHierarchy
         from sqlmodel import select
         from ..clustering.hierarchy import merge_clusters_hierarchical
-
+        embedding_model, embedding_provider = embedding_model.split("/", 1)
         db = get_db(db_path)
 
         with db.get_session() as session:
+            llm_provider, llm_model = model.split("/", 1)
+
             # If summary_run_id not provided, find the latest one
             if not summary_run_id:
                 latest = session.exec(

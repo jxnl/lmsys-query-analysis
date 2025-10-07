@@ -18,8 +18,7 @@ MiniBatchKMeans is recommended for large datasets. It scales well and produces c
 |--------|------|---------|-------------|
 | `--n-clusters` | INTEGER | 100 | Number of clusters to create |
 | `--use-chroma` | FLAG | False | Reuse embeddings from ChromaDB |
-| `--embedding-model` | TEXT | all-MiniLM-L6-v2 | Embedding model |
-| `--embedding-provider` | TEXT | sentence-transformers | Provider for embeddings |
+| `--embedding-model` | TEXT | cohere/embed-v4.0 | Embedding model (format: provider/model) |
 | `--embed-batch-size` | INTEGER | 32 | Batch size for embedding |
 | `--mb-batch-size` | INTEGER | 4096 | MiniBatch size for KMeans |
 | `--chunk-size` | INTEGER | 5000 | Chunk size for streaming |
@@ -60,8 +59,7 @@ HDBSCAN finds natural clusters based on density. It excludes noise points and do
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--use-chroma` | FLAG | False | Reuse embeddings from ChromaDB |
-| `--embedding-model` | TEXT | all-MiniLM-L6-v2 | Embedding model |
-| `--embedding-provider` | TEXT | sentence-transformers | Provider for embeddings |
+| `--embedding-model` | TEXT | cohere/embed-v4.0 | Embedding model (format: provider/model) |
 | `--embed-batch-size` | INTEGER | 32 | Batch size for embedding |
 | `--chunk-size` | INTEGER | 5000 | Chunk size for streaming |
 | `--min-cluster-size` | INTEGER | 15 | Minimum cluster size |
