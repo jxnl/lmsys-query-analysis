@@ -10,7 +10,7 @@ DEFAULT_DB_PATH = Path.home() / ".lmsys-query-analysis" / "queries.db"
 class Database:
     """Database connection manager."""
 
-    def __init__(self, db_path: str | Path | None = None):
+    def __init__(self, db_path: str | Path | None = None, auto_create_tables: bool = True):
         if db_path is None:
             db_path = DEFAULT_DB_PATH
 
@@ -28,6 +28,10 @@ class Database:
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
 
+        # Auto-create tables if enabled
+        if auto_create_tables:
+            self.create_tables()
+
     def create_tables(self):
         """Create all tables in the database."""
         SQLModel.metadata.create_all(self.engine)
@@ -41,6 +45,6 @@ class Database:
         SQLModel.metadata.drop_all(self.engine)
 
 
-def get_db(db_path: str | Path | None = None) -> Database:
+def get_db(db_path: str | Path | None = None, auto_create_tables: bool = True) -> Database:
     """Get database instance."""
-    return Database(db_path)
+    return Database(db_path, auto_create_tables=auto_create_tables)

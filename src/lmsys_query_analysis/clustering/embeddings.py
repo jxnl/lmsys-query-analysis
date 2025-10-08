@@ -14,6 +14,7 @@ import logging
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import anyio
+import nest_asyncio
 from rich.progress import (
     Progress,
     SpinnerColumn,
@@ -21,6 +22,9 @@ from rich.progress import (
     BarColumn,
     TaskProgressColumn,
 )
+
+# Enable nested event loops globally for this module
+nest_asyncio.apply()
 
 # Type definitions for Cohere models
 CohereModel = Literal["embed-v4.0"]
@@ -219,28 +223,40 @@ class EmbeddingGenerator:
         batch_size: int,
         show_progress: bool,
     ) -> np.ndarray:
-        """Generate embeddings using OpenAI API with anyio concurrency."""
+        """Generate embeddings using OpenAI API with anyio concurrency.
+
+        Uses nest_asyncio (applied at module level) to handle nested event loops.
+        Uses asyncio instead of anyio.run() to work with nest_asyncio.
+        """
+        import asyncio
+
         logger = logging.getLogger("lmsys")
         start = time.perf_counter()
 
-        if show_progress:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TaskProgressColumn(),
-            ) as progress:
-                task = progress.add_task(
-                    f"[cyan]Generating embeddings with OpenAI {self.model_name}...",
-                    total=len(texts),
-                )
-                all_embeddings = anyio.run(
-                    self._async_openai_batches, texts, batch_size, task, progress
-                )
-        else:
-            all_embeddings = anyio.run(
-                self._async_openai_batches, texts, batch_size, None, None
-            )
+        async def _run():
+            if show_progress:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                ) as progress:
+                    task = progress.add_task(
+                        f"[cyan]Generating embeddings with OpenAI {self.model_name}...",
+                        total=len(texts),
+                    )
+                    return await self._async_openai_batches(texts, batch_size, task, progress)
+            else:
+                return await self._async_openai_batches(texts, batch_size, None, None)
+
+        # Use asyncio with nest_asyncio support
+        try:
+            loop = asyncio.get_running_loop()
+            # We're in an async context - run_until_complete works with nest_asyncio
+            all_embeddings = loop.run_until_complete(_run())
+        except RuntimeError:
+            # No loop running - create one
+            all_embeddings = asyncio.run(_run())
 
         elapsed = time.perf_counter() - start
         if len(texts) > 0:
@@ -310,28 +326,40 @@ class EmbeddingGenerator:
         batch_size: int,
         show_progress: bool,
     ) -> np.ndarray:
-        """Generate embeddings using Cohere API with anyio concurrency."""
+        """Generate embeddings using Cohere API with anyio concurrency.
+
+        Uses nest_asyncio (applied at module level) to handle nested event loops.
+        Uses asyncio instead of anyio.run() to work with nest_asyncio.
+        """
+        import asyncio
+
         logger = logging.getLogger("lmsys")
         start = time.perf_counter()
 
-        if show_progress:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TaskProgressColumn(),
-            ) as progress:
-                task = progress.add_task(
-                    f"[cyan]Generating embeddings with Cohere {self.model_name}...",
-                    total=len(texts),
-                )
-                all_embeddings = anyio.run(
-                    self._async_cohere_batches, texts, batch_size, task, progress
-                )
-        else:
-            all_embeddings = anyio.run(
-                self._async_cohere_batches, texts, batch_size, None, None
-            )
+        async def _run():
+            if show_progress:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                ) as progress:
+                    task = progress.add_task(
+                        f"[cyan]Generating embeddings with Cohere {self.model_name}...",
+                        total=len(texts),
+                    )
+                    return await self._async_cohere_batches(texts, batch_size, task, progress)
+            else:
+                return await self._async_cohere_batches(texts, batch_size, None, None)
+
+        # Use asyncio with nest_asyncio support
+        try:
+            loop = asyncio.get_running_loop()
+            # We're in an async context - run_until_complete works with nest_asyncio
+            all_embeddings = loop.run_until_complete(_run())
+        except RuntimeError:
+            # No loop running - create one
+            all_embeddings = asyncio.run(_run())
 
         elapsed = time.perf_counter() - start
         if len(texts) > 0:
