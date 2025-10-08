@@ -1,0 +1,13 @@
+# Generated outputs
+example_analysis.db
+example_config.yaml
+*.json
+*.csv
+
+# Temporary files
+*.tmp
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
