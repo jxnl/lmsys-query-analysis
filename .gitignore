@@ -22,6 +22,10 @@ data/
 *.swp
 *.swo
 
+# Coverage reports
+.coverage
+htmlcov/
+
 # OS
 .DS_Store
 Thumbs.db
