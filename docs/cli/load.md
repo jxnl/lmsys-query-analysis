@@ -14,8 +14,7 @@ uv run lmsys load [OPTIONS]
 |--------|------|---------|-------------|
 | `--limit` | INTEGER | None | Maximum number of queries to load |
 | `--use-chroma` | FLAG | False | Store embeddings in ChromaDB for semantic search |
-| `--embedding-model` | TEXT | all-MiniLM-L6-v2 | Sentence-transformers model for embeddings |
-| `--embedding-provider` | TEXT | sentence-transformers | Embedding provider to use |
+| `--embedding-model` | TEXT | cohere/embed-v4.0 | Embedding model (format: provider/model) |
 | `--batch-size` | INTEGER | 32 | Batch size for embedding generation |
 
 ## Examples
@@ -52,8 +51,14 @@ uv run lmsys load --limit 50000 --use-chroma
 Use a different embedding model:
 
 ```bash
+# OpenAI embeddings
 uv run lmsys load --limit 10000 --use-chroma \
-  --embedding-model all-mpnet-base-v2 \
+  --embedding-model openai/text-embedding-3-small \
+  --batch-size 64
+
+# Sentence transformers (local)
+uv run lmsys load --limit 10000 --use-chroma \
+  --embedding-model sentence-transformers/all-mpnet-base-v2 \
   --batch-size 64
 ```
 
@@ -94,7 +99,9 @@ Before running `load`, you must:
 - Use `--limit` during development to iterate faster
 - Increase `--batch-size` if you have sufficient memory
 - `--use-chroma` adds overhead but enables semantic search
-- Consider using `all-MiniLM-L6-v2` (default) for speed or `all-mpnet-base-v2` for quality
+- Default `cohere/embed-v4.0` provides good quality and speed with Matryoshka dimensions
+- Use `sentence-transformers/all-MiniLM-L6-v2` for faster local processing
+- Use `openai/text-embedding-3-small` or `openai/text-embedding-3-large` for highest quality
 
 ## Next Steps
 

@@ -76,13 +76,13 @@ uv run lmsys search "python programming" --search-type clusters
 ### Quick 5k End-to-End (Local, no API keys)
 
 ```bash
-# Load 5k with local sentence-transformers embeddings
+# Load 5k with Cohere embeddings
 uv run lmsys load --limit 5000 --use-chroma \
-  --embedding-provider cohere --embedding-model embed-v4.0
+  --embedding-model cohere/embed-v4.0
 
 # Cluster into 50 groups and write centroids to Chroma
 uv run lmsys cluster kmeans --n-clusters 50 --use-chroma \
-  --embedding-provider cohere --embedding-model embed-v4.0
+  --embedding-model cohere/embed-v4.0
 
 # Get latest run_id
 uv run lmsys runs --latest
@@ -91,12 +91,11 @@ uv run lmsys runs --latest
 uv run lmsys summarize <RUN_ID> --alias v1 \
   --use-chroma --max-queries 80 --concurrency 6
 
-# Merge clusters into hierarchy (uses gpt-4o-mini by default)
+# Merge clusters into hierarchy (uses openai/gpt-4o-mini by default)
 uv run lmsys merge-clusters <RUN_ID> \
   --target-levels 3 \
   --merge-ratio 0.2 \
-  --embedding-provider cohere \
-  --embedding-model embed-v4.0
+  --embedding-model cohere/embed-v4.0
 
 # Cluster discovery (JSON)
 uv run lmsys search-cluster "vector databases" --run-id <RUN_ID> --json | jq .
@@ -132,17 +131,16 @@ uv run lmsys load --limit 10000 --use-chroma
 ```bash
 # Run KMeans with 200 clusters (recommended for fine-grained analysis)
 uv run lmsys cluster kmeans --n-clusters 200 --use-chroma \
-  --embedding-model embed-v4.0 \
-  --embedding-provider cohere \
+  --embedding-model cohere/embed-v4.0 \
   --embed-batch-size 64 --mb-batch-size 8192 --chunk-size 10000 \
   --description "Fine-grained clustering"
 
-# Faster with fewer clusters
+# Faster with fewer clusters (uses default cohere/embed-v4.0)
 uv run lmsys cluster kmeans --n-clusters 50 --use-chroma
 
 # HDBSCAN (finds natural clusters; excludes noise)
 uv run lmsys cluster hdbscan --use-chroma \
-  --embedding-model embed-v4.0 --embedding-provider cohere \
+  --embedding-model cohere/embed-v4.0 \
   --embed-batch-size 64 --chunk-size 10000
 
 # Notes
@@ -151,9 +149,9 @@ uv run lmsys cluster hdbscan --use-chroma \
 
 # Use Cohere embed-v4.0 for embeddings (Matryoshka 256 by default)
 uv run lmsys load --limit 10000 --use-chroma \
-  --embedding-provider cohere --embedding-model embed-v4.0
+  --embedding-model cohere/embed-v4.0
 uv run lmsys cluster kmeans --n-clusters 200 --use-chroma \
-  --embedding-provider cohere --embedding-model embed-v4.0
+  --embedding-model cohere/embed-v4.0
 ```
 
 ### LLM Summarization
@@ -208,18 +206,16 @@ uv run lmsys merge-clusters <RUN_ID> \
 
 # Customize hierarchy parameters
 uv run lmsys merge-clusters <RUN_ID> \
-  --target-levels 2 \              # Number of hierarchy levels (2 = one merge)
-  --merge-ratio 0.5 \              # Merge aggressiveness (0.5 = 100->50->25)
-  --llm-provider openai \          # Provider for merging (openai/anthropic/groq)
-  --llm-model gpt-4o-mini \        # LLM model (default: gpt-4o-mini)
-  --embedding-provider cohere \    # Provider for cluster embeddings (cohere/openai/sentence-transformers)
-  --embedding-model embed-v4.0 \   # Embedding model (default: embed-v4.0 for cohere)
-  --concurrency 8 \                # Parallel LLM requests
-  --neighborhood-size 40           # Clusters per LLM context (Clio default)
+  --target-levels 2 \                           # Number of hierarchy levels (2 = one merge)
+  --merge-ratio 0.5 \                           # Merge aggressiveness (0.5 = 100->50->25)
+  --model openai/gpt-4o-mini \                  # LLM for merging (default: openai/gpt-4o-mini)
+  --embedding-model cohere/embed-v4.0 \         # Embedding model (default: cohere/embed-v4.0)
+  --concurrency 8 \                             # Parallel LLM requests
+  --neighborhood-size 40                        # Clusters per LLM context (Clio default)
 
 # Use Claude for higher quality merging, this gets summaries from the summary-run-id which is used in merging
 uv run lmsys merge-clusters <RUN_ID> \
-  --llm-provider anthropic --llm-model claude-3-5-sonnet-20241022
+  --model anthropic/claude-3-5-sonnet-20241022
 
 # Example: 200 clusters → 40 → 8 top-level categories
 uv run lmsys merge-clusters kmeans-200-20251004-005043 \

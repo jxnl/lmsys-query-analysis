@@ -15,8 +15,8 @@ db = DatabaseManager("~/.lmsys-query-analysis/queries.db")
 run_id = cluster_queries_kmeans(
     db=db,
     n_clusters=100,
-    embedding_model="all-MiniLM-L6-v2",
-    embedding_provider="sentence-transformers",
+    embedding_model="embed-v4.0",
+    embedding_provider="cohere",
     embed_batch_size=32,
     mb_batch_size=4096,
     chunk_size=5000,
@@ -32,8 +32,8 @@ print(f"Clustering complete: {run_id}")
 
 - **db** (DatabaseManager): Database manager instance
 - **n_clusters** (int): Number of clusters to create
-- **embedding_model** (str): Model name for embeddings
-- **embedding_provider** (str): Provider ("sentence-transformers")
+- **embedding_model** (str): Model name for embeddings (e.g., "embed-v4.0", "text-embedding-3-small")
+- **embedding_provider** (str): Provider ("cohere", "openai", or "sentence-transformers")
 - **embed_batch_size** (int): Batch size for embedding generation
 - **mb_batch_size** (int): MiniBatch size for KMeans
 - **chunk_size** (int): Chunk size for streaming processing
@@ -59,8 +59,8 @@ db = DatabaseManager("~/.lmsys-query-analysis/queries.db")
 
 run_id = cluster_queries_hdbscan(
     db=db,
-    embedding_model="all-MiniLM-L6-v2",
-    embedding_provider="sentence-transformers",
+    embedding_model="embed-v4.0",
+    embedding_provider="cohere",
     embed_batch_size=32,
     chunk_size=5000,
     min_cluster_size=15,
@@ -76,8 +76,8 @@ print(f"HDBSCAN clustering complete: {run_id}")
 ### Parameters
 
 - **db** (DatabaseManager): Database manager instance
-- **embedding_model** (str): Model name for embeddings
-- **embedding_provider** (str): Provider ("sentence-transformers")
+- **embedding_model** (str): Model name for embeddings (e.g., "embed-v4.0", "text-embedding-3-small")
+- **embedding_provider** (str): Provider ("cohere", "openai", or "sentence-transformers")
 - **embed_batch_size** (int): Batch size for embedding generation
 - **chunk_size** (int): Chunk size for streaming processing
 - **min_cluster_size** (int): Minimum cluster size for HDBSCAN
