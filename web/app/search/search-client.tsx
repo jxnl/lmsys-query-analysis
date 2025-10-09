@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { DataViewer, type DataViewerData } from '@/components/data-viewer';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -21,11 +22,15 @@ interface SearchClientProps {
 }
 
 export function SearchClient({ runs }: SearchClientProps) {
+  // Default to latest run (first in array since ordered by newest first)
+  const defaultRunId = runs.length > 0 ? runs[0].runId : 'all';
+
   const [searchText, setSearchText] = useState('');
-  const [selectedRunId, setSelectedRunId] = useState<string>('all');
+  const [selectedRunId, setSelectedRunId] = useState<string>(defaultRunId);
   const [results, setResults] = useState<DataViewerData | null>(null);
   const [isPending, startTransition] = useTransition();
   const [hasSearched, setHasSearched] = useState(false);
+  const router = useRouter();
 
   const handleSearch = () => {
     if (!searchText.trim()) return;
@@ -35,6 +40,13 @@ export function SearchClient({ runs }: SearchClientProps) {
       const runId = selectedRunId === 'all' ? undefined : selectedRunId;
       const data = await searchQueries(searchText, runId, 1, 50);
       setResults(data);
+
+      // Update URL with search params
+      const params = new URLSearchParams();
+      params.set('q', searchText);
+      if (runId) params.set('runId', runId);
+      params.set('page', '1');
+      router.push(`/search?${params.toString()}`, { scroll: false });
     });
   };
 
@@ -43,6 +55,13 @@ export function SearchClient({ runs }: SearchClientProps) {
       const runId = selectedRunId === 'all' ? undefined : selectedRunId;
       const data = await searchQueries(searchText, runId, newPage, 50);
       setResults(data);
+
+      // Update URL with new page
+      const params = new URLSearchParams();
+      params.set('q', searchText);
+      if (runId) params.set('runId', runId);
+      params.set('page', newPage.toString());
+      router.push(`/search?${params.toString()}`, { scroll: false });
     });
   };
 
@@ -127,7 +146,12 @@ export function SearchClient({ runs }: SearchClientProps) {
 
       {results && results.queries.length > 0 && (
         <div className={isPending ? 'opacity-50 pointer-events-none' : ''}>
-          <DataViewer data={results} onPageChange={handlePageChange} showClusters={true} />
+          <DataViewer
+            data={results}
+            onPageChange={handlePageChange}
+            showClusters={true}
+            filterRunId={selectedRunId === 'all' ? undefined : selectedRunId}
+          />
         </div>
       )}
     </div>

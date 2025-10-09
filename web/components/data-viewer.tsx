@@ -35,9 +35,10 @@ interface DataViewerProps {
   data: DataViewerData;
   onPageChange: (page: number) => void;
   showClusters?: boolean;
+  filterRunId?: string; // Filter clusters to only show those from this run
 }
 
-export function DataViewer({ data, onPageChange, showClusters = true }: DataViewerProps) {
+export function DataViewer({ data, onPageChange, showClusters = true, filterRunId }: DataViewerProps) {
   const { queries, page, pages, total } = data;
   const [expandedQueries, setExpandedQueries] = useState<Set<number>>(new Set());
 
@@ -142,29 +143,38 @@ export function DataViewer({ data, onPageChange, showClusters = true }: DataView
                     </div>
 
                     {/* Cluster Associations */}
-                    {showClusters && query.clusters && query.clusters.length > 0 && (
-                      <div className="space-y-2 pt-2 border-t">
-                        <p className="text-xs font-medium text-muted-foreground">
-                          Topics ({query.clusters.length}):
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {query.clusters.map((cluster, idx) => (
-                            <Link
-                              key={`${cluster.runId}-${cluster.clusterId}-${idx}`}
-                              href={`/clusters/${cluster.runId}/${cluster.clusterId}`}
-                            >
-                              <Badge
-                                variant="default"
-                                className="text-xs hover:bg-primary/80 cursor-pointer"
+                    {showClusters && query.clusters && query.clusters.length > 0 && (() => {
+                      // Filter clusters by run if filterRunId is provided
+                      const displayClusters = filterRunId
+                        ? query.clusters.filter(c => c.runId === filterRunId)
+                        : query.clusters;
+
+                      if (displayClusters.length === 0) return null;
+
+                      return (
+                        <div className="space-y-2 pt-2 border-t">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Topics ({displayClusters.length}):
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {displayClusters.map((cluster, idx) => (
+                              <Link
+                                key={`${cluster.runId}-${cluster.clusterId}-${idx}`}
+                                href={`/clusters/${cluster.runId}/${cluster.clusterId}`}
                               >
-                                {cluster.title || `Cluster ${cluster.clusterId}`}
-                                <ExternalLink className="ml-1 h-3 w-3" />
-                              </Badge>
-                            </Link>
-                          ))}
+                                <Badge
+                                  variant="default"
+                                  className="text-xs hover:bg-primary/80 cursor-pointer"
+                                >
+                                  {cluster.title || `Cluster ${cluster.clusterId}`}
+                                  <ExternalLink className="ml-1 h-3 w-3" />
+                                </Badge>
+                              </Link>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Query Metadata */}
                     <div className="flex gap-4 text-xs text-muted-foreground pt-2 border-t">
