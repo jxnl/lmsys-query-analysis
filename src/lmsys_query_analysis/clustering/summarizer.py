@@ -160,7 +160,7 @@ class ClusterSummarizer:
     def generate_batch_summaries(
         self,
         clusters_data: List[tuple[int, List[str]]],
-        max_queries: int = 50,
+        max_queries: int = 100,
         concurrency: Optional[int] = None,
         rpm: Optional[int] = None,
         contrast_neighbors: int = 2,

@@ -49,27 +49,32 @@ class NeighborhoodCategories(BaseModel):
         description="""List of broader category names based on behavioral patterns and user segments.
 
         Requirements:
-        - Generate 8-15 category names
+        - Generate 8-18 category names (prefer MORE specific over FEWER generic)
         - Focus on USER BEHAVIORS and MENTAL MODELS, not just topics
         - Use concrete terminology (technical terms, domains, specific actions)
         - Think taxonomically: identify axes like "expertise level", "autonomy", "output type"
         - Describe harmful/sensitive topics explicitly for observability
         - Each category should represent a distinct user segment or interaction pattern
+        - AVOID generic terms: "General", "Various", "Diverse", "Technical Tasks", "Professional Use"
 
-        Examples (behavioral/segment-focused):
+        Examples (behavioral/segment-focused - GOOD):
         - "Novice Programmers Seeking Complete Code Solutions"
         - "Creative Writers Requesting Story Prompts and Continuations"
         - "Jailbreak Attempts via Roleplay Prompts"
         - "Non-Native Speakers Using LLMs for Professional Translation"
         - "Expert Developers Seeking Architectural Advice"
+        - "Data Scientists Requesting Python Pandas Analysis"
+        - "Web Developers Debugging JavaScript Framework Issues"
 
-        Examples (BAD - too topic-focused):
+        Examples (BAD - too generic/topic-focused):
         - "Python Programming" ❌
         - "Creative Writing" ❌
         - "Translation" ❌
+        - "Technical Task Automation" ❌
+        - "Industry Professionals" ❌
         """,
         min_length=8,
-        max_length=15
+        max_length=18
     )
 
 
@@ -229,17 +234,23 @@ Think like the Anthropic Education Report:
 Guidelines:
 1. FOCUS ON BEHAVIORS, not just topics (e.g., "Novice Programmers Seeking Complete Solutions" not "Programming")
 2. Create names specific enough for product decisions, broad enough to encompass 2-5 clusters
-3. Avoid generic terms ("General Queries", "Various Topics", "Diverse Requests")
+3. Avoid generic terms ("General Queries", "Various Topics", "Diverse Requests", "Technical Tasks", "Professional Use")
 4. Explicitly describe harmful/sensitive patterns for observability (e.g., "Jailbreak via Roleplay Prompts")
 5. Ensure categories represent distinct user segments or interaction patterns
 6. Think: what would a PM or UX researcher want to know?
+7. PREFER SPECIFICITY: Include concrete domains, technologies, or use cases in category names
+8. Each category should be DISTINCT and NON-OVERLAPPING with others
 
-Output roughly {target_count} names (acceptable range: 8-15).
+IMPORTANT: Aim for {int(target_count * 1.2)} categories rather than exactly {target_count}.
+It's better to have more specific categories than fewer generic ones.
+
+Output roughly {int(target_count * 1.2)} names (acceptable range: {target_count}-{target_count + 7}).
 
 First, use <scratchpad> to:
 - Identify 2-4 main behavioral patterns or user segments
 - Note taxonomic dimensions (e.g., expertise, task complexity, autonomy)
 - Consider what this reveals about how people conceptualize AI
+- Check: are my categories specific enough? Do they avoid generic terms?
 
 Then provide your category names focusing on user behavior and mental models."""
 
@@ -284,12 +295,15 @@ async def deduplicate_cluster_names(
 </candidate_names>
 
 Task:
-1. Identify similar or overlapping names
-2. Merge them, choosing the most specific and descriptive name
-3. Ensure remaining clusters are clearly distinct
-4. Preserve important diversity - don't over-merge
+1. Identify ONLY highly similar or overlapping names (>80% semantic overlap)
+2. When in doubt, KEEP categories separate - preserving specificity is more important than reducing count
+3. Merge ONLY when names are near-duplicates or clearly redundant
+4. Choose the most specific and descriptive name when merging
+5. Preserve important diversity - it's better to have {int(target_count * 1.2)} specific categories than {target_count} generic ones
 
-Output roughly {target_count} final cluster names."""
+IMPORTANT: Err on the side of keeping categories distinct. Only merge when truly redundant.
+
+Output {target_count} to {int(target_count * 1.3)} final cluster names (prefer more specific over fewer generic)."""
 
     response = await client.chat.completions.create(
         response_model=DeduplicatedClusters,
@@ -402,21 +416,29 @@ Requirements:
    - Accurately reflect ALL children
    - EMPHASIZE USER BEHAVIOR or SEGMENT when possible
    - Use specific terms (technologies, domains, actions)
-   - Avoid: "Diverse", "Various", "General", "Multiple"
+   - FORBIDDEN WORDS: "Diverse", "Various", "General", "Multiple", "Different", "Mixed", "Broad", "Wide-ranging", "Miscellaneous", "Assorted"
+   - FORBIDDEN PHRASES: "Technical Tasks", "Professional Use", "Industry Professionals", "General Queries"
+   - Include concrete details: specific languages, frameworks, domains, or user types
    - Be actionable for product/UX decisions
 
 Example GOOD titles (behavioral focus):
 - "Novice Programmers Expecting Complete Code Generation"
 - "Jailbreak Attempts via Roleplay and Prompt Injection"
 - "Non-Native Speakers Using LLMs for Professional Translation"
+- "Data Scientists Requesting Python Pandas Analysis Code"
+- "Web Developers Debugging React Component Errors"
 
-Example OK titles (topic focus):
+Example OK titles (topic focus, but specific):
 - "Python Flask and Django Web Development"
 - "Spanish and Portuguese Business Translation"
+- "SQL Database Query Optimization"
 
-Example BAD:
+Example BAD (too generic):
 - "Various Programming Queries" ❌
 - "General Development Questions" ❌
+- "Technical Task Automation" ❌
+- "Professional Development" ❌
+- "Industry Professionals Utilizing LLMs" ❌
 """
 
     response = await client.chat.completions.create(
@@ -618,12 +640,19 @@ async def merge_clusters_hierarchical(
             )
             logger.debug(f"  Generation took {time.time() - step_start:.1f}s")
 
-            # Step 4: Deduplicate globally
+            # Step 4: Deduplicate globally (with validation)
             step_start = time.time()
             logger.info(
                 f"Step 4/4: Deduplicating {len(all_candidates)} candidates "
                 f"→ ~{n_target} parent clusters..."
             )
+
+            # Calculate min/max bounds for parent count to prevent over-merging
+            # We want roughly n_target, but allow up to 30% more to preserve specificity
+            min_parents = max(n_target, int(n_current * merge_ratio * 0.9))
+            max_parents = int(n_target * 1.3)
+            logger.debug(f"  Target parent range: {min_parents}-{max_parents} (aiming for {n_target})")
+
             if limiter:
                 async with limiter:
                     dedup_result = await deduplicate_cluster_names(
@@ -635,6 +664,14 @@ async def merge_clusters_hierarchical(
                 )
 
             parent_names = dedup_result.clusters
+
+            # Validate deduplication didn't over-merge
+            if len(parent_names) < min_parents:
+                logger.warning(
+                    f"  Deduplication created too few parents ({len(parent_names)} < {min_parents}). "
+                    f"This may result in overly generic categories."
+                )
+
             logger.info(
                 f"  Deduplicated: {len(all_candidates)} candidates → {len(parent_names)} unique parents "
                 f"(removed {len(all_candidates) - len(parent_names)} duplicates)"
@@ -729,6 +766,25 @@ async def merge_clusters_hierarchical(
                 for name, children in sorted_parents[-3:]:
                     if len(children) > 0:
                         logger.debug(f"    '{name}': {len(children)} children")
+
+            # Validate that no parent has too many children (indicates overly generic category)
+            max_reasonable_children = int(avg_children * 2.5)  # Alert if 2.5x average
+            oversized_parents = [
+                (name, len(children))
+                for name, children in parent_children.items()
+                if len(children) > max_reasonable_children
+            ]
+            if oversized_parents:
+                logger.warning(
+                    f"  Found {len(oversized_parents)} oversized parent clusters "
+                    f"(>{max_reasonable_children} children, avg is {avg_children:.1f}):"
+                )
+                for name, count in oversized_parents:
+                    logger.warning(f"    '{name}': {count} children - may be too generic")
+                logger.warning(
+                    f"  Consider: (1) increasing merge_ratio, (2) using smaller neighborhoods, "
+                    f"or (3) being more conservative in deduplication"
+                )
 
             # Step 6: Refine parent names based on children (parallelized)
             step_start = time.time()
