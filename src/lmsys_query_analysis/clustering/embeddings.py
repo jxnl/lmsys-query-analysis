@@ -89,13 +89,13 @@ class EmbeddingGenerator:
         if self.provider == "sentence-transformers" and self.model is None:
             self.model = SentenceTransformer(self.model_name)
 
-    def generate_embeddings(
+    async def generate_embeddings(
         self,
         texts: List[str],
         batch_size: int = 32,
         show_progress: bool = True,
     ) -> np.ndarray:
-        """Generate embeddings for a list of texts.
+        """Generate embeddings for a list of texts (async).
 
         Args:
             texts: List of text strings to embed
@@ -109,43 +109,55 @@ class EmbeddingGenerator:
         filtered_texts = []
         original_indices = []
         for i, text in enumerate(texts):
-            if text and text.strip():  # Skip empty or whitespace-only strings
+            if text and text.strip():
                 filtered_texts.append(text.strip())
                 original_indices.append(i)
-        
+
         if not filtered_texts:
-            # All texts were empty, return zero embeddings
             logger = logging.getLogger("lmsys")
             logger.warning("All input texts were empty, returning zero embeddings")
             dim = self.get_embedding_dim()
             return np.zeros((len(texts), dim))
-        
+
         # Generate embeddings for valid texts
+        logger = logging.getLogger("lmsys")
+        start = time.perf_counter()
+
         if self.provider == "openai":
-            # Use async path for OpenAI to parallelize batch requests
-            valid_embeddings = self._generate_openai_embeddings_async(
-                filtered_texts, batch_size, show_progress
-            )
+            valid_embeddings_list = await self._async_openai_batches(filtered_texts, batch_size, None, None)
+            valid_embeddings = np.array(valid_embeddings_list)
+            elapsed = time.perf_counter() - start
+            if len(filtered_texts) > 0:
+                rate = len(filtered_texts) / elapsed if elapsed > 0 else float("inf")
+                logger.info(
+                    "Embeddings(OpenAI): %s texts in %.2fs (%.1f/s) using %s (concurrency=%s)",
+                    len(filtered_texts), elapsed, rate, self.model_name, self.concurrency
+                )
         elif self.provider == "cohere":
-            # Use async path for Cohere to parallelize batch requests
-            valid_embeddings = self._generate_cohere_embeddings_async(
-                filtered_texts, batch_size, show_progress
-            )
+            valid_embeddings_list = await self._async_cohere_batches(filtered_texts, batch_size, None, None)
+            valid_embeddings = np.array(valid_embeddings_list)
+            elapsed = time.perf_counter() - start
+            if len(filtered_texts) > 0:
+                rate = len(filtered_texts) / elapsed if elapsed > 0 else float("inf")
+                logger.info(
+                    "Embeddings(Cohere): %s texts in %.2fs (%.1f/s) using %s (concurrency=%s)",
+                    len(filtered_texts), elapsed, rate, self.model_name, self.concurrency
+                )
         else:
+            # For sentence transformers, use sync version
             valid_embeddings = self._generate_st_embeddings(filtered_texts, batch_size, show_progress)
-        
+
         # If all texts were valid, return as-is
         if len(filtered_texts) == len(texts):
             return valid_embeddings
-        
+
         # Otherwise, create full array with zero embeddings for invalid texts
-        logger = logging.getLogger("lmsys")
         logger.warning(f"Filtered out {len(texts) - len(filtered_texts)} empty/invalid texts")
-        
+
         full_embeddings = np.zeros((len(texts), valid_embeddings.shape[1]))
         for i, orig_idx in enumerate(original_indices):
             full_embeddings[orig_idx] = valid_embeddings[i]
-        
+
         return full_embeddings
 
     def _generate_st_embeddings(
@@ -248,59 +260,6 @@ class EmbeddingGenerator:
                 flat.extend(r)
         return flat
 
-    def _generate_openai_embeddings_async(
-        self,
-        texts: List[str],
-        batch_size: int,
-        show_progress: bool,
-    ) -> np.ndarray:
-        """Generate embeddings using OpenAI API with anyio concurrency."""
-        import asyncio
-
-        logger = logging.getLogger("lmsys")
-        start = time.perf_counter()
-
-        async def _run():
-            if show_progress:
-                with Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    BarColumn(),
-                    TaskProgressColumn(),
-                ) as progress:
-                    task = progress.add_task(
-                        f"[cyan]Generating embeddings with OpenAI {self.model_name}...",
-                        total=len(texts),
-                    )
-                    return await self._async_openai_batches(texts, batch_size, task, progress)
-            else:
-                return await self._async_openai_batches(texts, batch_size, None, None)
-
-        # Check if we're already in an async context
-        try:
-            asyncio.get_running_loop()
-            # We're in an async context - run in a separate thread with its own event loop
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, _run())
-                all_embeddings = future.result()
-        except RuntimeError:
-            # No event loop running, safe to use asyncio.run()
-            all_embeddings = asyncio.run(_run())
-
-        elapsed = time.perf_counter() - start
-        if len(texts) > 0:
-            rate = len(texts) / elapsed if elapsed > 0 else float("inf")
-            logger.info(
-                "Embeddings(OpenAI): %s texts in %.2fs (%.1f/s) using %s (concurrency=%s)",
-                len(texts),
-                elapsed,
-                rate,
-                self.model_name,
-                self.concurrency,
-            )
-        return np.array(all_embeddings)
-
     async def _async_cohere_batches(
         self, texts: List[str], batch_size: int, progress_task, progress
     ) -> List[List[float]]:
@@ -354,59 +313,6 @@ class EmbeddingGenerator:
             if r is not None:
                 flat.extend(r)
         return flat
-
-    def _generate_cohere_embeddings_async(
-        self,
-        texts: List[str],
-        batch_size: int,
-        show_progress: bool,
-    ) -> np.ndarray:
-        """Generate embeddings using Cohere API with anyio concurrency."""
-        import asyncio
-
-        logger = logging.getLogger("lmsys")
-        start = time.perf_counter()
-
-        async def _run():
-            if show_progress:
-                with Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    BarColumn(),
-                    TaskProgressColumn(),
-                ) as progress:
-                    task = progress.add_task(
-                        f"[cyan]Generating embeddings with Cohere {self.model_name}...",
-                        total=len(texts),
-                    )
-                    return await self._async_cohere_batches(texts, batch_size, task, progress)
-            else:
-                return await self._async_cohere_batches(texts, batch_size, None, None)
-
-        # Check if we're already in an async context
-        try:
-            asyncio.get_running_loop()
-            # We're in an async context - run in a separate thread with its own event loop
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, _run())
-                all_embeddings = future.result()
-        except RuntimeError:
-            # No event loop running, safe to use asyncio.run()
-            all_embeddings = asyncio.run(_run())
-
-        elapsed = time.perf_counter() - start
-        if len(texts) > 0:
-            rate = len(texts) / elapsed if elapsed > 0 else float("inf")
-            logger.info(
-                "Embeddings(Cohere): %s texts in %.2fs (%.1f/s) using %s (concurrency=%s)",
-                len(texts),
-                elapsed,
-                rate,
-                self.model_name,
-                self.concurrency,
-            )
-        return np.array(all_embeddings)
 
     def get_embedding_dim(self) -> int:
         """Get the dimension of embeddings from this model."""

@@ -2,32 +2,94 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Vision: Autonomous AI Research Agent for Conversational System Analysis
+
+**Long-term vision**: Every company building AI systems (chatbots, agents, RAG systems, voice assistants) uploads their interaction logs to our platform. An autonomous AI agent with specialized tools explores the data overnight and discovers engineering fixes, prompt improvements, and product opportunities the team didn't know existed.
+
+**Current implementation**: This repository provides the foundational tool library and CLI interface that enables agents to perform autonomous data analysis on conversational datasets. Starting with LMSYS-1M query analysis, the tools demonstrate how agents can explore data, form hypotheses, and generate actionable insights without pre-defined workflows.
+
 ## Purpose & Goals
 
-This repository provides **terminal-based CLI tools for agents to perform comprehensive data analysis on LMSYS queries**. The primary goal is to enable systematic investigation of how people use LLM systems through data-driven analysis workflows.
+This repository provides **terminal-based CLI tools for agents to perform comprehensive data analysis on conversational systems**. The primary goal is to enable autonomous investigation of how people use AI systems through data-driven exploration workflows.
 
-### Core Capabilities
+### Core Capabilities (Tool Categories)
 
-- **Data Loading**: Download and process the LMSYS-1M dataset from Hugging Face
-- **Clustering Analysis**: Group similar queries using embeddings and clustering algorithms (KMeans, HDBSCAN)
-- **Hierarchical Organization**: Create multi-level cluster hierarchies using LLM-driven merging (Anthropic Clio methodology)
-- **Cluster Investigation**: Explore and summarize query clusters to identify patterns and usage trends
-- **Contrastive Analysis**: Highlight what makes each cluster unique compared to neighbors
-- **Semantic Search**: Navigate queries and clusters using natural language
-- **Hypothesis Generation**: Discover insights about user behavior, query patterns, and LLM interactions
-- **Agentic Cluster Curation**: Interactive CLI tools (`lmsys edit`) for fixing cluster quality issues through direct CRUD operations
+The CLI implements specialized tools across multiple categories:
 
-### Agent Workflow
+#### 1. Data Loading Tools
 
-Agents can use this tool to:
+- Load datasets from Hugging Face or custom sources
+- Generate and backfill embeddings for semantic analysis
+- Manage dataset lifecycle (status checks, clearing)
 
-1. **Investigate LLM Usage Patterns**: Discover how users interact with different LLM systems
-2. **Identify Common Use Cases**: Group similar queries to find patterns
-3. **Generate Insights**: Use LLM-powered summarization to understand cluster characteristics
-4. **Form Hypotheses**: Systematically explore data to develop testable hypotheses
-5. **Export Findings**: Save analysis results for further investigation
+#### 2. Clustering Tools
 
-All capabilities are accessible through the `lmsys` CLI command in a composable workflow: `load → cluster → summarize → merge-clusters → search → export`
+- Run unsupervised clustering (KMeans, HDBSCAN) to discover behavioral patterns
+- List and compare clustering runs with different parameters
+- Get detailed cluster statistics and metadata
+- Identify outliers and anomalies automatically
+
+#### 3. Summarization Tools
+
+- Generate LLM-powered cluster summaries and descriptions
+- Create multiple summary runs to compare different models or prompts
+- Extract representative queries and key themes
+- Support contrastive analysis (what makes each cluster unique)
+
+#### 4. Hierarchy Tools
+
+- Build multi-level cluster taxonomies using Anthropic Clio methodology
+- Navigate hierarchical structures from high-level themes to specific patterns
+- Organize hundreds of clusters into manageable categories
+
+#### 5. Search & Analysis Tools
+
+- Semantic search across queries and clusters
+- Filter and aggregate by metadata dimensions
+- Export data for external analysis
+- Compare time periods and detect trends
+
+#### 6. Curation Tools
+
+- Edit cluster assignments and metadata (move, rename, merge, split, tag)
+- Track edit history and audit trails
+- Flag clusters for review and quality annotation
+- Manage orphaned queries and cleanup operations
+
+### Agent Workflow: Autonomous Investigation
+
+Agents use these tools to autonomously explore data and discover insights:
+
+#### Phase 1: Landscape Exploration
+
+- Load dataset and generate embeddings
+- Run clustering to identify behavioral patterns
+- Build hierarchy to organize patterns into themes
+- Generate summaries to understand cluster semantics
+
+#### Phase 2: Anomaly Detection
+
+- Identify outlier clusters (unusual size, latency, error rates)
+- Investigate high-impact patterns affecting significant traffic
+- Search for similar patterns across the dataset
+
+#### Phase 3: Hypothesis Testing
+
+- Create custom classifications to test hypotheses
+- Drill down into specific clusters to find sub-patterns
+- Compare successful vs. failing interactions
+- Validate findings with statistical analysis
+
+#### Phase 4: Actionable Recommendations
+
+- Quantify business impact (affected traffic, revenue, cost)
+- Generate engineering fixes with code snippets
+- Estimate implementation effort and ROI
+- Prioritize by impact and feasibility
+
+**Key Innovation**: Agents make autonomous decisions about what to investigate, which tools to compose, when to drill down vs. zoom out, and when they have found enough insights. No pre-defined workflow required.
+
+All capabilities are accessible through the `lmsys` CLI command in composable workflows: `load → cluster → summarize → merge-clusters → search → inspect → edit → export`
 
 ### Web Viewer (Zero External Dependencies)
 
