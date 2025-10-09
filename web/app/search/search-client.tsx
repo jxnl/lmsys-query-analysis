@@ -99,7 +99,7 @@ export function SearchClient({ runs }: SearchClientProps) {
             </div>
             
             <div className="text-sm text-muted-foreground">
-              <p>Search uses ChromaDB semantic search to find similar queries by meaning.</p>
+              <p>Search uses full-text search to find queries matching your search terms.</p>
               {selectedRunId !== 'all' && (
                 <p className="mt-1">Filtering by run: <span className="font-mono">{selectedRunId}</span></p>
               )}
@@ -116,8 +116,11 @@ export function SearchClient({ runs }: SearchClientProps) {
 
       {!isPending && hasSearched && results && results.queries.length === 0 && (
         <Card>
-          <CardContent className="py-12 text-center">
+          <CardContent className="py-12 text-center space-y-3">
             <p className="text-muted-foreground">No results found for "{searchText}"</p>
+            <div className="text-sm text-muted-foreground">
+              <p>Try different search terms or check that queries have been loaded into the database.</p>
+            </div>
           </CardContent>
         </Card>
       )}

@@ -30,11 +30,22 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ## Features
 
+### Zero External Dependencies
+**No ChromaDB server required!** All search functionality uses SQL LIKE queries for fast, simple operation. Just start the Next.js server and go.
+
+### Core Features
 - **Sidebar Navigation**: Persistent sidebar with navigation to all pages
 - **Jobs Dashboard**: View all clustering runs with metadata and stats
-- **Semantic Search**: Search queries using ChromaDB semantic search (finds similar queries by meaning)
-- **Hierarchy Viewer**: Navigate cluster hierarchies with collapsible tree
-- **Query Browser**: Paginated view of queries within each cluster
+- **Search (SQL LIKE queries)**:
+  - Global search across all queries
+  - Cluster-specific search within individual clusters
+  - Search cluster summaries by title/description
+- **Enhanced Hierarchy Viewer**: Navigate cluster hierarchies with:
+  - Collapsible tree with expand/collapse all controls
+  - Visual progress bars showing cluster size
+  - Color coding (blue for large ≥10%, primary for medium 3-10%, gray for small <3%)
+  - Summary statistics (total clusters, leaf count, levels, query count)
+- **Query Browser**: Paginated view of queries within each cluster (50 per page)
 - **Cluster Summaries**: LLM-generated titles, descriptions, and representative queries
 - **Data Viewer**: Reusable component for displaying queries with cluster associations
 
@@ -44,28 +55,29 @@ Open [http://localhost:3000](http://localhost:3000)
 
 - **Next.js 15**: App Router with Server Components
 - **Drizzle ORM**: Type-safe SQL queries (read-only)
-- **ChromaDB JS Client**: Semantic search (requires server)
+- **SQLite**: All data storage and search via LIKE queries (no external services)
 - **Zod**: Runtime validation
 - **ShadCN**: UI components (Radix UI + Tailwind)
 
 ### Data Flow
 
 ```
-Python CLI → SQLite + ChromaDB (data artifacts)
+Python CLI → SQLite (clustering data)
                 ↓
-      Next.js Server Components
+      Next.js Server Components (read-only SQLite access)
                 ↓
           Browser UI
 ```
+
+The web viewer **only reads from SQLite** and uses SQL LIKE queries for search. ChromaDB is only used by the Python CLI for semantic search.
 
 ## Configuration
 
 ### Default Paths
 
-The viewer uses the same default paths as the Python CLI:
+The viewer uses the same default path as the Python CLI:
 
 - **SQLite**: `~/.lmsys-query-analysis/queries.db`
-- **ChromaDB**: `~/.lmsys-query-analysis/chroma/`
 
 ### Custom Paths
 
@@ -73,7 +85,6 @@ Create `.env.local` to override:
 
 ```bash
 DB_PATH=/path/to/your/queries.db
-CHROMA_PATH=/path/to/your/chroma
 ```
 
 ## Project Structure
@@ -95,8 +106,6 @@ web/
 │   ├── db/
 │   │   ├── schema.ts                   # Drizzle schema (mirrors SQLModel)
 │   │   └── client.ts                   # SQLite connection
-│   ├── chroma/
-│   │   └── client.ts                   # ChromaDB client
 │   └── types/
 │       └── schemas.ts                  # Zod validation schemas
 └── next.config.ts
@@ -145,7 +154,6 @@ For production deployments, set:
 
 ```bash
 DB_PATH=/production/path/queries.db
-CHROMA_PATH=/production/path/chroma
 ```
 
 ## Troubleshooting
@@ -158,21 +166,6 @@ The Python CLI hasn't created any data yet. Run:
 uv run lmsys load --limit 1000
 uv run lmsys cluster kmeans --n-clusters 50
 ```
-
-### ChromaDB Connection Errors
-
-The JS client requires a running ChromaDB server for semantic search functionality:
-
-```bash
-chroma run --path ~/.lmsys-query-analysis/chroma
-```
-
-Then restart the Next.js dev server.
-
-Note: Semantic search will only work if:
-1. ChromaDB server is running on `localhost:8000`
-2. Queries were loaded with `--use-chroma` flag
-3. The embedding provider/model matches your clustering run
 
 ### SQLite Permission Errors
 
@@ -188,9 +181,13 @@ See `app/actions.ts` for all Server Actions:
 
 - `getRuns()` - List all clustering runs
 - `getHierarchyTree(hierarchyRunId)` - Get full hierarchy tree
-- `getClusterSummary(runId, clusterId)` - Get cluster metadata
-- `getClusterQueries(runId, clusterId, page)` - Get paginated queries
-- `searchClusters(query, runId)` - Semantic search via ChromaDB
+- `getClusterSummary(runId, clusterId, alias?)` - Get cluster metadata
+- `getClusterQueries(runId, clusterId, page)` - Get paginated queries for a cluster
+- `searchClusters(query, runId, nResults?)` - Search cluster summaries using SQL LIKE queries
+- `searchQueries(searchText, runId?, page)` - Global query search using SQL LIKE queries
+- `searchQueriesInCluster(searchText, runId, clusterId, page)` - Search queries within a specific cluster using SQL LIKE queries
+- `getClusterQueryCounts(runId)` - Get query counts for all clusters in a run
+- `getSummaryAliases(runId)` - Get all summary aliases for a run
 
 ## Contributing
 

@@ -8,8 +8,7 @@ import {
   queryClusters,
   clusterSummaries,
 } from '@/lib/db/schema';
-import { eq, and, desc, sql, count } from 'drizzle-orm';
-import { getCollection } from '@/lib/chroma/client';
+import { eq, and, desc, sql, count, like, or } from 'drizzle-orm';
 import type {
   ClusteringRun,
   ClusterHierarchy,
@@ -82,22 +81,22 @@ export async function getHierarchyTree(hierarchyRunId: string): Promise<ClusterH
  * Get cluster summary for a specific cluster
  */
 export async function getClusterSummary(runId: string, clusterId: number, alias?: string): Promise<ClusterSummary | null> {
-  let query = db
-    .select()
-    .from(clusterSummaries)
-    .where(
-      and(
-        eq(clusterSummaries.runId, runId),
-        eq(clusterSummaries.clusterId, clusterId)
-      )
-    );
+  // Build where conditions
+  const conditions = [
+    eq(clusterSummaries.runId, runId),
+    eq(clusterSummaries.clusterId, clusterId)
+  ];
 
-  // If alias is provided, filter by it
+  // If alias is provided, add it to conditions
   if (alias) {
-    query = query.where(eq(clusterSummaries.alias, alias)) as any;
+    conditions.push(eq(clusterSummaries.alias, alias));
   }
 
-  const [summary] = await query.orderBy(desc(clusterSummaries.generatedAt));
+  const [summary] = await db
+    .select()
+    .from(clusterSummaries)
+    .where(and(...conditions))
+    .orderBy(desc(clusterSummaries.generatedAt));
 
   if (!summary) return null;
   return summary as ClusterSummary;
@@ -153,35 +152,31 @@ export async function getClusterQueries(
 }
 
 /**
- * Search clusters using ChromaDB semantic search
+ * Search clusters using full-text search on titles and descriptions
  */
 export async function searchClusters(query: string, runId: string, nResults: number = 20) {
-  // Get embedding config from run
-  const [run] = await db
-    .select()
-    .from(clusteringRuns)
-    .where(eq(clusteringRuns.runId, runId));
-
-  if (!run || !run.parameters) {
-    throw new Error('Run not found or missing parameters');
-  }
-
-  const params = run.parameters as Record<string, any>;
-  const provider = params.embedding_provider;
-  const model = params.embedding_model;
-
-  if (!provider || !model) {
-    throw new Error('Run missing embedding provider or model in parameters');
-  }
-
-  // Query ChromaDB
-  const collection = await getCollection(provider, model, 'cluster_summaries');
-
-  const results = await collection.query({
-    queryTexts: [query],
-    nResults,
-    where: { run_id: runId },
-  });
+  const searchPattern = `%${query}%`;
+  
+  const results = await db
+    .select({
+      clusterId: clusterSummaries.clusterId,
+      title: clusterSummaries.title,
+      description: clusterSummaries.description,
+      summary: clusterSummaries.summary,
+      numQueries: clusterSummaries.numQueries,
+    })
+    .from(clusterSummaries)
+    .where(
+      and(
+        eq(clusterSummaries.runId, runId),
+        or(
+          like(clusterSummaries.title, searchPattern),
+          like(clusterSummaries.description, searchPattern),
+          like(clusterSummaries.summary, searchPattern)
+        )
+      )
+    )
+    .limit(nResults);
 
   return results;
 }
@@ -220,7 +215,68 @@ export async function getClusterQueryCounts(runId: string): Promise<Record<numbe
 }
 
 /**
- * Search queries using ChromaDB semantic search
+ * Search queries within a specific cluster using full-text search
+ */
+export async function searchQueriesInCluster(
+  searchText: string,
+  runId: string,
+  clusterId: number,
+  page: number = 1,
+  limit: number = 50
+): Promise<PaginatedQueries> {
+  console.log('[searchQueriesInCluster] runId:', runId, 'clusterId:', clusterId, 'searchText:', searchText);
+
+  const offset = (page - 1) * limit;
+  const searchPattern = `%${searchText}%`;
+
+  // Get paginated queries matching search text in this cluster
+  const results = await db
+    .select({
+      query: queries,
+    })
+    .from(queries)
+    .innerJoin(queryClusters, eq(queries.id, queryClusters.queryId))
+    .where(
+      and(
+        eq(queryClusters.runId, runId),
+        eq(queryClusters.clusterId, clusterId),
+        like(queries.queryText, searchPattern)
+      )
+    )
+    .limit(limit)
+    .offset(offset);
+
+  console.log('[searchQueriesInCluster] Found', results.length, 'queries on page', page);
+
+  // Get total count
+  const [countResult] = await db
+    .select({ count: count() })
+    .from(queryClusters)
+    .innerJoin(queries, eq(queryClusters.queryId, queries.id))
+    .where(
+      and(
+        eq(queryClusters.runId, runId),
+        eq(queryClusters.clusterId, clusterId),
+        like(queries.queryText, searchPattern)
+      )
+    );
+
+  const total = countResult.count;
+  const pages = Math.ceil(total / limit);
+
+  console.log('[searchQueriesInCluster] Total:', total, 'Pages:', pages);
+
+  return {
+    queries: results.map((r) => r.query as Query),
+    total,
+    page,
+    pages,
+    limit,
+  };
+}
+
+/**
+ * Search queries using full-text search
  */
 export async function searchQueries(
   searchText: string,
@@ -228,68 +284,24 @@ export async function searchQueries(
   page: number = 1,
   limit: number = 50
 ) {
-  // Get embedding config from run or use defaults
-  let provider = 'cohere';
-  let model = 'embed-v4_0'; // Note: ChromaDB sanitizes dots to underscores
-  
-  if (runId) {
-    const [run] = await db
-      .select()
-      .from(clusteringRuns)
-      .where(eq(clusteringRuns.runId, runId));
+  console.log('[searchQueries] searchText:', searchText, 'runId:', runId, 'page:', page);
 
-    if (run && run.parameters) {
-      const params = run.parameters as Record<string, any>;
-      provider = params.embedding_provider || provider;
-      // Sanitize model name to match ChromaDB collection naming
-      model = (params.embedding_model || 'embed-v4.0').replace(/[^a-zA-Z0-9_-]/g, '_');
-    }
-  } else {
-    // If no runId, try to get config from most recent run
-    const [latestRun] = await db
-      .select()
-      .from(clusteringRuns)
-      .orderBy(desc(clusteringRuns.createdAt))
-      .limit(1);
-    
-    if (latestRun && latestRun.parameters) {
-      const params = latestRun.parameters as Record<string, any>;
-      provider = params.embedding_provider || provider;
-      model = (params.embedding_model || 'embed-v4.0').replace(/[^a-zA-Z0-9_-]/g, '_');
-    }
-  }
-
-  // Query ChromaDB for semantic search
-  const collection = await getCollection(provider, model, 'queries');
-  
-  // Calculate offset for pagination
   const offset = (page - 1) * limit;
-  
-  // ChromaDB doesn't support offset directly, so we fetch more and slice
-  // This is a limitation - for production you'd want to implement cursor-based pagination
-  const fetchLimit = offset + limit;
-  
-  const chromaResults = await collection.query({
-    queryTexts: [searchText],
-    nResults: Math.min(fetchLimit, 1000), // Cap at 1000 for performance
-  });
+  const searchPattern = `%${searchText}%`;
 
-  // Extract query IDs from ChromaDB results
-  const allQueryIds = chromaResults.ids[0]
-    .map(id => parseInt(id.replace('query_', '')))
-    .slice(offset, offset + limit);
-
-  if (allQueryIds.length === 0) {
-    return {
-      queries: [],
-      total: 0,
-      page,
-      pages: 0,
-      limit,
-    };
+  // Build where conditions
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const whereConditions: any[] = [like(queries.queryText, searchPattern)];
+  if (runId) {
+    whereConditions.push(
+      or(
+        eq(queryClusters.runId, runId),
+        sql`${queryClusters.runId} IS NULL`
+      )
+    );
   }
 
-  // Fetch full query data from SQLite with cluster associations
+  // Execute query with pagination
   const results = await db
     .select({
       query: queries,
@@ -307,17 +319,13 @@ export async function searchQueries(
         eq(queryClusters.clusterId, clusterSummaries.clusterId)
       )
     )
-    .where(sql`${queries.id} IN ${sql.raw(`(${allQueryIds.join(',')})`)}`);
+    .where(and(...whereConditions))
+    .limit(limit)
+    .offset(offset);
 
-  // Filter by run if provided
-  let filteredResults = results;
-  if (runId) {
-    filteredResults = results.filter(r => r.clusterRunId === runId || r.clusterRunId === null);
-  }
-
-  // Group results by query
+  // Group results by query to handle multiple cluster assignments
   const queryMap = new Map();
-  for (const row of filteredResults) {
+  for (const row of results) {
     const queryId = row.query.id;
     if (!queryMap.has(queryId)) {
       queryMap.set(queryId, {
@@ -338,8 +346,25 @@ export async function searchQueries(
 
   const queriesWithClusters = Array.from(queryMap.values());
 
-  // Estimate total (ChromaDB doesn't give us exact count easily)
-  const total = chromaResults.ids[0].length;
+  // Get total count
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const countWhereConditions: any[] = [like(queries.queryText, searchPattern)];
+  if (runId) {
+    countWhereConditions.push(
+      or(
+        eq(queryClusters.runId, runId),
+        sql`${queryClusters.runId} IS NULL`
+      )
+    );
+  }
+
+  const [countResult] = await db
+    .select({ count: count() })
+    .from(queries)
+    .leftJoin(queryClusters, eq(queries.id, queryClusters.queryId))
+    .where(and(...countWhereConditions));
+
+  const total = countResult.count;
   const pages = Math.ceil(total / limit);
 
   return {

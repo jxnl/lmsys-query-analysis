@@ -30,16 +30,20 @@ All capabilities are accessible through the `lmsys` CLI command in a composable 
 
 ### Web Viewer
 
-A **Next.js-based interactive web interface** (`web/`) provides read-only visualization of clustering results:
+A **Next.js-based interactive web interface** (`web/`) provides read-only visualization of clustering results with **zero external dependencies** (no ChromaDB server required):
 
 - **Jobs Dashboard**: Browse all clustering runs with metadata
-- **Hierarchy Explorer**: Navigate multi-level cluster hierarchies with collapsible tree UI
+- **Hierarchy Explorer**: Navigate multi-level cluster hierarchies with enhanced visual controls
+  - Expand/collapse all controls
+  - Visual progress bars and color coding by cluster size
+  - Summary statistics (total clusters, leaf count, levels, query count)
+- **Search (SQL LIKE queries)**: Global and cluster-specific search without ChromaDB
 - **Query Browser**: Paginated view of queries within each cluster (50 per page)
 - **Cluster Details**: LLM-generated summaries, descriptions, and representative queries
 
-**Architecture**: Next.js 15 + Drizzle ORM (SQLite) + ChromaDB JS Client + Zod + ShadCN UI
+**Architecture**: Next.js 15 + Drizzle ORM (SQLite) + Zod + ShadCN UI
 
-**Data Flow**: Python CLI creates data artifacts (SQLite + ChromaDB) → Next.js reads directly from these artifacts → Browser UI
+**Data Flow**: Python CLI creates SQLite database → Next.js reads SQLite (read-only) → Browser UI
 
 **Quick Start**:
 ```bash
@@ -48,7 +52,7 @@ npm install
 npm run dev  # Opens http://localhost:3000
 ```
 
-The viewer connects to the same default paths as the Python CLI (`~/.lmsys-query-analysis/`). See `web/README.md` for full documentation.
+The viewer uses only SQLite (no ChromaDB server). All search uses SQL LIKE queries. See `web/README.md` for full documentation.
 
 ### Extensibility
 
