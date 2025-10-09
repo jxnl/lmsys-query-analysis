@@ -3,7 +3,7 @@
 import typer
 from rich.console import Console
 
-from ..common import with_error_handling, chroma_path_option, json_output_option
+from ..common import with_error_handling, chroma_path_option, json_output_option, table_output_option, xml_output_option
 from ..formatters import tables, json_output
 from ...db.chroma import get_chroma
 
@@ -16,8 +16,16 @@ app = typer.Typer(help="ChromaDB utilities")
 def chroma_info(
     chroma_path: str = chroma_path_option,
     json_out: bool = json_output_option,
+    table: bool = table_output_option,
+    xml: bool = xml_output_option,
 ):
     """List all Chroma collections with metadata and counts."""
+    # Validate format options
+    format_count = sum([json_out, table, xml])
+    if format_count > 1:
+        console.print("[red]Error: Cannot specify more than one output format[/red]")
+        raise typer.Exit(1)
+        
     chroma = get_chroma(chroma_path)
     cols = chroma.list_all_collections()
     
@@ -40,7 +48,11 @@ def chroma_info(
         payload = json_output.format_chroma_collections_json(normalized)
         console.print_json(data=payload)
         return
-    
-    table = tables.format_chroma_collections_table(normalized)
-    console.print(table)
+    elif xml:
+        xml_output = json_output.format_chroma_collections_xml(normalized)
+        console.print(xml_output)
+    else:
+        # Default to table format
+        table_output = tables.format_chroma_collections_table(normalized)
+        console.print(table_output)
 

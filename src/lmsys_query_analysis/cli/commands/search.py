@@ -3,7 +3,7 @@
 import typer
 from rich.console import Console
 
-from ..common import with_error_handling, chroma_path_option, embedding_model_option, json_output_option
+from ..common import with_error_handling, chroma_path_option, embedding_model_option, json_output_option, table_output_option, xml_output_option
 from ..formatters import tables, json_output
 from ..helpers.client_factory import create_queries_client, create_clusters_client
 from ...db.connection import get_db
@@ -30,6 +30,8 @@ def search(
     by: str = typer.Option(None, help="Group counts by: cluster|language|model"),
     facets: str = typer.Option(None, help="Compute facets for: cluster,language,model (comma-separated)"),
     json_out: bool = json_output_option,
+    table: bool = table_output_option,
+    xml: bool = xml_output_option,
     chroma_path: str = chroma_path_option,
     embedding_model: str = embedding_model_option,
 ):
@@ -38,6 +40,12 @@ def search(
     For queries: supports provenance via --run-id, semantic conditioning via
     --within-clusters, and grouped counts/facets. Use --json for machine output.
     """
+    # Validate format options
+    format_count = sum([json_out, table, xml])
+    if format_count > 1:
+        console.print("[red]Error: Cannot specify more than one output format[/red]")
+        raise typer.Exit(1)
+    
     # Parse cluster_ids list
     cluster_ids_list = None
     if cluster_ids:
@@ -134,13 +142,20 @@ def search(
             )
             console.print_json(data=payload)
             return
+        elif xml:
+            if not hits:
+                console.print("[yellow]No results found[/yellow]")
+                return
+            xml_output = json_output.format_search_results_queries_xml(text, hits)
+            console.print(xml_output)
         else:
+            # Default to table format
             if not hits:
                 console.print("[yellow]No results found[/yellow]")
                 return
             
-            table = tables.format_search_results_queries_table(hits)
-            console.print(table)
+            table_output = tables.format_search_results_queries_table(hits)
+            console.print(table_output)
     
     elif search_type == "clusters":
         # Use SDK for cluster summaries search
@@ -151,11 +166,19 @@ def search(
             payload = json_output.format_search_clusters_json(text, run_id, chits)
             console.print_json(data=payload)
             return
-        if not chits:
-            console.print("[yellow]No results found[/yellow]")
-            return
-        table = tables.format_search_results_clusters_table(chits)
-        console.print(table)
+        elif xml:
+            if not chits:
+                console.print("[yellow]No results found[/yellow]")
+                return
+            xml_output = json_output.format_search_results_clusters_xml(text, chits)
+            console.print(xml_output)
+        else:
+            # Default to table format
+            if not chits:
+                console.print("[yellow]No results found[/yellow]")
+                return
+            table_output = tables.format_search_results_clusters_table(chits)
+            console.print(table_output)
     
     else:
         console.print(f"[red]Invalid search_type: {search_type}[/red]")
@@ -170,10 +193,18 @@ def search_cluster(
     summary_run_id: str = typer.Option(None, help="Filter by summary run id"),
     top_k: int = typer.Option(20, help="Number of cluster hits"),
     json_out: bool = json_output_option,
+    table: bool = table_output_option,
+    xml: bool = xml_output_option,
     chroma_path: str = chroma_path_option,
     embedding_model: str = embedding_model_option,
 ):
     """Search cluster titles+descriptions (summaries)."""
+    # Validate format options
+    format_count = sum([json_out, table, xml])
+    if format_count > 1:
+        console.print("[red]Error: Cannot specify more than one output format[/red]")
+        raise typer.Exit(1)
+        
     db = get_db(None)
     client = create_clusters_client(db, run_id, embedding_model, chroma_path)
     
@@ -189,11 +220,18 @@ def search_cluster(
         payload = json_output.format_search_clusters_json(text, run_id, hits)
         console.print_json(data=payload)
         return
-    
-    if not hits:
-        console.print("[yellow]No results found[/yellow]")
-        return
-    
-    table = tables.format_search_results_clusters_table(hits)
-    console.print(table)
+    elif xml:
+        if not hits:
+            console.print("[yellow]No results found[/yellow]")
+            return
+        xml_output = json_output.format_search_results_clusters_xml(text, hits)
+        console.print(xml_output)
+    else:
+        # Default to table format
+        if not hits:
+            console.print("[yellow]No results found[/yellow]")
+            return
+        
+        table_output = tables.format_search_results_clusters_table(hits)
+        console.print(table_output)
 

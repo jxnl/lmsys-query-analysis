@@ -15,6 +15,10 @@ chroma_path_option = typer.Option(None, help="ChromaDB path (default: ~/.lmsys-q
 embedding_model_option = typer.Option("openai/text-embedding-3-small", help="Embedding model (provider/model)")
 json_output_option = typer.Option(False, "--json", help="Emit JSON output")
 
+# Output format options
+table_output_option = typer.Option(False, "--table", help="Force table output (default when no format specified)")
+xml_output_option = typer.Option(False, "--xml", help="Emit XML output")
+
 
 def with_error_handling(func: Callable) -> Callable:
     """Decorator to add consistent error handling to CLI commands."""

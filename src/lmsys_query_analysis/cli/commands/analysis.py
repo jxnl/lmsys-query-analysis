@@ -3,8 +3,8 @@
 import typer
 from rich.console import Console
 
-from ..common import with_error_handling, db_path_option
-from ..formatters import tables
+from ..common import with_error_handling, db_path_option, table_output_option, xml_output_option
+from ..formatters import tables, json_output
 from ...db.connection import get_db
 from ...services import query_service, run_service, cluster_service, export_service
 
@@ -18,8 +18,15 @@ def list_queries(
     model: str = typer.Option(None, help="Filter by model name"),
     limit: int = typer.Option(50, help="Number of queries to display"),
     db_path: str = db_path_option,
+    table: bool = table_output_option,
+    xml: bool = xml_output_option,
 ):
     """List queries with optional filtering by run_id and cluster_id."""
+    # Validate format options
+    if table and xml:
+        console.print("[red]Error: Cannot specify both --table and --xml[/red]")
+        raise typer.Exit(1)
+        
     db = get_db(db_path)
     queries = query_service.list_queries(db, run_id, cluster_id, model, limit)
     
@@ -27,16 +34,29 @@ def list_queries(
         console.print("[yellow]No queries found for given filters[/yellow]")
         return
     
-    table = tables.format_queries_table(queries)
-    console.print(table)
+    # Output in requested format
+    if xml:
+        xml_output = json_output.format_queries_xml(queries, f"Queries ({len(queries)} shown)")
+        console.print(xml_output)
+    else:
+        # Default to table format
+        table_output = tables.format_queries_table(queries)
+        console.print(table_output)
 
 
 @with_error_handling
 def runs(
     db_path: str = db_path_option,
     latest: bool = typer.Option(False, "--latest", help="Show only the most recent run"),
+    table: bool = table_output_option,
+    xml: bool = xml_output_option,
 ):
     """List all clustering runs."""
+    # Validate format options
+    if table and xml:
+        console.print("[red]Error: Cannot specify both --table and --xml[/red]")
+        raise typer.Exit(1)
+        
     db = get_db(db_path)
     runs_list = run_service.list_runs(db, latest=latest)
     
@@ -44,8 +64,14 @@ def runs(
         console.print("[yellow]No clustering runs found[/yellow]")
         return
     
-    table = tables.format_runs_table(runs_list, latest=latest)
-    console.print(table)
+    # Output in requested format
+    if xml:
+        xml_output = json_output.format_runs_xml(runs_list, latest=latest)
+        console.print(xml_output) 
+    else:
+        # Default to table format
+        table_output = tables.format_runs_table(runs_list, latest=latest)
+        console.print(table_output)
 
 
 @with_error_handling
@@ -59,8 +85,15 @@ def list_clusters(
         0, help="Show up to N example queries per cluster"
     ),
     example_width: int = typer.Option(80, help="Max characters per example query"),
+    table: bool = table_output_option,
+    xml: bool = xml_output_option,
 ):
     """List all clusters for a run with their titles and descriptions."""
+    # Validate format options
+    if table and xml:
+        console.print("[red]Error: Cannot specify both --table and --xml[/red]")
+        raise typer.Exit(1)
+    
     db = get_db(db_path)
     summaries = cluster_service.list_cluster_summaries(
         db, run_id, summary_run_id, alias, limit
@@ -73,29 +106,34 @@ def list_clusters(
         )
         return
     
-    # Display table
-    table = tables.format_cluster_summaries_table(
-        summaries, run_id, show_examples, example_width
-    )
-    console.print(table)
-    
-    # Display examples in detail if requested
-    if show_examples and show_examples > 0:
-        console.print("\n[bold cyan]Examples per cluster[/bold cyan]")
-        for summary in summaries:
-            reps = summary.representative_queries or []
-            if not reps:
-                continue
-            console.print(
-                f"[yellow]Cluster {summary.cluster_id}[/yellow] — {summary.title or ''}"
-            )
-            for ex in reps[:show_examples]:
-                ex_line = ex.splitlines()[0].strip()
-                if len(ex_line) > example_width:
-                    ex_line = ex_line[: example_width - 3] + "..."
-                console.print(f"  - {ex_line}")
-    
-    console.print(f"\n[cyan]Total: {len(summaries)} clusters[/cyan]")
+    # Output in requested format
+    if xml:
+        xml_output = json_output.format_cluster_summaries_xml(summaries, run_id)
+        console.print(xml_output)
+    else:
+        # Default to table format
+        table_output = tables.format_cluster_summaries_table(
+            summaries, run_id, show_examples, example_width
+        )
+        console.print(table_output)
+        
+        # Display examples in detail if requested (only for table format)
+        if show_examples and show_examples > 0:
+            console.print("\n[bold cyan]Examples per cluster[/bold cyan]")
+            for summary in summaries:
+                reps = summary.representative_queries or []
+                if not reps:
+                    continue
+                console.print(
+                    f"[yellow]Cluster {summary.cluster_id}[/yellow] — {summary.title or ''}"
+                )
+                for ex in reps[:show_examples]:
+                    ex_line = ex.splitlines()[0].strip()
+                    if len(ex_line) > example_width:
+                        ex_line = ex_line[: example_width - 3] + "..."
+                    console.print(f"  - {ex_line}")
+        
+        console.print(f"\n[cyan]Total: {len(summaries)} clusters[/cyan]")
 
 
 @with_error_handling
