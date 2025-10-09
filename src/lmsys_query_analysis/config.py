@@ -20,9 +20,9 @@ class RunnerConfig(BaseModel):
     use_streaming: bool = Field(default=False, description="Use streaming for large datasets")
 
     # Embedding configuration
-    embedding_model: str = Field(default="embed-v4.0", description="Embedding model name")
+    embedding_model: str = Field(default="text-embedding-3-small", description="Embedding model name")
     embedding_provider: Literal["cohere", "openai", "sentence-transformers"] = Field(
-        default="cohere",
+        default="openai",
         description="Embedding provider"
     )
     embedding_batch_size: int = Field(default=100, gt=0, description="Batch size for embedding generation")
@@ -44,10 +44,10 @@ class RunnerConfig(BaseModel):
 
     # LLM configuration
     llm_provider: Literal["anthropic", "openai", "groq"] = Field(
-        default="anthropic",
+        default="openai",
         description="LLM provider for summarization and hierarchy"
     )
-    llm_model: str = Field(default="claude-3-5-sonnet-20241022", description="LLM model name")
+    llm_model: str = Field(default="gpt-4o-mini", description="LLM model name")
 
     # Database configuration
     db_path: Optional[str] = Field(default=None, description="Persistent database path")

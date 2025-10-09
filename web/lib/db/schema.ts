@@ -63,9 +63,47 @@ export const clusterHierarchies = sqliteTable('cluster_hierarchies', {
   createdAt: text('created_at').notNull(),
 });
 
+// Mirror of Python ClusterEdit model
+export const clusterEdits = sqliteTable('cluster_edits', {
+  id: integer('id').primaryKey(),
+  runId: text('run_id').notNull(),
+  clusterId: integer('cluster_id'),
+  editType: text('edit_type').notNull(), // 'rename', 'move_query', 'merge', 'split', 'delete', 'tag'
+  editor: text('editor').notNull(), // 'claude', 'cli-user', or username
+  timestamp: text('timestamp').notNull(),
+  oldValue: text('old_value', { mode: 'json' }), // Previous state
+  newValue: text('new_value', { mode: 'json' }), // New state
+  reason: text('reason'), // Why the edit was made
+});
+
+// Mirror of Python ClusterMetadata model
+export const clusterMetadata = sqliteTable('cluster_metadata', {
+  id: integer('id').primaryKey(),
+  runId: text('run_id').notNull(),
+  clusterId: integer('cluster_id').notNull(),
+  coherenceScore: integer('coherence_score'), // 1-5 scale
+  quality: text('quality'), // 'high', 'medium', 'low'
+  flags: text('flags', { mode: 'json' }), // ['language_mixing', 'needs_review', etc.]
+  notes: text('notes'), // Free-form notes
+  lastEdited: text('last_edited').notNull(),
+});
+
+// Mirror of Python OrphanedQuery model
+export const orphanedQueries = sqliteTable('orphaned_queries', {
+  id: integer('id').primaryKey(),
+  runId: text('run_id').notNull(),
+  queryId: integer('query_id').notNull(),
+  originalClusterId: integer('original_cluster_id'),
+  orphanedAt: text('orphaned_at').notNull(),
+  reason: text('reason'),
+});
+
 // Type exports for use in components
 export type Query = typeof queries.$inferSelect;
 export type ClusteringRun = typeof clusteringRuns.$inferSelect;
 export type QueryCluster = typeof queryClusters.$inferSelect;
 export type ClusterSummary = typeof clusterSummaries.$inferSelect;
 export type ClusterHierarchy = typeof clusterHierarchies.$inferSelect;
+export type ClusterEdit = typeof clusterEdits.$inferSelect;
+export type ClusterMetadata = typeof clusterMetadata.$inferSelect;
+export type OrphanedQuery = typeof orphanedQueries.$inferSelect;

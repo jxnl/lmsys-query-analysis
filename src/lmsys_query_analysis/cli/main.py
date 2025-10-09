@@ -13,6 +13,7 @@ from .commands import (
     hierarchy,
     chroma,
     verify,
+    edit,
 )
 
 app = typer.Typer(help="LMSYS Query Analysis CLI")
@@ -32,6 +33,7 @@ def _configure(
 app.add_typer(clustering.app, name="cluster")
 app.add_typer(chroma.app, name="chroma")
 app.add_typer(verify.app, name="verify")
+app.add_typer(edit.app, name="edit")
 
 # Register data commands
 app.command()(data.load)

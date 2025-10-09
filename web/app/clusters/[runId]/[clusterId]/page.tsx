@@ -1,10 +1,12 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getClusterSummary, getClusterQueries } from '@/app/actions';
+import { getClusterSummary, getClusterQueries, getClusterMetadata, getClusterEditHistory } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ClusterQueriesClient } from './cluster-queries-client';
+import { ClusterMetadataPanel } from './cluster-metadata-panel';
+import { EditHistoryPanel } from './edit-history-panel';
 
 interface ClusterPageProps {
   params: Promise<{ runId: string; clusterId: string }>;
@@ -32,6 +34,10 @@ export default async function ClusterPage({ params, searchParams }: ClusterPageP
     page: initialData.page,
     pages: initialData.pages
   });
+
+  // Fetch cluster metadata and edit history
+  const metadata = await getClusterMetadata(runId, clusterId);
+  const editHistory = await getClusterEditHistory(runId, clusterId);
 
   // If no queries found, return 404
   if (initialData.queries.length === 0 && page === 1) {
@@ -95,6 +101,11 @@ export default async function ClusterPage({ params, searchParams }: ClusterPageP
           </CardContent>
         </Card>
       )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <ClusterMetadataPanel metadata={metadata} runId={runId} clusterId={clusterId} />
+        <EditHistoryPanel edits={editHistory} runId={runId} clusterId={clusterId} />
+      </div>
 
       <Card>
         <CardHeader>

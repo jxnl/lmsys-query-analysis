@@ -15,6 +15,7 @@ This repository provides **terminal-based CLI tools for agents to perform compre
 - **Contrastive Analysis**: Highlight what makes each cluster unique compared to neighbors
 - **Semantic Search**: Navigate queries and clusters using natural language
 - **Hypothesis Generation**: Discover insights about user behavior, query patterns, and LLM interactions
+- **Agentic Cluster Curation**: Interactive CLI tools (`lmsys edit`) for fixing cluster quality issues through direct CRUD operations
 
 ### Agent Workflow
 
@@ -90,6 +91,32 @@ uv run lmsys list-clusters <RUN_ID>                       # View cluster titles
 uv run lmsys search "python" --run-id <RUN_ID>            # Semantic search
 ```
 
+**Cluster Curation Commands (`lmsys edit`):**
+```bash
+# Query operations
+uv run lmsys edit view-query <QUERY_ID>                                    # View query with cluster assignments
+uv run lmsys edit move-query <RUN_ID> --query-id <ID> --to-cluster <ID>   # Move query to different cluster
+uv run lmsys edit move-queries <RUN_ID> --query-ids 1,2,3 --to-cluster <ID>  # Batch move queries
+
+# Cluster operations
+uv run lmsys edit rename-cluster <RUN_ID> --cluster-id <ID> --title "..."           # Rename cluster
+uv run lmsys edit merge-clusters <RUN_ID> --source 1,2,3 --target <ID>              # Merge clusters
+uv run lmsys edit split-cluster <RUN_ID> --cluster-id <ID> --query-ids 1,2,3 \
+  --new-title "..." --new-description "..."                                          # Split cluster
+uv run lmsys edit delete-cluster <RUN_ID> --cluster-id <ID> --orphan                # Delete cluster
+
+# Metadata operations
+uv run lmsys edit tag-cluster <RUN_ID> --cluster-id <ID> --coherence 3 \
+  --quality medium --notes "..."                                                     # Tag cluster metadata
+uv run lmsys edit flag-cluster <RUN_ID> --cluster-id <ID> --flag "language_mixing" # Flag for review
+
+# Audit operations
+uv run lmsys edit history <RUN_ID> --cluster-id <ID>     # View edit history
+uv run lmsys edit audit <RUN_ID>                         # Full audit log
+uv run lmsys edit orphaned <RUN_ID>                      # List orphaned queries
+uv run lmsys edit select-bad-clusters <RUN_ID> --max-size 10  # Find problematic clusters
+```
+
 **Testing:**
 ```bash
 uv run pytest -v                                    # All tests
@@ -141,6 +168,18 @@ The codebase follows a layered architecture:
 - `hierarchy_run_id` (format: `hier-<run_id>-<timestamp>`)
 - `run_id`, `cluster_id`, `parent_cluster_id`, `level` (0=leaf, 1=first merge, etc.)
 - `children_ids` (JSON array), `title`, `description`
+
+**cluster_edits** - Audit trail for cluster curation operations
+- `run_id`, `cluster_id`, `edit_type` ('rename', 'move_query', 'merge', 'split', 'delete', 'tag')
+- `editor` ('claude', 'cli-user', or username), `timestamp`
+- `old_value` (JSON), `new_value` (JSON), `reason` (text)
+
+**cluster_metadata** - Quality annotations for clusters
+- `run_id`, `cluster_id`, `coherence_score` (1-5), `quality` ('high', 'medium', 'low')
+- `flags` (JSON array: 'language_mixing', 'needs_review', etc.), `notes`, `last_edited`
+
+**orphaned_queries** - Queries removed from clusters
+- `run_id`, `query_id`, `original_cluster_id`, `orphaned_at`, `reason`
 
 ### ChromaDB Collections
 
@@ -215,12 +254,17 @@ Provider is stored in `clustering_runs.parameters` to ensure consistency across 
 ```
 src/lmsys_query_analysis/
 ├── cli/
-│   └── main.py              # Typer CLI: load, cluster, summarize, merge-clusters, search, etc.
+│   ├── main.py              # Typer CLI: load, cluster, summarize, merge-clusters, search, edit
+│   └── commands/
+│       ├── edit.py          # Cluster curation commands (lmsys edit)
+│       └── ...              # Other command modules
 ├── db/
-│   ├── models.py            # SQLModel schemas (Query, ClusteringRun, QueryCluster, etc.)
+│   ├── models.py            # SQLModel schemas (Query, ClusteringRun, ClusterEdit, etc.)
 │   ├── connection.py        # Database manager (default: ~/.lmsys-query-analysis/queries.db)
 │   ├── loader.py            # LMSYS dataset loader with HuggingFace integration
 │   └── chroma.py            # ChromaDB manager (default: ~/.lmsys-query-analysis/chroma/)
+├── services/
+│   └── curation_service.py  # Cluster curation business logic (move, rename, merge, tag, etc.)
 ├── clustering/
 │   ├── embeddings.py        # Multi-provider embedding wrapper
 │   ├── kmeans.py            # MiniBatchKMeans streaming clustering

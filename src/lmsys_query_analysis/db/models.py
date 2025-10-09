@@ -148,3 +148,108 @@ class ClusterHierarchy(SQLModel, table=True):
 
     # Relationship
     run: Optional[ClusteringRun] = Relationship()
+
+
+class ClusterEdit(SQLModel, table=True):
+    """Table storing audit trail for all cluster curation operations.
+
+    Tracks WHO changed WHAT and WHY, enabling full provenance and history
+    for cluster modifications made through CLI or web interface.
+    """
+
+    __tablename__ = "cluster_edits"
+    __table_args__ = (
+        Index("ix_cluster_edits_run_id", "run_id"),
+        Index("ix_cluster_edits_cluster_id", "cluster_id"),
+        Index("ix_cluster_edits_edit_type", "edit_type"),
+        Index("ix_cluster_edits_timestamp", "timestamp"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    run_id: str = Field(
+        sa_column=Column(
+            "run_id",
+            ForeignKey("clustering_runs.run_id", ondelete="CASCADE"),
+        ),
+    )
+    cluster_id: Optional[int] = None  # Null for query-level edits
+    edit_type: str  # 'rename', 'move_query', 'merge', 'split', 'delete', 'tag'
+    editor: str  # 'claude', 'cli-user', or username
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+    # Change tracking
+    old_value: Optional[dict] = Field(default=None, sa_column=Column(JSON))  # Previous state
+    new_value: Optional[dict] = Field(default=None, sa_column=Column(JSON))  # New state
+    reason: Optional[str] = None  # Why the edit was made
+
+    # Relationship
+    run: Optional[ClusteringRun] = Relationship()
+
+
+class ClusterMetadata(SQLModel, table=True):
+    """Table storing quality annotations and metadata for clusters.
+
+    Enables quality tracking, filtering, and flagging of clusters that
+    need attention or review.
+    """
+
+    __tablename__ = "cluster_metadata"
+    __table_args__ = (
+        UniqueConstraint("run_id", "cluster_id", name="uq_clustermetadata_run_cluster"),
+        Index("ix_cluster_metadata_run_id", "run_id"),
+        Index("ix_cluster_metadata_quality", "quality"),
+        Index("ix_cluster_metadata_coherence_score", "coherence_score"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    run_id: str = Field(
+        sa_column=Column(
+            "run_id",
+            ForeignKey("clustering_runs.run_id", ondelete="CASCADE"),
+        ),
+    )
+    cluster_id: int
+    coherence_score: Optional[int] = None  # 1-5 scale
+    quality: Optional[str] = None  # 'high', 'medium', 'low'
+    flags: Optional[list] = Field(default=None, sa_column=Column(JSON))  # ['language_mixing', 'needs_review', etc.]
+    notes: Optional[str] = None  # Free-form notes
+    last_edited: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationship
+    run: Optional[ClusteringRun] = Relationship()
+
+
+class OrphanedQuery(SQLModel, table=True):
+    """Table tracking queries that have been removed from clusters.
+
+    Maintains provenance for queries removed during cluster deletion or
+    manual curation operations.
+    """
+
+    __tablename__ = "orphaned_queries"
+    __table_args__ = (
+        UniqueConstraint("run_id", "query_id", name="uq_orphanedquery_run_query"),
+        Index("ix_orphaned_queries_run_id", "run_id"),
+        Index("ix_orphaned_queries_query_id", "query_id"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    run_id: str = Field(
+        sa_column=Column(
+            "run_id",
+            ForeignKey("clustering_runs.run_id", ondelete="CASCADE"),
+        ),
+    )
+    query_id: int = Field(
+        sa_column=Column(
+            "query_id",
+            ForeignKey("queries.id", ondelete="CASCADE"),
+        ),
+    )
+    original_cluster_id: Optional[int] = None
+    orphaned_at: datetime = Field(default_factory=datetime.utcnow)
+    reason: Optional[str] = None
+
+    # Relationships
+    run: Optional[ClusteringRun] = Relationship()
+    query: Optional[Query] = Relationship()

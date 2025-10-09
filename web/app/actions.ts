@@ -333,7 +333,7 @@ export async function searchQueries(
         clusters: [],
       });
     }
-    
+
     if (row.clusterId !== null) {
       queryMap.get(queryId).clusters.push({
         clusterId: row.clusterId,
@@ -374,4 +374,62 @@ export async function searchQueries(
     pages,
     limit,
   };
+}
+
+/**
+ * Get cluster metadata (quality, coherence, flags, notes)
+ */
+export async function getClusterMetadata(runId: string, clusterId: number) {
+  const { clusterMetadata } = await import('@/lib/db/schema');
+
+  const [metadata] = await db
+    .select()
+    .from(clusterMetadata)
+    .where(
+      and(
+        eq(clusterMetadata.runId, runId),
+        eq(clusterMetadata.clusterId, clusterId)
+      )
+    );
+
+  return metadata || null;
+}
+
+/**
+ * Get edit history for a cluster
+ */
+export async function getClusterEditHistory(runId: string, clusterId?: number) {
+  const { clusterEdits } = await import('@/lib/db/schema');
+
+  const conditions = [eq(clusterEdits.runId, runId)];
+  if (clusterId !== undefined) {
+    conditions.push(eq(clusterEdits.clusterId, clusterId));
+  }
+
+  const edits = await db
+    .select()
+    .from(clusterEdits)
+    .where(and(...conditions))
+    .orderBy(desc(clusterEdits.timestamp));
+
+  return edits;
+}
+
+/**
+ * Get orphaned queries for a run
+ */
+export async function getOrphanedQueries(runId: string) {
+  const { orphanedQueries } = await import('@/lib/db/schema');
+
+  const results = await db
+    .select({
+      orphan: orphanedQueries,
+      query: queries,
+    })
+    .from(orphanedQueries)
+    .innerJoin(queries, eq(orphanedQueries.queryId, queries.id))
+    .where(eq(orphanedQueries.runId, runId))
+    .orderBy(desc(orphanedQueries.orphanedAt));
+
+  return results;
 }
