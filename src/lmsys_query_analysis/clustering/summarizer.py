@@ -91,14 +91,23 @@ class ClusterSummaryResponse(BaseModel):
     )
     description: str = Field(
         ...,
-        description="""2-3 concise sentences explaining the cluster's PRIMARY purpose and key patterns.
+        description="""3-4 concise sentences explaining what the cluster reveals about user behavior and needs.
 
         Structure:
-        1. What users are trying to accomplish (main goal/task)
-        2. Common characteristics (technical level, phrasing style, specific subtopics)
-        3. What distinguishes this cluster from similar ones (if contrastive neighbors provided)
+        1. What users are trying to accomplish (main goal/task) and their mental model
+        2. How users phrase requests (communication style, expertise level, assumptions about AI)
+        3. Key patterns or product insights (unmet needs, expectation gaps, opportunities)
+        4. What distinguishes this from similar clusters (if contrastive neighbors provided)
 
-        Focus on the DOMINANT pattern (60%+ of queries), not every variation.
+        Focus on the DOMINANT pattern (60%+ of queries). Think like an anthropologist + product manager:
+        - What do these queries reveal about how people use LLMs?
+        - What capabilities do users assume exist?
+        - Are there unmet needs or product opportunities?
+
+        Example: "Users treat the LLM as a code generator, expecting complete solutions from minimal specs.
+        They paste homework problems verbatim or provide only input/output examples, assuming the AI can
+        infer requirements. This reveals an expectation gap - they want 'magic wand' functionality rather
+        than collaborative problem-solving."
         """
     )
 
@@ -308,14 +317,14 @@ class ClusterSummarizer:
         messages = [
             {
                 "role": "system",
-                "content": """You are an expert taxonomist specializing in categorizing user interactions with LLM systems. Your goal is to create PRECISE, SPECIFIC cluster labels that enable quick understanding.
+                "content": """You are an expert in human-AI interaction analysis, acting as both a taxonomist and behavioral researcher. Your goal is to create PRECISE cluster labels that reveal what users really want from LLMs and how they think about AI capabilities.
 
 CRITICAL INSTRUCTIONS:
 
 1. IDENTIFY THE DOMINANT PATTERN (what 60-80% of queries share)
    - Ignore outliers and edge cases
-   - Focus on the PRIMARY use case or theme
-   - If truly mixed, identify the 2-3 main subtypes
+   - Focus on the PRIMARY use case, user behavior, and mental model
+   - Look for patterns in HOW users phrase requests, not just WHAT they ask
 
 2. TITLE REQUIREMENTS:
    - 3-7 words maximum
@@ -332,18 +341,33 @@ CRITICAL INSTRUCTIONS:
      * "Diverse Technical Requests" ❌
      * "Various Creative Writing Tasks" ❌
 
-3. DESCRIPTION REQUIREMENTS:
-   - Sentence 1: State the PRIMARY goal/task (what users want to accomplish)
-   - Sentence 2: Key patterns (technical level, common subtopics, phrasing style)
-   - Sentence 3: (Optional) What distinguishes from neighbors if provided
-   - Be SPECIFIC: mention actual examples, technical terms, languages, frameworks
-   - Focus on DOMINANT pattern, not every variation
+3. DESCRIPTION REQUIREMENTS - THINK LIKE AN ANTHROPOLOGIST + PRODUCT MANAGER:
+   - Sentence 1: What users want to accomplish AND their mental model of the LLM
+   - Sentence 2: How they communicate (phrasing patterns, expertise level, assumptions about AI capabilities)
+   - Sentence 3: Key behavioral insight or product opportunity (expectation gaps, unmet needs, emerging patterns)
+   - Sentence 4: (Optional) What distinguishes from neighbors if provided
+
+   Ask yourself:
+   - What do these queries reveal about how people conceptualize AI?
+   - What capabilities do users assume exist?
+   - Are there expectation gaps or product opportunities?
+   - How do different user types (novices vs experts) approach the same problem?
+
+   Example GOOD description:
+   "Users treat the LLM as a code generator, expecting complete solutions from minimal specs. They paste
+   homework problems verbatim or provide only input/output examples, assuming the AI can infer all
+   requirements. This reveals a 'magic wand' mental model where users want instant results without
+   articulating their needs - an opportunity for guided prompting interfaces."
+
+   Example BAD description:
+   "Users ask programming questions and request code examples in various languages." ❌
 
 4. MULTILINGUAL CLUSTERS:
    - Always specify the language(s) in the title
+   - Note any cultural differences in how users phrase requests
    - Example: "Portuguese Business Writing", "Arabic General Knowledge"
 
-Follow the Pydantic schema rules exactly.""",
+Follow the Pydantic schema rules exactly. Your descriptions should read like insights from a user research report, not generic summaries.""",
             },
             {"role": "user", "content": prompt},
         ]

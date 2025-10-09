@@ -38,24 +38,35 @@ class NeighborhoodCategories(BaseModel):
     """Response for generating higher-level categories from a neighborhood of clusters."""
 
     scratchpad: str = Field(
-        description="""Brief analysis of common themes and patterns across the clusters.
-        Identify 2-4 main themes. Keep to 1-2 paragraphs maximum."""
+        description="""Brief analysis identifying:
+        1. Common behavioral patterns (how users interact with LLMs)
+        2. User segments or mental models (novices vs experts, use case types)
+        3. 2-4 main taxonomic dimensions (e.g., expertise level, task type, domain)
+
+        Keep to 1-2 paragraphs maximum. Think like the Anthropic Education Report - create frameworks, not just lists."""
     )
     categories: List[str] = Field(
-        description="""List of broader category names that could encompass multiple clusters.
+        description="""List of broader category names based on behavioral patterns and user segments.
 
         Requirements:
         - Generate 8-15 category names
-        - Be specific enough to be meaningful (avoid "General Queries", "Various Topics")
+        - Focus on USER BEHAVIORS and MENTAL MODELS, not just topics
         - Use concrete terminology (technical terms, domains, specific actions)
+        - Think taxonomically: identify axes like "expertise level", "autonomy", "output type"
         - Describe harmful/sensitive topics explicitly for observability
-        - Each category should potentially cover 2-5 of the input clusters
+        - Each category should represent a distinct user segment or interaction pattern
 
-        Examples:
-        - "Python Web Development and API Implementation"
-        - "Creative Writing and Storytelling Prompts"
-        - "Toxic Content and Jailbreak Attempts"
-        - "Multilingual Translation Requests (Spanish/Portuguese)"
+        Examples (behavioral/segment-focused):
+        - "Novice Programmers Seeking Complete Code Solutions"
+        - "Creative Writers Requesting Story Prompts and Continuations"
+        - "Jailbreak Attempts via Roleplay Prompts"
+        - "Non-Native Speakers Using LLMs for Professional Translation"
+        - "Expert Developers Seeking Architectural Advice"
+
+        Examples (BAD - too topic-focused):
+        - "Python Programming" ❌
+        - "Creative Writing" ❌
+        - "Translation" ❌
         """,
         min_length=8,
         max_length=15
@@ -99,27 +110,46 @@ class RefinedClusterSummary(BaseModel):
     """Response for refining a parent cluster based on its assigned children."""
 
     summary: str = Field(
-        description="""Two-sentence summary of the cluster in past tense.
+        description="""Two-sentence behavioral insight summary in past tense.
 
-        Sentence 1: What users were trying to accomplish
-        Sentence 2: Common characteristics or patterns across children
+        Sentence 1: What users were trying to accomplish and their mental model/approach
+        Sentence 2: Key behavioral patterns, user segments, or product implications across children
 
-        Be specific and avoid generic language.
+        Focus on INSIGHTS, not just description. What does this reveal about how people use LLMs?
+
+        Example GOOD:
+        "Users sought complete coding solutions with minimal specification, treating the LLM as a 'magic wand'
+        code generator. Novices pasted homework problems verbatim while experts provided architectural constraints,
+        revealing distinct mental models of AI capability across expertise levels."
+
+        Example BAD:
+        "Users asked programming questions in various languages. Questions covered web development, data analysis,
+        and algorithms." ❌
         """
     )
     title: str = Field(
-        description="""Concise, specific title (≤10 words) for the parent cluster.
+        description="""Concise, behavior-focused title (≤10 words) for the parent cluster.
 
         Requirements:
         - Accurately reflect ALL assigned children
+        - Emphasize USER BEHAVIOR or SEGMENT when possible
         - Use specific technical terms, domains, or actions
         - Avoid generic words: "Diverse", "Various", "General", "Multiple"
-        - Be actionable and precise for monitoring/observability
+        - Be actionable for product decisions and observability
 
-        Examples:
+        Examples (GOOD - behavioral focus):
+        - "Novice Programmers Expecting Complete Code Generation"
+        - "Jailbreak Attempts via Roleplay and Prompt Injection"
+        - "Non-Native Business Communication and Translation"
+        - "Expert Developers Seeking Architectural Consultation"
+
+        Examples (OK - topic focus):
         - "Python Flask and Django Web Development"
-        - "Harmful Content Generation and Jailbreak Attempts"
         - "Spanish and Portuguese Business Translation"
+
+        Examples (BAD):
+        - "Various Programming Topics" ❌
+        - "General Development Queries" ❌
         """,
         max_length=100
     )
@@ -180,29 +210,38 @@ async def generate_neighborhood_categories(
         for c in clusters
     ])
 
-    system_prompt = """You are a taxonomist organizing user query patterns for AI safety monitoring and observability."""
+    system_prompt = """You are a behavioral researcher and taxonomist analyzing how people interact with LLMs. Your goal is to create a framework that reveals user mental models, behaviors, and product opportunities - not just topic categories."""
 
-    user_prompt = f"""Review these clusters and create {target_count} higher-level categories:
+    user_prompt = f"""Review these clusters and create a behavioral taxonomy with roughly {target_count} categories:
 
 <cluster_list>
 {cluster_str}
 </cluster_list>
 
-Your task is to create roughly {target_count} higher-level cluster names that could potentially include one or more of the provided clusters.
-These higher-level clusters should represent broader categories or themes that emerge from the given clusters, while remaining as specific as possible.
+Your task is to identify USER BEHAVIORS and MENTAL MODELS, then create {target_count} higher-level category names.
+
+Think like the Anthropic Education Report:
+1. Identify behavioral patterns (how do users phrase requests? What do they assume?)
+2. Find user segments (novices vs experts, different mental models)
+3. Map along taxonomic dimensions (expertise level, autonomy/agency, task type, output expectations)
+4. Look for product insights (expectation gaps, unmet needs, emerging use cases)
 
 Guidelines:
-1. Analyze themes, topics, or characteristics common to multiple clusters
-2. Create names that are specific enough to be meaningful, but broad enough to encompass 2-5 clusters
-3. Avoid overly general or vague terms (no "General Queries", "Various Topics", "Diverse Requests")
-4. Do not hesitate to describe harmful or sensitive topics explicitly - specificity is necessary for observability
-5. Ensure category names are distinct from one another
-6. Use clear, concise, descriptive language
+1. FOCUS ON BEHAVIORS, not just topics (e.g., "Novice Programmers Seeking Complete Solutions" not "Programming")
+2. Create names specific enough for product decisions, broad enough to encompass 2-5 clusters
+3. Avoid generic terms ("General Queries", "Various Topics", "Diverse Requests")
+4. Explicitly describe harmful/sensitive patterns for observability (e.g., "Jailbreak via Roleplay Prompts")
+5. Ensure categories represent distinct user segments or interaction patterns
+6. Think: what would a PM or UX researcher want to know?
 
-You should output roughly {target_count} names (acceptable range: 8-15).
+Output roughly {target_count} names (acceptable range: 8-15).
 
-First, use a <scratchpad> to analyze themes (keep brief, 1-2 paragraphs).
-Then provide your category names."""
+First, use <scratchpad> to:
+- Identify 2-4 main behavioral patterns or user segments
+- Note taxonomic dimensions (e.g., expertise, task complexity, autonomy)
+- Consider what this reveals about how people conceptualize AI
+
+Then provide your category names focusing on user behavior and mental models."""
 
     response = await client.chat.completions.create(
         response_model=NeighborhoodCategories,
@@ -336,34 +375,48 @@ async def refine_parent_cluster(
     """
     children_str = "\n".join([f"<cluster>{title}</cluster>" for title in child_clusters])
 
-    system_prompt = """You are summarizing a group of related clusters into a precise, actionable description."""
+    system_prompt = """You are a behavioral researcher creating insight-driven cluster summaries. Focus on what these patterns reveal about user behavior, mental models, and product opportunities."""
 
-    user_prompt = f"""Summarize this group of related cluster names:
+    user_prompt = f"""Analyze this group of related clusters and create a behavioral insight summary:
 
 <child_clusters>
 {children_str}
 </child_clusters>
 
 Requirements:
-1. Create a two-sentence summary in past tense:
-   - Sentence 1: What users were trying to accomplish
-   - Sentence 2: Common characteristics or patterns
+1. Create a two-sentence BEHAVIORAL INSIGHT summary in past tense:
+   - Sentence 1: What users were trying to accomplish AND their mental model/approach to AI
+   - Sentence 2: Key behavioral patterns, user segments, or product implications
 
-2. Generate a title (≤10 words):
-   - Accurately reflect ALL assigned children
-   - Use specific technical terms, domains, or actions
-   - Avoid generic words: "Diverse", "Various", "General"
-   - Be actionable for monitoring/observability
+   Focus on INSIGHTS not description. What does this reveal?
 
-Example good titles:
+   Example GOOD:
+   "Users sought complete coding solutions with minimal specification, treating the LLM as a 'magic wand'
+   code generator. Novices pasted homework verbatim while experts provided constraints, revealing distinct
+   mental models across expertise levels - opportunity for adaptive interfaces."
+
+   Example BAD:
+   "Users asked programming questions. Questions covered multiple languages and frameworks." ❌
+
+2. Generate a behavior-focused title (≤10 words):
+   - Accurately reflect ALL children
+   - EMPHASIZE USER BEHAVIOR or SEGMENT when possible
+   - Use specific terms (technologies, domains, actions)
+   - Avoid: "Diverse", "Various", "General", "Multiple"
+   - Be actionable for product/UX decisions
+
+Example GOOD titles (behavioral focus):
+- "Novice Programmers Expecting Complete Code Generation"
+- "Jailbreak Attempts via Roleplay and Prompt Injection"
+- "Non-Native Speakers Using LLMs for Professional Translation"
+
+Example OK titles (topic focus):
 - "Python Flask and Django Web Development"
-- "Harmful Content Generation and Jailbreak Attempts"
 - "Spanish and Portuguese Business Translation"
 
-Example bad titles:
-- "Various Programming Queries"
-- "General User Requests"
-- "Diverse Technical Topics"
+Example BAD:
+- "Various Programming Queries" ❌
+- "General Development Questions" ❌
 """
 
     response = await client.chat.completions.create(
