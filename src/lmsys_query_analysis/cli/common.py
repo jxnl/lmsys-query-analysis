@@ -12,7 +12,7 @@ logger = logging.getLogger("lmsys")
 # Reusable option definitions
 db_path_option = typer.Option(None, help="Database path (default: ~/.lmsys-query-analysis/queries.db)")
 chroma_path_option = typer.Option(None, help="ChromaDB path (default: ~/.lmsys-query-analysis/chroma)")
-embedding_model_option = typer.Option("cohere/embed-v4.0", help="Embedding model (provider/model)")
+embedding_model_option = typer.Option("openai/text-embedding-3-small", help="Embedding model (provider/model)")
 json_output_option = typer.Option(False, "--json", help="Emit JSON output")
 
 

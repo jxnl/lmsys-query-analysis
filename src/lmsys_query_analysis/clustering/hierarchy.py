@@ -384,8 +384,8 @@ Example bad titles:
 async def merge_clusters_hierarchical(
     base_clusters: List[Dict],
     run_id: str,
-    embedding_model: str = "embed-v4.0",
-    embedding_provider: str = "cohere",
+    embedding_model: str = "text-embedding-3-small",
+    embedding_provider: str = "openai",
     llm_provider: str = "openai",
     llm_model: str = "gpt-4o-mini",
     target_levels: int = 3,

@@ -104,8 +104,8 @@ def load_config_from_yaml(yaml_path: str) -> RunnerConfig:
         n_clusters: 200
         enable_hierarchy: true
         hierarchy_levels: 4
-        llm_provider: anthropic
-        llm_model: claude-3-5-sonnet-20241022
+        llm_provider: openai
+        llm_model: gpt-4o-mini
         log_level: INFO
         db_path: ./analysis.db
         ```

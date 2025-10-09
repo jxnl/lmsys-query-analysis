@@ -38,8 +38,8 @@ class EmbeddingGenerator:
 
     def __init__(
         self,
-        model_name: str = "embed-v4.0",
-        provider: str = "cohere",
+        model_name: str = "text-embedding-3-small",
+        provider: str = "openai",
         api_key: Optional[str] = None,
         concurrency: int = 100,
         request_timeout: float = 30.0,
@@ -48,8 +48,8 @@ class EmbeddingGenerator:
         """Initialize embedding generator.
 
         Args:
-            model_name: Model name (default: all-MiniLM-L6-v2 for sentence-transformers,
-                       text-embedding-3-small for openai, embed-v4.0 for cohere)
+            model_name: Model name (default: text-embedding-3-small for openai,
+                       all-MiniLM-L6-v2 for sentence-transformers, embed-v4.0 for cohere)
             provider: "sentence-transformers", "openai", or "cohere"
             api_key: API key for OpenAI/Cohere (or set OPENAI_API_KEY/COHERE_API_KEY env var)
             output_dimension: For Cohere v4, use 512 or 1024 (Matryoshka dimensions)

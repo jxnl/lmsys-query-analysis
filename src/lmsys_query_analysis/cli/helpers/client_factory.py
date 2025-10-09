@@ -83,7 +83,7 @@ def create_embedding_generator(
 def create_queries_client(
     db: Database,
     run_id: Optional[str] = None,
-    embedding_model_string: str = "cohere/embed-v4.0",
+    embedding_model_string: str = "openai/text-embedding-3-small",
     chroma_path: Optional[str] = None,
 ) -> QueriesClient:
     """Create QueriesClient with proper configuration.
@@ -112,7 +112,7 @@ def create_queries_client(
 def create_clusters_client(
     db: Database,
     run_id: Optional[str] = None,
-    embedding_model_string: str = "cohere/embed-v4.0",
+    embedding_model_string: str = "openai/text-embedding-3-small",
     chroma_path: Optional[str] = None,
 ) -> ClustersClient:
     """Create ClustersClient with proper configuration.
