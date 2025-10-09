@@ -35,8 +35,8 @@ from lmsys_query_analysis import (
     load_config_from_yaml,
     save_config_to_yaml,
 )
-from lmsys_query_analysis.db.connection import Database
-from lmsys_query_analysis.db.chroma import ChromaManager
+from lmsys_query_analysis.db.connection import Database, DEFAULT_DB_PATH
+from lmsys_query_analysis.db.chroma import ChromaManager, DEFAULT_CHROMA_PATH
 from lmsys_query_analysis.semantic.clusters import ClustersClient
 from lmsys_query_analysis.semantic.queries import QueriesClient
 from lmsys_query_analysis.services import cluster_service
@@ -115,7 +115,7 @@ def display_query_results(results, title: str, max_results: int = 5):
     console.print(table)
 
 
-async def demonstrate_searches(run_id: str, hierarchy_run_id: str, db_path: str):
+async def demonstrate_searches(run_id: str, hierarchy_run_id: str, db_path: str | None = None):
     """Demonstrate semantic search on clusters and queries."""
 
     console.print("[bold]Demonstrating semantic search capabilities[/bold]\n")
@@ -250,7 +250,8 @@ async def run_example():
         hierarchy_levels=3,
         llm_provider="anthropic",
         llm_model="claude-3-5-sonnet-20241022",
-        db_path="./examples/example_analysis.db",
+        db_path=str(DEFAULT_DB_PATH),  # ~/.lmsys-query-analysis/queries.db
+        chroma_path=str(DEFAULT_CHROMA_PATH),  # ~/.lmsys-query-analysis/chroma
         log_level="INFO",
     )
 
@@ -295,25 +296,27 @@ async def run_example():
             f"""[bold]Your analysis is complete! Here's how to explore it:[/bold]
 
 [cyan]1. View all runs:[/cyan]
-   uv run lmsys runs --db-path {config.db_path}
+   uv run lmsys runs
 
 [cyan]2. List cluster summaries (after summarization):[/cyan]
-   uv run lmsys list-clusters {results['run_id']} --db-path {config.db_path}
+   uv run lmsys list-clusters {results['run_id']}
 
 [cyan]3. Generate cluster summaries:[/cyan]
-   uv run lmsys summarize {results['run_id']} --db-path {config.db_path}
+   uv run lmsys summarize {results['run_id']}
 
 [cyan]4. Search queries semantically:[/cyan]
    uv run lmsys search "python programming" --run-id {results['run_id']}
 
 [cyan]5. Inspect a specific cluster:[/cyan]
-   uv run lmsys inspect {results['run_id']} <cluster_id> --db-path {config.db_path}
+   uv run lmsys inspect {results['run_id']} <cluster_id>
 
 [cyan]6. Export results to JSON:[/cyan]
-   uv run lmsys export {results['run_id']} --output results.json --db-path {config.db_path}
+   uv run lmsys export {results['run_id']} --output results.json
 
 [cyan]7. Create hierarchy (if not enabled above):[/cyan]
-   uv run lmsys merge-clusters {results['run_id']} --db-path {config.db_path}
+   uv run lmsys merge-clusters {results['run_id']}
+
+[dim]Note: All commands use default paths (~/.lmsys-query-analysis/)[/dim]
 """,
             title="Next Steps",
             border_style="green"
@@ -385,7 +388,7 @@ This example demonstrates the complete workflow for analyzing LMSYS queries:
   • Loads 1,000 queries from LMSYS-1M dataset
   • Generates embeddings using Cohere embed-v4.0
   • Clusters queries into 100 groups using KMeans
-  • Saves results to examples/example_analysis.db
+  • Saves results to ~/.lmsys-query-analysis/queries.db
   • Provides commands to explore results
 
 [cyan]Customization:[/cyan]

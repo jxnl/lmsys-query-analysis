@@ -28,9 +28,42 @@ Agents can use this tool to:
 
 All capabilities are accessible through the `lmsys` CLI command in a composable workflow: `load → cluster → summarize → merge-clusters → search → export`
 
+### Web Viewer
+
+A **Next.js-based interactive web interface** (`web/`) provides read-only visualization of clustering results:
+
+- **Jobs Dashboard**: Browse all clustering runs with metadata
+- **Hierarchy Explorer**: Navigate multi-level cluster hierarchies with collapsible tree UI
+- **Query Browser**: Paginated view of queries within each cluster (50 per page)
+- **Cluster Details**: LLM-generated summaries, descriptions, and representative queries
+
+**Architecture**: Next.js 15 + Drizzle ORM (SQLite) + ChromaDB JS Client + Zod + ShadCN UI
+
+**Data Flow**: Python CLI creates data artifacts (SQLite + ChromaDB) → Next.js reads directly from these artifacts → Browser UI
+
+**Quick Start**:
+```bash
+cd web
+npm install
+npm run dev  # Opens http://localhost:3000
+```
+
+The viewer connects to the same default paths as the Python CLI (`~/.lmsys-query-analysis/`). See `web/README.md` for full documentation.
+
 ### Extensibility
 
 If agents identify gaps in functionality or need additional tools to enhance their analysis capabilities, they should suggest these improvements to the user for potential implementation.
+
+## User Preferences
+
+**Default Analysis Workflow**: When the user requests to "run an analysis" or similar commands, ALWAYS execute the complete analysis pipeline including hierarchical merging:
+
+1. Load data with embeddings (`lmsys load --limit N --use-chroma`)
+2. Run clustering (`lmsys cluster kmeans --n-clusters N --use-chroma`)
+3. Generate LLM summaries (`lmsys summarize <RUN_ID> --alias "analysis-v1"`)
+4. **ALWAYS run hierarchical merge** (`lmsys merge-clusters <RUN_ID>`)
+
+The hierarchical merge step is essential for organizing clusters into a navigable structure and should never be skipped.
 
 ## Build, Test, and Dev Commands
 

@@ -47,13 +47,14 @@ chmod +x examples/example_runner.py
    - Anthropic Claude for summaries
    - Hierarchical organization (3 levels)
    - Saves config to `examples/example_config.yaml`
+   - Uses default paths: `~/.lmsys-query-analysis/queries.db` and `~/.lmsys-query-analysis/chroma`
 
 2. **Runs Analysis**
    - Downloads and processes LMSYS data
    - Generates embeddings
    - Performs clustering
    - Creates hierarchical organization
-   - Saves to `examples/example_analysis.db`
+   - Saves to `~/.lmsys-query-analysis/queries.db` (default location)
 
 3. **Demonstrates Search**
    - Searches clusters by topic ("programming languages")
@@ -93,7 +94,7 @@ config = RunnerConfig(
   • Clusters: 100
   • Embedding: cohere/embed-v4.0
   • LLM: anthropic/claude-3-5-sonnet-20241022
-  • Database: ./examples/example_analysis.db
+  • Database: ~/.lmsys-query-analysis/queries.db
   • Hierarchy: Enabled
 
 ✓ Configuration saved to ./examples/example_config.yaml
@@ -121,7 +122,7 @@ config = RunnerConfig(
 │ Hierarchy Run ID        │ hier-kmeans-100-...          │
 │ Total Queries Processed │ 1000                         │
 │ Execution Time          │ 456.78s                      │
-│ Database Path           │ ./examples/example_analysis… │
+│ Database Path           │ ~/.lmsys-query-analysis/q…   │
 └─────────────────────────┴──────────────────────────────┘
 
 ====================================================
@@ -188,8 +189,11 @@ Hierarchy Structure:
 ```
 examples/
 ├── example_runner.py         # This script
-├── example_config.yaml       # Saved configuration
-└── example_analysis.db       # SQLite database with results
+└── example_config.yaml       # Saved configuration
+
+~/.lmsys-query-analysis/
+├── queries.db                # SQLite database with results (default location)
+└── chroma/                   # ChromaDB vector store (default location)
 ```
 
 ## Tips
@@ -205,8 +209,8 @@ examples/
 The runner has an asyncio nesting issue. Use the CLI workflow instead:
 
 ```bash
-uv run lmsys load --limit 1000 --use-chroma --db-path examples/example.db
-uv run lmsys cluster kmeans --n-clusters 100 --use-chroma --db-path examples/example.db
+uv run lmsys load --limit 1000 --use-chroma
+uv run lmsys cluster kmeans --n-clusters 100 --use-chroma
 ```
 
 ### "Missing API keys"
