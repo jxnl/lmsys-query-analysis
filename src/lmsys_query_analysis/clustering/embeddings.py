@@ -14,7 +14,6 @@ import logging
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import anyio
-import nest_asyncio
 from rich.progress import (
     Progress,
     SpinnerColumn,
@@ -22,9 +21,6 @@ from rich.progress import (
     BarColumn,
     TaskProgressColumn,
 )
-
-# Enable nested event loops globally for this module
-nest_asyncio.apply()
 
 # Type definitions for Cohere models
 CohereModel = Literal["embed-v4.0"]
@@ -109,18 +105,48 @@ class EmbeddingGenerator:
         Returns:
             numpy array of embeddings (n_texts, embedding_dim)
         """
+        # Filter out empty/invalid texts and track original indices
+        filtered_texts = []
+        original_indices = []
+        for i, text in enumerate(texts):
+            if text and text.strip():  # Skip empty or whitespace-only strings
+                filtered_texts.append(text.strip())
+                original_indices.append(i)
+        
+        if not filtered_texts:
+            # All texts were empty, return zero embeddings
+            logger = logging.getLogger("lmsys")
+            logger.warning("All input texts were empty, returning zero embeddings")
+            dim = self.get_embedding_dim()
+            return np.zeros((len(texts), dim))
+        
+        # Generate embeddings for valid texts
         if self.provider == "openai":
             # Use async path for OpenAI to parallelize batch requests
-            return self._generate_openai_embeddings_async(
-                texts, batch_size, show_progress
+            valid_embeddings = self._generate_openai_embeddings_async(
+                filtered_texts, batch_size, show_progress
             )
         elif self.provider == "cohere":
             # Use async path for Cohere to parallelize batch requests
-            return self._generate_cohere_embeddings_async(
-                texts, batch_size, show_progress
+            valid_embeddings = self._generate_cohere_embeddings_async(
+                filtered_texts, batch_size, show_progress
             )
         else:
-            return self._generate_st_embeddings(texts, batch_size, show_progress)
+            valid_embeddings = self._generate_st_embeddings(filtered_texts, batch_size, show_progress)
+        
+        # If all texts were valid, return as-is
+        if len(filtered_texts) == len(texts):
+            return valid_embeddings
+        
+        # Otherwise, create full array with zero embeddings for invalid texts
+        logger = logging.getLogger("lmsys")
+        logger.warning(f"Filtered out {len(texts) - len(filtered_texts)} empty/invalid texts")
+        
+        full_embeddings = np.zeros((len(texts), valid_embeddings.shape[1]))
+        for i, orig_idx in enumerate(original_indices):
+            full_embeddings[orig_idx] = valid_embeddings[i]
+        
+        return full_embeddings
 
     def _generate_st_embeddings(
         self,
@@ -187,6 +213,7 @@ class EmbeddingGenerator:
 
         async def worker(idx: int, payload: List[str]):
             backoff = 1.0
+            last_exception = None
             for attempt in range(5):
                 try:
                     async with semaphore:
@@ -199,12 +226,16 @@ class EmbeddingGenerator:
                     if progress_task is not None:
                         progress.update(progress_task, advance=len(payload))
                     return
-                except Exception:
+                except Exception as e:
+                    last_exception = e
                     # Simple exponential backoff
                     await anyio.sleep(backoff)
                     backoff = min(backoff * 2, 8.0)
-            # If all retries fail, raise
-            raise
+            # If all retries fail, raise the last exception
+            if last_exception:
+                raise last_exception
+            else:
+                raise RuntimeError("All retries failed but no exception captured")
 
         async with anyio.create_task_group() as tg:
             for j, (start, payload) in enumerate(batches):
@@ -223,11 +254,7 @@ class EmbeddingGenerator:
         batch_size: int,
         show_progress: bool,
     ) -> np.ndarray:
-        """Generate embeddings using OpenAI API with anyio concurrency.
-
-        Uses nest_asyncio (applied at module level) to handle nested event loops.
-        Uses asyncio instead of anyio.run() to work with nest_asyncio.
-        """
+        """Generate embeddings using OpenAI API with anyio concurrency."""
         import asyncio
 
         logger = logging.getLogger("lmsys")
@@ -249,14 +276,9 @@ class EmbeddingGenerator:
             else:
                 return await self._async_openai_batches(texts, batch_size, None, None)
 
-        # Use asyncio with nest_asyncio support
-        try:
-            loop = asyncio.get_running_loop()
-            # We're in an async context - run_until_complete works with nest_asyncio
-            all_embeddings = loop.run_until_complete(_run())
-        except RuntimeError:
-            # No loop running - create one
-            all_embeddings = asyncio.run(_run())
+        # Simple approach: always create a new event loop for this operation
+        # This avoids nested event loop issues
+        all_embeddings = asyncio.run(_run())
 
         elapsed = time.perf_counter() - start
         if len(texts) > 0:
@@ -287,6 +309,7 @@ class EmbeddingGenerator:
 
         async def worker(idx: int, payload: List[str]):
             backoff = 1.0
+            last_exception = None
             for attempt in range(5):
                 try:
                     async with semaphore:
@@ -302,12 +325,16 @@ class EmbeddingGenerator:
                     if progress_task is not None:
                         progress.update(progress_task, advance=len(payload))
                     return
-                except Exception:
+                except Exception as e:
+                    last_exception = e
                     # Simple exponential backoff
                     await anyio.sleep(backoff)
                     backoff = min(backoff * 2, 8.0)
-            # If all retries fail, raise
-            raise
+            # If all retries fail, raise the last exception
+            if last_exception:
+                raise last_exception
+            else:
+                raise RuntimeError("All retries failed but no exception captured")
 
         async with anyio.create_task_group() as tg:
             for j, (start, payload) in enumerate(batches):
@@ -326,11 +353,7 @@ class EmbeddingGenerator:
         batch_size: int,
         show_progress: bool,
     ) -> np.ndarray:
-        """Generate embeddings using Cohere API with anyio concurrency.
-
-        Uses nest_asyncio (applied at module level) to handle nested event loops.
-        Uses asyncio instead of anyio.run() to work with nest_asyncio.
-        """
+        """Generate embeddings using Cohere API with anyio concurrency."""
         import asyncio
 
         logger = logging.getLogger("lmsys")
@@ -352,14 +375,9 @@ class EmbeddingGenerator:
             else:
                 return await self._async_cohere_batches(texts, batch_size, None, None)
 
-        # Use asyncio with nest_asyncio support
-        try:
-            loop = asyncio.get_running_loop()
-            # We're in an async context - run_until_complete works with nest_asyncio
-            all_embeddings = loop.run_until_complete(_run())
-        except RuntimeError:
-            # No loop running - create one
-            all_embeddings = asyncio.run(_run())
+        # Simple approach: always create a new event loop for this operation
+        # This avoids nested event loop issues
+        all_embeddings = asyncio.run(_run())
 
         elapsed = time.perf_counter() - start
         if len(texts) > 0:

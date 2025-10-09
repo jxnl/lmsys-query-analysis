@@ -512,9 +512,8 @@ async def merge_clusters_hierarchical(
             step_start = time.time()
             logger.info(f"Step 1/4: Embedding {n_current} cluster summaries...")
             texts = [f"{c['title']}: {c['description']}" for c in current_clusters]
-            # Call async batch directly since we're already in async context
-            emb_list = await embedder._async_cohere_batches(texts, batch_size=96, progress_task=None, progress=None)
-            embeddings = np.array(emb_list)
+            # Use proper public interface - this handles the async/sync boundary correctly
+            embeddings = embedder.generate_embeddings(texts, batch_size=96, show_progress=False)
             logger.debug(f"  Embedded {n_current} summaries in {time.time() - step_start:.1f}s")
 
             # Step 2: Create neighborhoods
