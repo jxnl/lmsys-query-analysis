@@ -1,25 +1,25 @@
-'use client'
+"use client";
 
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import Link from 'next/link';
-import { useState } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import { useState } from "react";
+import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 
 export interface QueryWithClusters {
   id: number;
-  conversationId: string;
+  conversation_id: string;
   model: string;
-  queryText: string;
+  query_text: string;
   language: string | null;
   timestamp: string | null;
   clusters?: Array<{
-    clusterId: number;
-    runId: string;
+    cluster_id: number;
+    run_id: string;
     title: string | null;
-    confidenceScore?: number | null;
+    confidence_score?: number | null;
   }>;
 }
 
@@ -38,9 +38,16 @@ interface DataViewerProps {
   filterRunId?: string; // Filter clusters to only show those from this run
 }
 
-export function DataViewer({ data, onPageChange, showClusters = true, filterRunId }: DataViewerProps) {
+export function DataViewer({
+  data,
+  onPageChange,
+  showClusters = true,
+  filterRunId,
+}: DataViewerProps) {
   const { queries, page, pages, total } = data;
-  const [expandedQueries, setExpandedQueries] = useState<Set<number>>(new Set());
+  const [expandedQueries, setExpandedQueries] = useState<Set<number>>(
+    new Set(),
+  );
 
   const toggleExpand = (queryId: number) => {
     setExpandedQueries((prev) => {
@@ -56,7 +63,7 @@ export function DataViewer({ data, onPageChange, showClusters = true, filterRunI
 
   const truncateText = (text: string, maxLength: number = 200) => {
     if (text.length <= maxLength) return text;
-    return text.slice(0, maxLength) + '...';
+    return text.slice(0, maxLength) + "...";
   };
 
   return (
@@ -92,10 +99,10 @@ export function DataViewer({ data, onPageChange, showClusters = true, filterRunI
         <div className="space-y-3 p-4">
           {queries.map((query) => {
             const isExpanded = expandedQueries.has(query.id);
-            const displayText = isExpanded 
-              ? query.queryText 
-              : truncateText(query.queryText);
-            const needsTruncation = query.queryText.length > 200;
+            const displayText = isExpanded
+              ? query.query_text
+              : truncateText(query.query_text);
+            const needsTruncation = query.query_text.length > 200;
 
             return (
               <Card key={query.id}>
@@ -103,7 +110,9 @@ export function DataViewer({ data, onPageChange, showClusters = true, filterRunI
                   <div className="space-y-3">
                     {/* Query Text */}
                     <div className="space-y-2">
-                      <p className="text-sm whitespace-pre-wrap">{displayText}</p>
+                      <p className="text-sm whitespace-pre-wrap">
+                        {displayText}
+                      </p>
                       {needsTruncation && (
                         <Button
                           variant="ghost"
@@ -143,50 +152,61 @@ export function DataViewer({ data, onPageChange, showClusters = true, filterRunI
                     </div>
 
                     {/* Cluster Associations */}
-                    {showClusters && query.clusters && query.clusters.length > 0 && (() => {
-                      // Filter clusters by run if filterRunId is provided
-                      const displayClusters = filterRunId
-                        ? query.clusters.filter(c => c.runId === filterRunId)
-                        : query.clusters;
+                    {showClusters &&
+                      query.clusters &&
+                      query.clusters.length > 0 &&
+                      (() => {
+                        // Filter clusters by run if filterRunId is provided
+                        const displayClusters = filterRunId
+                          ? query.clusters.filter(
+                              (c) => c.run_id === filterRunId,
+                            )
+                          : query.clusters;
 
-                      if (displayClusters.length === 0) return null;
+                        if (displayClusters.length === 0) return null;
 
-                      return (
-                        <div className="space-y-2 pt-2 border-t">
-                          <p className="text-xs font-medium text-muted-foreground">
-                            Topics ({displayClusters.length}):
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {displayClusters.map((cluster, idx) => (
-                              <Link
-                                key={`${cluster.runId}-${cluster.clusterId}-${idx}`}
-                                href={`/clusters/${cluster.runId}/${cluster.clusterId}`}
-                              >
-                                <Badge
-                                  variant="default"
-                                  className="text-xs hover:bg-primary/80 cursor-pointer"
+                        return (
+                          <div className="space-y-2 pt-2 border-t">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Topics ({displayClusters.length}):
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {displayClusters.map((cluster, idx) => (
+                                <Link
+                                  key={`${cluster.run_id}-${cluster.cluster_id}-${idx}`}
+                                  href={`/clusters/${cluster.run_id}/${cluster.cluster_id}`}
                                 >
-                                  {cluster.title || `Cluster ${cluster.clusterId}`}
-                                  <ExternalLink className="ml-1 h-3 w-3" />
-                                </Badge>
-                              </Link>
-                            ))}
+                                  <Badge
+                                    variant="default"
+                                    className="text-xs hover:bg-primary/80 cursor-pointer"
+                                  >
+                                    {cluster.title ||
+                                      `Cluster ${cluster.cluster_id}`}
+                                    <ExternalLink className="ml-1 h-3 w-3" />
+                                  </Badge>
+                                </Link>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })()}
+                        );
+                      })()}
 
                     {/* Query Metadata */}
                     <div className="flex gap-4 text-xs text-muted-foreground pt-2 border-t">
                       <span>ID: {query.id}</span>
-                      <span>Conversation: {query.conversationId.substring(0, 8)}...</span>
+                      <span>
+                        Conversation: {query.conversation_id.substring(0, 8)}...
+                      </span>
                       {query.timestamp && (
                         <span>
-                          {new Date(query.timestamp).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                          })}
+                          {new Date(query.timestamp).toLocaleDateString(
+                            "en-US",
+                            {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            },
+                          )}
                         </span>
                       )}
                     </div>
@@ -224,4 +244,3 @@ export function DataViewer({ data, onPageChange, showClusters = true, filterRunI
     </div>
   );
 }
-

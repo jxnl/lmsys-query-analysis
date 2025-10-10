@@ -1,8 +1,17 @@
-import Link from 'next/link';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import type { ClusteringRun } from '@/lib/types';
+import Link from "next/link";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import type { components } from "@/lib/api/types";
+
+type ClusteringRun = components["schemas"]["ClusteringRunSummary"];
 
 interface JobsTableProps {
   runs: ClusteringRun[];
@@ -26,52 +35,76 @@ export function JobsTable({ runs }: JobsTableProps) {
         <TableBody>
           {runs.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground">
+              <TableCell
+                colSpan={7}
+                className="text-center text-muted-foreground"
+              >
                 No clustering runs found. Run `lmsys cluster` to create one.
               </TableCell>
             </TableRow>
           ) : (
             runs.map((run) => {
-              // Extract embedding info (handle both snake_case and camelCase)
-              const embeddingProvider = (run.parameters?.embedding_provider || run.parameters?.embeddingProvider) as string | undefined;
-              const embeddingModel = (run.parameters?.embedding_model || run.parameters?.embeddingModel) as string | undefined;
-              const embeddingDimension = (run.parameters?.embedding_dimension || run.parameters?.embeddingDimension) as number | undefined;
+              // Extract embedding info from parameters
+              const params = run.parameters as
+                | Record<string, unknown>
+                | null
+                | undefined;
+              const embeddingProvider = params?.embedding_provider as
+                | string
+                | undefined;
+              const embeddingModel = params?.embedding_model as
+                | string
+                | undefined;
+              const embeddingDimension = params?.embedding_dimension as
+                | number
+                | undefined;
 
               // Filter out embedding-related and redundant parameters
               const excludeKeys = new Set([
-                'embedding_provider', 'embeddingProvider',
-                'embedding_model', 'embeddingModel',
-                'embedding_dimension', 'embeddingDimension',
-                'nClusters', 'n_clusters', 'num_clusters'
+                "embedding_provider",
+                "embedding_model",
+                "embedding_dimension",
+                "n_clusters",
+                "num_clusters",
               ]);
 
-              const otherParams = run.parameters
-                ? Object.entries(run.parameters).filter(([key]) => !excludeKeys.has(key))
+              const otherParams = params
+                ? Object.entries(params).filter(
+                    ([key]) => !excludeKeys.has(key),
+                  )
                 : [];
 
               const formatParamValue = (value: unknown): string => {
-                if (value === null || value === undefined) return 'null';
-                if (typeof value === 'boolean') return value.toString();
-                if (typeof value === 'number') return value.toString();
-                if (typeof value === 'string') return value;
+                if (value === null || value === undefined) return "null";
+                if (typeof value === "boolean") return value.toString();
+                if (typeof value === "number") return value.toString();
+                if (typeof value === "string") return value;
                 if (Array.isArray(value)) return `[${value.length} items]`;
-                if (typeof value === 'object') return JSON.stringify(value);
+                if (typeof value === "object") return JSON.stringify(value);
                 return String(value);
               };
 
               return (
-                <TableRow key={run.runId}>
-                  <TableCell className="font-mono text-sm">{run.runId}</TableCell>
+                <TableRow key={run.run_id}>
+                  <TableCell className="font-mono text-sm">
+                    {run.run_id}
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline">{run.algorithm}</Badge>
                   </TableCell>
-                  <TableCell className="text-right">{run.numClusters || 'N/A'}</TableCell>
+                  <TableCell className="text-right">
+                    {run.num_clusters || "N/A"}
+                  </TableCell>
                   <TableCell className="text-sm">
                     {embeddingProvider && embeddingModel ? (
                       <div className="space-y-0.5">
-                        <div className="font-medium">{embeddingProvider}/{embeddingModel}</div>
+                        <div className="font-medium">
+                          {embeddingProvider}/{embeddingModel}
+                        </div>
                         {embeddingDimension && (
-                          <div className="text-xs text-muted-foreground">dim: {embeddingDimension}</div>
+                          <div className="text-xs text-muted-foreground">
+                            dim: {embeddingDimension}
+                          </div>
                         )}
                       </div>
                     ) : (
@@ -82,7 +115,10 @@ export function JobsTable({ runs }: JobsTableProps) {
                     {otherParams.length > 0 ? (
                       <div className="space-y-0.5 max-w-xs">
                         {otherParams.map(([key, value]) => (
-                          <div key={key} className="flex items-baseline gap-1.5">
+                          <div
+                            key={key}
+                            className="flex items-baseline gap-1.5"
+                          >
                             <span className="font-mono text-[10px] text-muted-foreground/70 whitespace-nowrap">
                               {key}:
                             </span>
@@ -100,14 +136,14 @@ export function JobsTable({ runs }: JobsTableProps) {
                     )}
                   </TableCell>
                   <TableCell>
-                    {new Date(run.createdAt).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
+                    {new Date(run.created_at).toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
                     })}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Link href={`/runs/${run.runId}`}>
+                    <Link href={`/runs/${run.run_id}`}>
                       <Button variant="ghost" size="sm">
                         View
                       </Button>

@@ -1,21 +1,24 @@
-'use client'
+"use client";
 
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { DataViewer, type DataViewerData } from '@/components/data-viewer';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { DataViewer, type DataViewerData } from "@/components/data-viewer";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import type { ClusteringRun } from '@/lib/types';
-import { searchQueries } from '../actions';
-import { Search, Loader2 } from 'lucide-react';
+} from "@/components/ui/select";
+import { apiFetch } from "@/lib/api";
+import type { components } from "@/lib/api/types";
+import { Search, Loader2 } from "lucide-react";
+
+type ClusteringRun = components["schemas"]["ClusteringRunSummary"];
+type SearchQueryResult = components["schemas"]["QuerySearchResult"];
 
 interface SearchClientProps {
   runs: ClusteringRun[];
@@ -23,9 +26,9 @@ interface SearchClientProps {
 
 export function SearchClient({ runs }: SearchClientProps) {
   // Default to latest run (first in array since ordered by newest first)
-  const defaultRunId = runs.length > 0 ? runs[0].runId : 'all';
+  const defaultRunId = runs.length > 0 ? runs[0].run_id : "all";
 
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState("");
   const [selectedRunId, setSelectedRunId] = useState<string>(defaultRunId);
   const [results, setResults] = useState<DataViewerData | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -34,39 +37,15 @@ export function SearchClient({ runs }: SearchClientProps) {
 
   const handleSearch = () => {
     if (!searchText.trim()) return;
-
-    setHasSearched(true);
-    startTransition(async () => {
-      const runId = selectedRunId === 'all' ? undefined : selectedRunId;
-      const data = await searchQueries(searchText, runId, 1, 50);
-      setResults(data);
-
-      // Update URL with search params
-      const params = new URLSearchParams();
-      params.set('q', searchText);
-      if (runId) params.set('runId', runId);
-      params.set('page', '1');
-      router.push(`/search?${params.toString()}`, { scroll: false });
-    });
+    throw new Error("Search is not implemented yet");
   };
 
   const handlePageChange = (newPage: number) => {
-    startTransition(async () => {
-      const runId = selectedRunId === 'all' ? undefined : selectedRunId;
-      const data = await searchQueries(searchText, runId, newPage, 50);
-      setResults(data);
-
-      // Update URL with new page
-      const params = new URLSearchParams();
-      params.set('q', searchText);
-      if (runId) params.set('runId', runId);
-      params.set('page', newPage.toString());
-      router.push(`/search?${params.toString()}`, { scroll: false });
-    });
+    throw new Error("Search is not implemented yet");
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       handleSearch();
     }
   };
@@ -95,14 +74,17 @@ export function SearchClient({ runs }: SearchClientProps) {
                   <SelectContent>
                     <SelectItem value="all">All Runs</SelectItem>
                     {runs.map((run) => (
-                      <SelectItem key={run.runId} value={run.runId}>
-                        {run.runId} ({run.algorithm})
+                      <SelectItem key={run.run_id} value={run.run_id}>
+                        {run.run_id} ({run.algorithm})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleSearch} disabled={isPending || !searchText.trim()}>
+              <Button
+                onClick={handleSearch}
+                disabled={isPending || !searchText.trim()}
+              >
                 {isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -116,11 +98,17 @@ export function SearchClient({ runs }: SearchClientProps) {
                 )}
               </Button>
             </div>
-            
+
             <div className="text-sm text-muted-foreground">
-              <p>Search uses full-text search to find queries matching your search terms.</p>
-              {selectedRunId !== 'all' && (
-                <p className="mt-1">Filtering by run: <span className="font-mono">{selectedRunId}</span></p>
+              <p>
+                Search uses full-text search to find queries matching your
+                search terms.
+              </p>
+              {selectedRunId !== "all" && (
+                <p className="mt-1">
+                  Filtering by run:{" "}
+                  <span className="font-mono">{selectedRunId}</span>
+                </p>
               )}
             </div>
           </div>
@@ -136,25 +124,29 @@ export function SearchClient({ runs }: SearchClientProps) {
       {!isPending && hasSearched && results && results.queries.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center space-y-3">
-            <p className="text-muted-foreground">No results found for "{searchText}"</p>
+            <p className="text-muted-foreground">
+              No results found for "{searchText}"
+            </p>
             <div className="text-sm text-muted-foreground">
-              <p>Try different search terms or check that queries have been loaded into the database.</p>
+              <p>
+                Try different search terms or check that queries have been
+                loaded into the database.
+              </p>
             </div>
           </CardContent>
         </Card>
       )}
 
       {results && results.queries.length > 0 && (
-        <div className={isPending ? 'opacity-50 pointer-events-none' : ''}>
+        <div className={isPending ? "opacity-50 pointer-events-none" : ""}>
           <DataViewer
             data={results}
             onPageChange={handlePageChange}
             showClusters={true}
-            filterRunId={selectedRunId === 'all' ? undefined : selectedRunId}
+            filterRunId={selectedRunId === "all" ? undefined : selectedRunId}
           />
         </div>
       )}
     </div>
   );
 }
-

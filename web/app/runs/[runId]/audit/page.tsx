@@ -1,9 +1,19 @@
-import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { clusteringApi, curationApi } from '@/lib/api/client';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { apiFetch } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import type { components } from "@/lib/api/types";
+
+type ClusteringRun = components["schemas"]["ClusteringRunSummary"];
+type ClusterEdit = components["schemas"]["EditHistoryRecord"];
 
 interface AuditLogPageProps {
   params: Promise<{ runId: string }>;
@@ -13,26 +23,38 @@ export default async function AuditLogPage({ params }: AuditLogPageProps) {
   const { runId } = await params;
 
   // Fetch run metadata
-  const run = await clusteringApi.getRun(runId);
+  const run = await apiFetch<ClusteringRun>(`/api/clustering/runs/${runId}`);
   if (!run) {
     notFound();
   }
 
   // Fetch all edits for this run
-  const editsResponse = await curationApi.getAuditLog(runId);
+  const editsResponse = await apiFetch<{
+    items: ClusterEdit[];
+    total: number;
+  }>(`/api/curation/runs/${runId}/audit`);
   const edits = editsResponse.items;
 
   const getEditTypeBadge = (editType: string) => {
-    const variants: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }> = {
-      rename: { variant: 'secondary', label: 'Rename' },
-      move_query: { variant: 'default', label: 'Move Query' },
-      merge: { variant: 'secondary', label: 'Merge' },
-      split: { variant: 'secondary', label: 'Split' },
-      delete: { variant: 'destructive', label: 'Delete' },
-      tag: { variant: 'outline', label: 'Tag' },
+    const variants: Record<
+      string,
+      {
+        variant: "default" | "secondary" | "destructive" | "outline";
+        label: string;
+      }
+    > = {
+      rename: { variant: "secondary", label: "Rename" },
+      move_query: { variant: "default", label: "Move Query" },
+      merge: { variant: "secondary", label: "Merge" },
+      split: { variant: "secondary", label: "Split" },
+      delete: { variant: "destructive", label: "Delete" },
+      tag: { variant: "outline", label: "Tag" },
     };
 
-    const config = variants[editType] || { variant: 'outline' as const, label: editType };
+    const config = variants[editType] || {
+      variant: "outline" as const,
+      label: editType,
+    };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
@@ -63,7 +85,11 @@ export default async function AuditLogPage({ params }: AuditLogPageProps) {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Use <code className="text-xs bg-muted px-1 py-0.5 rounded">lmsys edit</code> commands to curate clusters. All changes will appear here.
+              Use{" "}
+              <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                lmsys edit
+              </code>{" "}
+              commands to curate clusters. All changes will appear here.
             </p>
           </CardContent>
         </Card>
@@ -84,12 +110,17 @@ export default async function AuditLogPage({ params }: AuditLogPageProps) {
                       {getEditTypeBadge(edit.edit_type)}
                       {edit.cluster_id && (
                         <Link href={`/clusters/${runId}/${edit.cluster_id}`}>
-                          <Badge variant="outline" className="hover:bg-accent cursor-pointer">
+                          <Badge
+                            variant="outline"
+                            className="hover:bg-accent cursor-pointer"
+                          >
                             Cluster {edit.cluster_id}
                           </Badge>
                         </Link>
                       )}
-                      <span className="text-xs text-muted-foreground">by {edit.editor}</span>
+                      <span className="text-xs text-muted-foreground">
+                        by {edit.editor}
+                      </span>
                     </div>
                     <span className="text-xs text-muted-foreground">
                       {new Date(edit.timestamp).toLocaleString()}
@@ -103,43 +134,59 @@ export default async function AuditLogPage({ params }: AuditLogPageProps) {
                   )}
 
                   {/* Show detailed changes */}
-                  {edit.edit_type === 'rename' && edit.old_value && edit.new_value && (
-                    <div className="mt-2 p-2 bg-muted rounded text-xs">
-                      <div className="font-medium mb-1">Title Change:</div>
-                      <div className="line-through text-muted-foreground">{(edit.old_value as any).title}</div>
-                      <div>→ {(edit.new_value as any).title}</div>
-                    </div>
-                  )}
-
-                  {edit.edit_type === 'move_query' && edit.old_value && edit.new_value && (
-                    <div className="mt-2 p-2 bg-muted rounded text-xs">
-                      <div className="font-medium mb-1">Query Movement:</div>
-                      <div>
-                        Query {(edit.old_value as any).query_id}: Cluster {(edit.old_value as any).cluster_id} → {(edit.new_value as any).cluster_id}
+                  {edit.edit_type === "rename" &&
+                    edit.old_value &&
+                    edit.new_value && (
+                      <div className="mt-2 p-2 bg-muted rounded text-xs">
+                        <div className="font-medium mb-1">Title Change:</div>
+                        <div className="line-through text-muted-foreground">
+                          {(edit.old_value as any).title}
+                        </div>
+                        <div>→ {(edit.new_value as any).title}</div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {edit.edit_type === 'merge' && edit.old_value && edit.new_value && (
-                    <div className="mt-2 p-2 bg-muted rounded text-xs">
-                      <div className="font-medium mb-1">Cluster Merge:</div>
-                      <div>
-                        Merged {((edit.old_value as any).source_clusters || []).join(', ')} → Cluster {(edit.new_value as any).target_cluster}
+                  {edit.edit_type === "move_query" &&
+                    edit.old_value &&
+                    edit.new_value && (
+                      <div className="mt-2 p-2 bg-muted rounded text-xs">
+                        <div className="font-medium mb-1">Query Movement:</div>
+                        <div>
+                          Query {(edit.old_value as any).query_id}: Cluster{" "}
+                          {(edit.old_value as any).cluster_id} →{" "}
+                          {(edit.new_value as any).cluster_id}
+                        </div>
                       </div>
-                      <div className="text-muted-foreground">
-                        {(edit.new_value as any).queries_moved} queries moved
-                      </div>
-                    </div>
-                  )}
+                    )}
 
-                  {edit.edit_type === 'tag' && edit.new_value && (
+                  {edit.edit_type === "merge" &&
+                    edit.old_value &&
+                    edit.new_value && (
+                      <div className="mt-2 p-2 bg-muted rounded text-xs">
+                        <div className="font-medium mb-1">Cluster Merge:</div>
+                        <div>
+                          Merged{" "}
+                          {((edit.old_value as any).source_clusters || []).join(
+                            ", ",
+                          )}{" "}
+                          → Cluster {(edit.new_value as any).target_cluster}
+                        </div>
+                        <div className="text-muted-foreground">
+                          {(edit.new_value as any).queries_moved} queries moved
+                        </div>
+                      </div>
+                    )}
+
+                  {edit.edit_type === "tag" && edit.new_value && (
                     <div className="mt-2 p-2 bg-muted rounded text-xs">
                       <div className="font-medium mb-1">Metadata Update:</div>
                       {(edit.new_value as any).quality && (
                         <div>Quality: {(edit.new_value as any).quality}</div>
                       )}
                       {(edit.new_value as any).coherence_score && (
-                        <div>Coherence: {(edit.new_value as any).coherence_score}/5</div>
+                        <div>
+                          Coherence: {(edit.new_value as any).coherence_score}/5
+                        </div>
                       )}
                     </div>
                   )}
@@ -152,7 +199,7 @@ export default async function AuditLogPage({ params }: AuditLogPageProps) {
 
       <div className="text-sm text-muted-foreground">
         <p>
-          View the full audit log with:{' '}
+          View the full audit log with:{" "}
           <code className="bg-muted px-1 py-0.5 rounded text-xs">
             lmsys edit audit {runId}
           </code>

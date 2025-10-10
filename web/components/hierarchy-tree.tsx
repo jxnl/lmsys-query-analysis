@@ -1,15 +1,28 @@
-'use client'
+"use client";
 
-import { useState, useEffect, createContext, useContext } from 'react';
-import Link from 'next/link';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronRight, ChevronDown, FileText, Loader2, Copy, Check, Maximize2, Minimize2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import type { components } from '@/lib/api/types';
-import { queriesApi } from '@/lib/api/client';
+import { useState, useEffect, createContext, useContext } from "react";
+import Link from "next/link";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  ChevronRight,
+  ChevronDown,
+  FileText,
+  Loader2,
+  Copy,
+  Check,
+  Maximize2,
+  Minimize2,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { components } from "@/lib/api/types";
+import { apiFetch } from "@/lib/api";
 
-type ClusterHierarchy = components['schemas']['HierarchyNode'];
-type Query = components['schemas']['QueryResponse'];
+type ClusterHierarchy = components["schemas"]["HierarchyNode"];
+type Query = components["schemas"]["QueryResponse"];
 
 // Context for managing expand/collapse state
 const ExpandContext = createContext<{
@@ -24,7 +37,12 @@ interface HierarchyTreeProps {
   hierarchyRunId?: string;
 }
 
-export function HierarchyTree({ nodes, runId, queryCounts = {}, hierarchyRunId }: HierarchyTreeProps) {
+export function HierarchyTree({
+  nodes,
+  runId,
+  queryCounts = {},
+  hierarchyRunId,
+}: HierarchyTreeProps) {
   const [expandAll, setExpandAll] = useState(false);
 
   // Build tree structure - find root nodes (no parent)
@@ -32,16 +50,18 @@ export function HierarchyTree({ nodes, runId, queryCounts = {}, hierarchyRunId }
 
   // Calculate total queries from hierarchy nodes (they now include query_count)
   const totalQueries = nodes
-    .filter(n => n.level === 0) // Only count leaf nodes to avoid double-counting
+    .filter((n) => n.level === 0) // Only count leaf nodes to avoid double-counting
     .reduce((sum, n) => sum + (n.query_count || 0), 0);
 
   // Calculate hierarchy stats
-  const maxLevel = Math.max(...nodes.map(n => n.level), 0);
-  const leafCount = nodes.filter(n => !n.children_ids || n.children_ids.length === 0).length;
+  const maxLevel = Math.max(...nodes.map((n) => n.level), 0);
+  const leafCount = nodes.filter(
+    (n) => !n.children_ids || n.children_ids.length === 0,
+  ).length;
 
   // Helper to calculate total query count for any node (including descendants)
   const getTotalQueryCount = (nodeId: number): number => {
-    const currentNode = nodes.find(n => n.cluster_id === nodeId);
+    const currentNode = nodes.find((n) => n.cluster_id === nodeId);
     if (!currentNode) return 0;
 
     // Use the query_count from the node directly (API now calculates this)
@@ -58,13 +78,16 @@ export function HierarchyTree({ nodes, runId, queryCounts = {}, hierarchyRunId }
   if (sortedRootNodes.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
-        No hierarchy found for this run. Run `lmsys merge-clusters` to create one.
+        No hierarchy found for this run. Run `lmsys merge-clusters` to create
+        one.
       </div>
     );
   }
 
   return (
-    <ExpandContext.Provider value={{ expandAll, toggleExpandAll: () => setExpandAll(!expandAll) }}>
+    <ExpandContext.Provider
+      value={{ expandAll, toggleExpandAll: () => setExpandAll(!expandAll) }}
+    >
       <div className="space-y-4">
         {/* Header with stats and controls */}
         <div className="flex items-center justify-between pb-2 border-b">
@@ -75,7 +98,9 @@ export function HierarchyTree({ nodes, runId, queryCounts = {}, hierarchyRunId }
             <span>•</span>
             <span>{maxLevel + 1} levels</span>
             <span>•</span>
-            <span className="font-medium text-foreground">{totalQueries.toLocaleString()} total queries</span>
+            <span className="font-medium text-foreground">
+              {totalQueries.toLocaleString()} total queries
+            </span>
           </div>
           <div className="flex gap-2">
             <Button
@@ -129,7 +154,15 @@ interface TreeNodeProps {
   hierarchyRunId?: string;
 }
 
-function TreeNode({ node, nodes, runId, queryCounts = {}, totalQueries, getTotalQueryCount, hierarchyRunId }: TreeNodeProps) {
+function TreeNode({
+  node,
+  nodes,
+  runId,
+  queryCounts = {},
+  totalQueries,
+  getTotalQueryCount,
+  hierarchyRunId,
+}: TreeNodeProps) {
   const expandContext = useContext(ExpandContext);
   const [isOpen, setIsOpen] = useState(false);
   const [queries, setQueries] = useState<Query[]>([]);
@@ -169,13 +202,14 @@ function TreeNode({ node, nodes, runId, queryCounts = {}, totalQueries, getTotal
   if (node.parent_cluster_id !== null && node.parent_cluster_id !== undefined) {
     parentTotal = getTotalQueryCount(node.parent_cluster_id);
   }
-  const percentage = parentTotal > 0 ? (totalQueryCount / parentTotal) * 100 : 0;
+  const percentage =
+    parentTotal > 0 ? (totalQueryCount / parentTotal) * 100 : 0;
 
   // Determine size category for color coding
-  const getSizeCategory = (): 'large' | 'medium' | 'small' => {
-    if (percentage >= 10) return 'large';
-    if (percentage >= 3) return 'medium';
-    return 'small';
+  const getSizeCategory = (): "large" | "medium" | "small" => {
+    if (percentage >= 10) return "large";
+    if (percentage >= 3) return "medium";
+    return "small";
   };
   const sizeCategory = getSizeCategory();
 
@@ -185,10 +219,12 @@ function TreeNode({ node, nodes, runId, queryCounts = {}, totalQueries, getTotal
     let currentId: number | null = node.cluster_id;
 
     while (currentId !== null) {
-      const currentNode = nodes.find(n => n.cluster_id === currentId);
+      const currentNode = nodes.find((n) => n.cluster_id === currentId);
       if (!currentNode) break;
 
-      path.unshift(`${currentNode.title || `Cluster ${currentNode.cluster_id}`} (ID: ${currentNode.cluster_id}, Level: ${currentNode.level})`);
+      path.unshift(
+        `${currentNode.title || `Cluster ${currentNode.cluster_id}`} (ID: ${currentNode.cluster_id}, Level: ${currentNode.level})`,
+      );
       currentId = currentNode.parent_cluster_id ?? null;
     }
 
@@ -203,43 +239,56 @@ function TreeNode({ node, nodes, runId, queryCounts = {}, totalQueries, getTotal
     let sampleQueries = queries;
     if (isLeaf && sampleQueries.length === 0) {
       try {
-        const data = await queriesApi.listQueries({ run_id: runId, cluster_id: node.cluster_id, page: 1, limit: 5 });
+        const data = await apiFetch<{
+          items: Query[];
+          total: number;
+          page: number;
+          pages: number;
+          limit: number;
+        }>(
+          `/api/queries?run_id=${runId}&cluster_id=${node.cluster_id}&page=1&limit=5`,
+        );
         sampleQueries = data.items;
       } catch (err) {
-        console.error('Failed to fetch sample queries:', err);
+        console.error("Failed to fetch sample queries:", err);
       }
     }
 
-    const queriesSection = sampleQueries.length > 0
-      ? `## Sample Queries (${sampleQueries.length} of ${queryCount})
-${sampleQueries.map((q, i) => `
+    const queriesSection =
+      sampleQueries.length > 0
+        ? `## Sample Queries (${sampleQueries.length} of ${queryCount})
+${sampleQueries
+  .map(
+    (q, i) => `
 ### Query ${i + 1}
 - **Text**: ${q.query_text}
-- **Model**: ${q.model || 'N/A'}
-- **Language**: ${q.language || 'N/A'}
+- **Model**: ${q.model || "N/A"}
+- **Language**: ${q.language || "N/A"}
 - **ID**: ${q.id}
-`).join('\n')}
+`,
+  )
+  .join("\n")}
 `
-      : isLeaf
-      ? `## Sample Queries
+        : isLeaf
+          ? `## Sample Queries
 No queries available
 `
-      : '';
+          : "";
 
     const metadata = `# Cluster Metadata
 
 ## Run Information
 - Run ID: ${runId}
-- Hierarchy Run ID: ${hierarchyRunId || node.hierarchy_run_id || 'N/A'}
+- Hierarchy Run ID: ${hierarchyRunId || node.hierarchy_run_id || "N/A"}
 
 ## Cluster Information
 - Cluster ID: ${node.cluster_id}
-- Title: ${node.title || 'N/A'}
+- Title: ${node.title || "N/A"}
 - Level: ${node.level}
-- Type: ${isLeaf ? 'Leaf' : 'Parent'}
+- Type: ${isLeaf ? "Leaf" : "Parent"}
 
 ## Hierarchy Path
-${hierarchyPath.map((p, i) => `${i + 1}. ${p}`).join('\n')}
+${hierarchyPath.map((p, i) => `${i + 1}. ${p}`).join("\n")}
 
 ## Statistics
 - Direct Query Count: ${queryCount}
@@ -249,26 +298,30 @@ ${hierarchyPath.map((p, i) => `${i + 1}. ${p}`).join('\n')}
 - Global Total Queries: ${totalQueries}
 
 ## Structure
-- Parent Cluster ID: ${node.parent_cluster_id ?? 'None (Root)'}
+- Parent Cluster ID: ${node.parent_cluster_id ?? "None (Root)"}
 - Children Count: ${sortedChildren.length}
-- Children IDs: ${node.children_ids?.join(', ') || 'None'}
+- Children IDs: ${node.children_ids?.join(", ") || "None"}
 
 ## Description
-${node.description || 'N/A'}
+${node.description || "N/A"}
 
 ${queriesSection}
 ## Database Record
 \`\`\`json
-${JSON.stringify({
-  hierarchy_run_id: node.hierarchy_run_id,
-  run_id: node.run_id,
-  cluster_id: node.cluster_id,
-  parent_cluster_id: node.parent_cluster_id,
-  level: node.level,
-  children_ids: node.children_ids,
-  title: node.title,
-  description: node.description,
-}, null, 2)}
+${JSON.stringify(
+  {
+    hierarchy_run_id: node.hierarchy_run_id,
+    run_id: node.run_id,
+    cluster_id: node.cluster_id,
+    parent_cluster_id: node.parent_cluster_id,
+    level: node.level,
+    children_ids: node.children_ids,
+    title: node.title,
+    description: node.description,
+  },
+  null,
+  2,
+)}
 \`\`\`
 `;
 
@@ -277,7 +330,7 @@ ${JSON.stringify({
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy metadata:', err);
+      console.error("Failed to copy metadata:", err);
     }
   };
 
@@ -285,12 +338,20 @@ ${JSON.stringify({
   useEffect(() => {
     if (isLeaf && isOpen && queries.length === 0) {
       setIsLoadingQueries(true);
-      queriesApi.listQueries({ run_id: runId, cluster_id: node.cluster_id, page: 1, limit: 10 })
+      apiFetch<{
+        items: Query[];
+        total: number;
+        page: number;
+        pages: number;
+        limit: number;
+      }>(
+        `/api/queries?run_id=${runId}&cluster_id=${node.cluster_id}&page=1&limit=10`,
+      )
         .then((data) => {
           setQueries(data.items);
         })
         .catch((err) => {
-          console.error('Failed to load queries:', err);
+          console.error("Failed to load queries:", err);
         })
         .finally(() => {
           setIsLoadingQueries(false);
@@ -305,42 +366,59 @@ ${JSON.stringify({
       {isLeaf ? (
         // Leaf node - collapsible to show queries
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-          <div className={`rounded-lg border transition-all ${
-            sizeCategory === 'large' ? 'border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/20' :
-            sizeCategory === 'medium' ? 'border-border bg-background' :
-            'border-border/50 bg-muted/20'
-          }`}>
+          <div
+            className={`rounded-lg border transition-all ${
+              sizeCategory === "large"
+                ? "border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/20"
+                : sizeCategory === "medium"
+                  ? "border-border bg-background"
+                  : "border-border/50 bg-muted/20"
+            }`}
+          >
             <CollapsibleTrigger className="flex items-center gap-2 py-2.5 px-3 hover:bg-accent/50 rounded-lg w-full text-left">
               {isOpen ? (
                 <ChevronDown className="h-4 w-4 flex-shrink-0" />
               ) : (
                 <ChevronRight className="h-4 w-4 flex-shrink-0" />
               )}
-              <FileText className={`h-4 w-4 flex-shrink-0 ${
-                sizeCategory === 'large' ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'
-              }`} />
+              <FileText
+                className={`h-4 w-4 flex-shrink-0 ${
+                  sizeCategory === "large"
+                    ? "text-blue-600 dark:text-blue-400"
+                    : "text-muted-foreground"
+                }`}
+              />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`font-medium truncate ${
-                    sizeCategory === 'large' ? 'text-base' : 'text-sm'
-                  }`}>
+                  <span
+                    className={`font-medium truncate ${
+                      sizeCategory === "large" ? "text-base" : "text-sm"
+                    }`}
+                  >
                     {node.title || `Cluster ${node.cluster_id}`}
                   </span>
-                  <span className={`text-xs font-medium ${
-                    sizeCategory === 'large' ? 'text-blue-600 dark:text-blue-400' :
-                    sizeCategory === 'medium' ? 'text-foreground' :
-                    'text-muted-foreground'
-                  }`}>
-                    {queryCount.toLocaleString()} queries ({percentage.toFixed(1)}%)
+                  <span
+                    className={`text-xs font-medium ${
+                      sizeCategory === "large"
+                        ? "text-blue-600 dark:text-blue-400"
+                        : sizeCategory === "medium"
+                          ? "text-foreground"
+                          : "text-muted-foreground"
+                    }`}
+                  >
+                    {queryCount.toLocaleString()} queries (
+                    {percentage.toFixed(1)}%)
                   </span>
                 </div>
                 {/* Visual progress bar */}
                 <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all ${
-                      sizeCategory === 'large' ? 'bg-blue-500' :
-                      sizeCategory === 'medium' ? 'bg-primary' :
-                      'bg-muted-foreground/40'
+                      sizeCategory === "large"
+                        ? "bg-blue-500"
+                        : sizeCategory === "medium"
+                          ? "bg-primary"
+                          : "bg-muted-foreground/40"
                     }`}
                     style={{ width: `${Math.min(percentage, 100)}%` }}
                   />
@@ -386,14 +464,19 @@ ${JSON.stringify({
                 <>
                   <div className="space-y-2">
                     {displayedQueries.map((query) => (
-                      <div key={query.id} className="text-sm p-2.5 bg-muted/50 rounded-md border border-border/50">
+                      <div
+                        key={query.id}
+                        className="text-sm p-2.5 bg-muted/50 rounded-md border border-border/50"
+                      >
                         <p className="whitespace-pre-wrap text-foreground/90">
                           {query.query_text.length > 200
-                            ? query.query_text.slice(0, 200) + '...'
+                            ? query.query_text.slice(0, 200) + "..."
                             : query.query_text}
                         </p>
                         <div className="flex gap-2 mt-1.5 text-xs text-muted-foreground">
-                          {query.model && <span className="font-medium">{query.model}</span>}
+                          {query.model && (
+                            <span className="font-medium">{query.model}</span>
+                          )}
                           {query.language && <span>• {query.language}</span>}
                         </div>
                       </div>
@@ -421,7 +504,9 @@ ${JSON.stringify({
                   )}
                 </>
               ) : (
-                <p className="text-sm text-muted-foreground py-2">No queries found</p>
+                <p className="text-sm text-muted-foreground py-2">
+                  No queries found
+                </p>
               )}
             </CollapsibleContent>
           </div>
@@ -429,11 +514,15 @@ ${JSON.stringify({
       ) : (
         // Parent node - collapsible
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-          <div className={`rounded-lg border transition-all ${
-            sizeCategory === 'large' ? 'border-emerald-200 bg-emerald-50/30 dark:border-emerald-900 dark:bg-emerald-950/20' :
-            sizeCategory === 'medium' ? 'border-border bg-background' :
-            'border-border/50 bg-muted/20'
-          }`}>
+          <div
+            className={`rounded-lg border transition-all ${
+              sizeCategory === "large"
+                ? "border-emerald-200 bg-emerald-50/30 dark:border-emerald-900 dark:bg-emerald-950/20"
+                : sizeCategory === "medium"
+                  ? "border-border bg-background"
+                  : "border-border/50 bg-muted/20"
+            }`}
+          >
             <CollapsibleTrigger className="flex items-center gap-2 py-2.5 px-3 hover:bg-accent/50 rounded-lg w-full text-left">
               {isOpen ? (
                 <ChevronDown className="h-4 w-4 flex-shrink-0" />
@@ -442,29 +531,39 @@ ${JSON.stringify({
               )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`font-semibold truncate ${
-                    sizeCategory === 'large' ? 'text-base' : 'text-sm'
-                  }`}>
+                  <span
+                    className={`font-semibold truncate ${
+                      sizeCategory === "large" ? "text-base" : "text-sm"
+                    }`}
+                  >
                     {node.title || `Cluster ${node.cluster_id}`}
                   </span>
-                  <span className={`text-xs font-medium ${
-                    sizeCategory === 'large' ? 'text-emerald-600 dark:text-emerald-400' :
-                    sizeCategory === 'medium' ? 'text-foreground' :
-                    'text-muted-foreground'
-                  }`}>
-                    {totalQueryCount.toLocaleString()} queries ({percentage.toFixed(1)}%)
+                  <span
+                    className={`text-xs font-medium ${
+                      sizeCategory === "large"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : sizeCategory === "medium"
+                          ? "text-foreground"
+                          : "text-muted-foreground"
+                    }`}
+                  >
+                    {totalQueryCount.toLocaleString()} queries (
+                    {percentage.toFixed(1)}%)
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    • {sortedChildren.length} {sortedChildren.length === 1 ? 'child' : 'children'}
+                    • {sortedChildren.length}{" "}
+                    {sortedChildren.length === 1 ? "child" : "children"}
                   </span>
                 </div>
                 {/* Visual progress bar */}
                 <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all ${
-                      sizeCategory === 'large' ? 'bg-emerald-500' :
-                      sizeCategory === 'medium' ? 'bg-primary' :
-                      'bg-muted-foreground/40'
+                      sizeCategory === "large"
+                        ? "bg-emerald-500"
+                        : sizeCategory === "medium"
+                          ? "bg-primary"
+                          : "bg-muted-foreground/40"
                     }`}
                     style={{ width: `${Math.min(percentage, 100)}%` }}
                   />
@@ -493,7 +592,9 @@ ${JSON.stringify({
 
             <CollapsibleContent className="px-3 pb-3 pt-2 space-y-2">
               {node.description && (
-                <p className="text-sm text-muted-foreground mb-3 pb-3 border-b">{node.description}</p>
+                <p className="text-sm text-muted-foreground mb-3 pb-3 border-b">
+                  {node.description}
+                </p>
               )}
               <div className="space-y-2 pl-2">
                 {sortedChildren.map((child) => (

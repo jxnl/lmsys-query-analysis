@@ -1,10 +1,15 @@
-import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { clusteringApi, hierarchyApi } from '@/lib/api/client';
-import { HierarchyTree } from '@/components/hierarchy-tree';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { apiFetch } from "@/lib/api";
+import { HierarchyTree } from "@/components/hierarchy-tree";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { components } from "@/lib/api/types";
+
+type ClusteringRun = components["schemas"]["ClusteringRunSummary"];
+type HierarchyListItem = components["schemas"]["HierarchyNode"];
+type HierarchyNode = components["schemas"]["HierarchyNode"];
 
 interface RunPageProps {
   params: Promise<{ runId: string }>;
@@ -12,18 +17,26 @@ interface RunPageProps {
 
 export default async function RunPage({ params }: RunPageProps) {
   const { runId } = await params;
-  const run = await clusteringApi.getRun(runId);
+  const run = await apiFetch<ClusteringRun>(`/api/clustering/runs/${runId}`);
 
   if (!run) {
     notFound();
   }
 
-  const hierarchiesResponse = await hierarchyApi.listHierarchies({ run_id: runId });
+  const hierarchiesResponse = await apiFetch<{
+    items: HierarchyListItem[];
+    total: number;
+  }>(`/api/hierarchy?run_id=${runId}`);
   const latestHierarchy = hierarchiesResponse.items[0];
 
   let hierarchyTree = null;
   if (latestHierarchy) {
-    const treeResponse = await hierarchyApi.getHierarchyTree(latestHierarchy.hierarchy_run_id);
+    const treeResponse = await apiFetch<{
+      nodes: HierarchyNode[];
+      hierarchy_run_id: string;
+      run_id: string;
+      total_queries: number;
+    }>(`/api/hierarchy/${latestHierarchy.hierarchy_run_id}`);
     hierarchyTree = treeResponse.nodes;
   }
 
@@ -57,7 +70,7 @@ export default async function RunPage({ params }: RunPageProps) {
             <CardTitle className="text-sm font-medium">Clusters</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{run.num_clusters || 'N/A'}</p>
+            <p className="text-2xl font-bold">{run.num_clusters || "N/A"}</p>
           </CardContent>
         </Card>
 
@@ -67,10 +80,10 @@ export default async function RunPage({ params }: RunPageProps) {
           </CardHeader>
           <CardContent>
             <p className="text-sm">
-              {new Date(run.created_at).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
+              {new Date(run.created_at).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
               })}
             </p>
           </CardContent>
@@ -88,7 +101,9 @@ export default async function RunPage({ params }: RunPageProps) {
                 <div key={key}>
                   <dt className="font-medium text-muted-foreground">{key}</dt>
                   <dd className="mt-1 font-mono text-xs">
-                    {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                    {typeof value === "object"
+                      ? JSON.stringify(value)
+                      : String(value)}
                   </dd>
                 </div>
               ))}
@@ -100,9 +115,10 @@ export default async function RunPage({ params }: RunPageProps) {
       <Card>
         <CardHeader>
           <CardTitle>Cluster Hierarchy</CardTitle>
-          {hierarchies.length > 1 && (
+          {hierarchiesResponse.items.length > 1 && (
             <p className="text-sm text-muted-foreground">
-              Showing latest hierarchy ({hierarchies.length} total)
+              Showing latest hierarchy ({hierarchiesResponse.items.length}{" "}
+              total)
             </p>
           )}
         </CardHeader>
@@ -115,9 +131,11 @@ export default async function RunPage({ params }: RunPageProps) {
             />
           ) : (
             <p className="text-muted-foreground text-center py-8">
-              No hierarchy found. Run{' '}
-              <code className="bg-muted px-2 py-1 rounded">lmsys merge-clusters {runId}</code> to
-              create one.
+              No hierarchy found. Run{" "}
+              <code className="bg-muted px-2 py-1 rounded">
+                lmsys merge-clusters {runId}
+              </code>{" "}
+              to create one.
             </p>
           )}
         </CardContent>
