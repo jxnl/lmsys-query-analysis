@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { DataViewer, type DataViewerData } from '@/components/data-viewer';
 import type { components } from '@/lib/api/types';
 import { queriesApi } from '@/lib/api/client';
-import { searchQueriesInCluster } from '@/app/actions';
+import { searchApi } from '@/lib/api/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, X } from 'lucide-react';
@@ -25,7 +25,15 @@ export function ClusterQueriesClient({
 }: ClusterQueriesClientProps) {
   // Convert to DataViewer format (minimal transformation)
   const toDataViewerFormat = (data: PaginatedQueriesResponse): DataViewerData => ({
-    queries: data.items.map(q => ({ ...q, clusters: [] })),
+    queries: data.items.map(q => ({
+      id: q.id,
+      conversationId: q.conversation_id,
+      model: q.model,
+      queryText: q.query_text,
+      language: q.language ?? null,
+      timestamp: q.timestamp ?? null,
+      clusters: []
+    })),
     total: data.total,
     page: data.page,
     pages: data.pages,
@@ -42,8 +50,34 @@ export function ClusterQueriesClient({
   const handlePageChange = (newPage: number) => {
     startTransition(async () => {
       if (isSearchMode) {
-        const searchResults = await searchQueriesInCluster(currentSearchText, runId, clusterId, newPage);
-        setData(toDataViewerFormat(searchResults));
+        const searchResults = await searchApi.searchQueries({
+          text: currentSearchText,
+          run_id: runId,
+          page: newPage,
+          limit: 50
+        });
+        // Convert search results to DataViewer format
+        const convertedData: DataViewerData = {
+          queries: searchResults.items.map(item => ({
+            id: item.query.id,
+            conversationId: item.query.conversation_id,
+            model: item.query.model,
+            queryText: item.query.query_text,
+            language: item.query.language ?? null,
+            timestamp: item.query.timestamp ?? null,
+            clusters: item.clusters.map(c => ({
+              clusterId: c.cluster_id,
+              runId: c.run_id,
+              title: c.title ?? null,
+              confidenceScore: c.confidence_score
+            }))
+          })),
+          total: searchResults.total,
+          page: searchResults.page ?? 1,
+          pages: searchResults.pages ?? 1,
+          limit: 50
+        };
+        setData(convertedData);
       } else {
         const clusterDetail = await queriesApi.getClusterDetail(runId, clusterId, { page: newPage, limit: 50 });
         setData(toDataViewerFormat(clusterDetail.queries));
@@ -61,8 +95,34 @@ export function ClusterQueriesClient({
     startTransition(async () => {
       setIsSearchMode(true);
       setCurrentSearchText(searchText);
-      const searchResults = await searchQueriesInCluster(searchText, runId, clusterId, 1);
-      setData(toDataViewerFormat(searchResults));
+      const searchResults = await searchApi.searchQueries({
+        text: searchText,
+        run_id: runId,
+        page: 1,
+        limit: 50
+      });
+      // Convert search results to DataViewer format
+      const convertedData: DataViewerData = {
+        queries: searchResults.items.map(item => ({
+          id: item.query.id,
+          conversationId: item.query.conversation_id,
+          model: item.query.model,
+          queryText: item.query.query_text,
+          language: item.query.language ?? null,
+          timestamp: item.query.timestamp ?? null,
+          clusters: item.clusters.map(c => ({
+            clusterId: c.cluster_id,
+            runId: c.run_id,
+            title: c.title ?? null,
+            confidenceScore: c.confidence_score
+          }))
+        })),
+        total: searchResults.total,
+        page: searchResults.page ?? 1,
+        pages: searchResults.pages ?? 1,
+        limit: 50
+      };
+      setData(convertedData);
       router.push(`/clusters/${runId}/${clusterId}?q=${encodeURIComponent(searchText)}`, { scroll: false });
     });
   };
@@ -122,7 +182,7 @@ export function ClusterQueriesClient({
       {/* Search Status */}
       {isSearchMode && (
         <div className="text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">
-          Showing search results for: <span className="font-medium text-foreground">"{currentSearchText}"</span>
+          Showing search results for: <span className="font-medium text-foreground">&ldquo;{currentSearchText}&rdquo;</span>
           {' '} — {data.total} {data.total === 1 ? 'result' : 'results'} found in this cluster
         </div>
       )}

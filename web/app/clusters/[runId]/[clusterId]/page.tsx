@@ -82,9 +82,9 @@ export default async function ClusterPage({ params, searchParams }: ClusterPageP
           </CardHeader>
           <CardContent>
             <ul className="space-y-2">
-              {summary.representative_queries.slice(0, 5).map((query: any, idx: number) => (
+              {summary.representative_queries.slice(0, 5).map((query: string, idx: number) => (
                 <li key={idx} className="text-sm border-l-2 border-muted pl-4">
-                  {typeof query === 'string' ? query : query.query_text || JSON.stringify(query)}
+                  {query}
                 </li>
               ))}
             </ul>
