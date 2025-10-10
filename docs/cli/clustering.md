@@ -22,6 +22,7 @@ MiniBatchKMeans is recommended for large datasets. It scales well and produces c
 | `--embed-batch-size` | INTEGER | 32 | Batch size for embedding |
 | `--mb-batch-size` | INTEGER | 4096 | MiniBatch size for KMeans |
 | `--chunk-size` | INTEGER | 5000 | Chunk size for streaming |
+| `--limit` | INTEGER | None | Limit number of queries to cluster |
 | `--description` | TEXT | None | Optional run description |
 
 #### Examples
@@ -46,6 +47,12 @@ uv run lmsys cluster kmeans --n-clusters 50 --use-chroma \
   --embed-batch-size 64 --mb-batch-size 8192 --chunk-size 10000
 ```
 
+Limit queries to speed up experimentation (e.g., first 5000 rows):
+
+```bash
+uv run lmsys cluster kmeans --n-clusters 200 --limit 5000
+```
+
 ### HDBSCAN
 
 ```bash
@@ -64,6 +71,7 @@ HDBSCAN finds natural clusters based on density. It excludes noise points and do
 | `--chunk-size` | INTEGER | 5000 | Chunk size for streaming |
 | `--min-cluster-size` | INTEGER | 15 | Minimum cluster size |
 | `--min-samples` | INTEGER | 5 | Minimum samples for core point |
+| `--limit` | INTEGER | None | Limit number of queries to cluster |
 | `--description` | TEXT | None | Optional run description |
 
 #### Examples
@@ -79,6 +87,12 @@ Adjust density parameters:
 ```bash
 uv run lmsys cluster hdbscan --use-chroma \
   --min-cluster-size 20 --min-samples 10
+```
+
+Limit queries for quicker runs (e.g., first 8000 rows):
+
+```bash
+uv run lmsys cluster hdbscan --limit 8000
 ```
 
 ## Understanding Run IDs
