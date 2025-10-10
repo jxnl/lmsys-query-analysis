@@ -30,10 +30,10 @@ def merge_clusters_cmd(
         3, help="Number of hierarchy levels (1=flat, 2=one merge, 3=two merges, etc.)"
     ),
     merge_ratio: float = typer.Option(
-        0.2, help="Target merge ratio per level (0.2 = 200->40->8)"
+        0.35, help="Target merge ratio per level (0.35 = 1000->350->120->42, higher=more specific)"
     ),
     neighborhood_size: int = typer.Option(
-        40, help="Average clusters per neighborhood (for LLM context)"
+        20, help="Average clusters per neighborhood for LLM context (smaller=more specific, 15-25 recommended)"
     ),
     concurrency: int = typer.Option(
         8, help="Max concurrent LLM requests"

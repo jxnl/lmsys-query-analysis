@@ -49,7 +49,7 @@ class NeighborhoodCategories(BaseModel):
         description="""List of broader category names based on behavioral patterns and user segments.
 
         Requirements:
-        - Generate 8-18 category names (prefer MORE specific over FEWER generic)
+        - Generate 8-20 category names (prefer MORE specific over FEWER generic)
         - Focus on USER BEHAVIORS and MENTAL MODELS, not just topics
         - Use concrete terminology (technical terms, domains, specific actions)
         - Think taxonomically: identify axes like "expertise level", "autonomy", "output type"
@@ -63,8 +63,11 @@ class NeighborhoodCategories(BaseModel):
         - "Jailbreak Attempts via Roleplay Prompts"
         - "Non-Native Speakers Using LLMs for Professional Translation"
         - "Expert Developers Seeking Architectural Advice"
-        - "Data Scientists Requesting Python Pandas Analysis"
-        - "Web Developers Debugging JavaScript Framework Issues"
+        - "Data Scientists Requesting Python Pandas Analysis Code"
+        - "Web Developers Debugging React Component Errors"
+        - "Python Flask API Development Assistance"
+        - "Chemical Engineers Generating Technical Documentation"
+        - "SQL Database Query Optimization Requests"
 
         Examples (BAD - too generic/topic-focused):
         - "Python Programming" ❌
@@ -72,9 +75,12 @@ class NeighborhoodCategories(BaseModel):
         - "Translation" ❌
         - "Technical Task Automation" ❌
         - "Industry Professionals" ❌
+        - "Professional Development" ❌
+        - "Coding Assistance" ❌
+        - "Users Automating Tasks" ❌
         """,
-        min_length=8,
-        max_length=18
+        min_length=10,
+        max_length=35
     )
 
 
@@ -241,10 +247,13 @@ Guidelines:
 7. PREFER SPECIFICITY: Include concrete domains, technologies, or use cases in category names
 8. Each category should be DISTINCT and NON-OVERLAPPING with others
 
-IMPORTANT: Aim for {int(target_count * 1.2)} categories rather than exactly {target_count}.
-It's better to have more specific categories than fewer generic ones.
+CRITICAL: Prioritize SPECIFICITY over hitting target count exactly.
+- Minimum output: {target_count} categories
+- Target output: {int(target_count * 1.3)} categories (30% more is GOOD)
+- Maximum output: {int(target_count * 1.5)} categories
 
-Output roughly {int(target_count * 1.2)} names (acceptable range: {target_count}-{target_count + 7}).
+It's better to have {int(target_count * 1.5)} specific categories than {target_count} generic ones.
+When in doubt, CREATE MORE CATEGORIES rather than merging into generic buckets.
 
 First, use <scratchpad> to:
 - Identify 2-4 main behavioral patterns or user segments
@@ -295,15 +304,24 @@ async def deduplicate_cluster_names(
 </candidate_names>
 
 Task:
-1. Identify ONLY highly similar or overlapping names (>80% semantic overlap)
-2. When in doubt, KEEP categories separate - preserving specificity is more important than reducing count
-3. Merge ONLY when names are near-duplicates or clearly redundant
-4. Choose the most specific and descriptive name when merging
-5. Preserve important diversity - it's better to have {int(target_count * 1.2)} specific categories than {target_count} generic ones
+1. Identify ONLY near-duplicate names (>90% semantic overlap - essentially the same category)
+2. DEFAULT ACTION: KEEP categories separate unless they are obvious duplicates
+3. Merge ONLY when:
+   - Names are near-identical (e.g., "Python Coding" vs "Python Code Generation" → merge)
+   - One is a clear subset of another (e.g., "React Debugging" under "React Development" → keep separate if both have substance)
+4. DO NOT merge based on:
+   - Same domain but different use cases (e.g., "SQL Query Writing" vs "SQL Performance Optimization" → KEEP BOTH)
+   - Same technology but different user segments (e.g., "Novice Python Help" vs "Expert Python Architecture" → KEEP BOTH)
+   - Similar topics but different behaviors (e.g., "Homework Help" vs "Professional Code Review" → KEEP BOTH)
 
-IMPORTANT: Err on the side of keeping categories distinct. Only merge when truly redundant.
+CRITICAL RULES:
+- Better to have {int(target_count * 1.4)} specific categories than {target_count} generic ones
+- When unsure, DO NOT MERGE
+- Preserve domain-specific and behavior-specific distinctions
+- Only merge if you can't distinguish the categories meaningfully
 
-Output {target_count} to {int(target_count * 1.3)} final cluster names (prefer more specific over fewer generic)."""
+Output {int(target_count * 0.9)} to {int(target_count * 1.5)} final cluster names.
+Acceptable range is wide - QUALITY (specificity) matters more than QUANTITY (hitting exact target)."""
 
     response = await client.chat.completions.create(
         response_model=DeduplicatedClusters,
@@ -464,8 +482,8 @@ async def merge_clusters_hierarchical(
     llm_provider: str = "openai",
     llm_model: str = "gpt-4o-mini",
     target_levels: int = 3,
-    merge_ratio: float = 0.2,
-    neighborhood_size: int = 40,
+    merge_ratio: float = 0.35,  # Changed from 0.2 to 0.35 to reduce over-merging
+    neighborhood_size: int = 20,  # Changed from 40 to 20 for more specific categories
     concurrency: int = 8,
     rpm: Optional[int] = None
 ) -> Tuple[str, List[Dict]]:
@@ -590,8 +608,8 @@ async def merge_clusters_hierarchical(
             step_start = time.time()
             logger.info(f"Step 1/4: Embedding {n_current} cluster summaries...")
             texts = [f"{c['title']}: {c['description']}" for c in current_clusters]
-            # Use proper public interface - this handles the async/sync boundary correctly
-            embeddings = embedder.generate_embeddings(texts, batch_size=96, show_progress=False)
+            # Await the async embedding generation
+            embeddings = await embedder.generate_embeddings(texts, batch_size=96, show_progress=False)
             logger.debug(f"  Embedded {n_current} summaries in {time.time() - step_start:.1f}s")
 
             # Step 2: Create neighborhoods
@@ -648,10 +666,11 @@ async def merge_clusters_hierarchical(
             )
 
             # Calculate min/max bounds for parent count to prevent over-merging
-            # We want roughly n_target, but allow up to 30% more to preserve specificity
-            min_parents = max(n_target, int(n_current * merge_ratio * 0.9))
-            max_parents = int(n_target * 1.3)
-            logger.debug(f"  Target parent range: {min_parents}-{max_parents} (aiming for {n_target})")
+            # We want roughly n_target, but allow up to 50% more to preserve specificity
+            # Changed from 1.3x to 1.5x to allow more specific categories
+            min_parents = max(n_target, int(n_current * merge_ratio * 0.85))
+            max_parents = int(n_target * 1.5)  # Increased from 1.3 to 1.5
+            logger.debug(f"  Target parent range: {min_parents}-{max_parents} (aiming for {n_target}, prefer higher end)")
 
             if limiter:
                 async with limiter:
@@ -667,10 +686,18 @@ async def merge_clusters_hierarchical(
 
             # Validate deduplication didn't over-merge
             if len(parent_names) < min_parents:
-                logger.warning(
-                    f"  Deduplication created too few parents ({len(parent_names)} < {min_parents}). "
-                    f"This may result in overly generic categories."
+                error_msg = (
+                    f"OVER-MERGING DETECTED: Deduplication created {len(parent_names)} parents "
+                    f"from {len(all_candidates)} candidates (expected {min_parents}-{max_parents}). "
+                    f"This indicates overly aggressive merging that will create generic categories.\n\n"
+                    f"Recommendations:\n"
+                    f"  1. Reduce merge_ratio (current: {merge_ratio}, try: {merge_ratio + 0.05:.2f})\n"
+                    f"  2. Reduce neighborhood_size (current: {neighborhood_size}, try: {max(15, neighborhood_size - 10)})\n"
+                    f"  3. Use better LLM (current: {llm_model}, try: claude-sonnet-4-5-20250929)\n\n"
+                    f"Re-run with: --merge-ratio {merge_ratio + 0.05:.2f} --neighborhood-size {max(15, neighborhood_size - 10)}"
                 )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
 
             logger.info(
                 f"  Deduplicated: {len(all_candidates)} candidates → {len(parent_names)} unique parents "
@@ -768,23 +795,43 @@ async def merge_clusters_hierarchical(
                         logger.debug(f"    '{name}': {len(children)} children")
 
             # Validate that no parent has too many children (indicates overly generic category)
-            max_reasonable_children = int(avg_children * 2.5)  # Alert if 2.5x average
+            max_reasonable_children = int(avg_children * 2.0)  # Changed from 2.5x to 2.0x (stricter)
             oversized_parents = [
                 (name, len(children))
                 for name, children in parent_children.items()
                 if len(children) > max_reasonable_children
             ]
             if oversized_parents:
-                logger.warning(
-                    f"  Found {len(oversized_parents)} oversized parent clusters "
-                    f"(>{max_reasonable_children} children, avg is {avg_children:.1f}):"
+                # Changed from warning to error if too many oversized parents
+                oversized_ratio = len(oversized_parents) / len(parent_names)
+                severity = "ERROR" if oversized_ratio > 0.2 else "WARNING"
+
+                log_func = logger.error if severity == "ERROR" else logger.warning
+                log_func(
+                    f"  {severity}: Found {len(oversized_parents)} oversized parent clusters "
+                    f"(>{max_reasonable_children} children, avg is {avg_children:.1f}, {oversized_ratio:.1%} of parents):"
                 )
-                for name, count in oversized_parents:
-                    logger.warning(f"    '{name}': {count} children - may be too generic")
-                logger.warning(
-                    f"  Consider: (1) increasing merge_ratio, (2) using smaller neighborhoods, "
-                    f"or (3) being more conservative in deduplication"
-                )
+                for name, count in oversized_parents[:10]:  # Show top 10
+                    log_func(f"    '{name}': {count} children - likely too generic")
+
+                if severity == "ERROR":
+                    error_msg = (
+                        f"\nOVER-MERGING DETECTED: {oversized_ratio:.1%} of parent clusters are oversized.\n"
+                        f"This indicates the hierarchy is creating overly generic catch-all categories.\n\n"
+                        f"Recommendations:\n"
+                        f"  1. Increase merge_ratio from {merge_ratio:.2f} to {min(0.5, merge_ratio + 0.1):.2f}\n"
+                        f"  2. Reduce neighborhood_size from {neighborhood_size} to {max(15, neighborhood_size - 5)}\n"
+                        f"  3. Use better LLM: claude-sonnet-4-5-20250929 (better at avoiding generic terms)\n\n"
+                        f"Re-run with: --merge-ratio {min(0.5, merge_ratio + 0.1):.2f} --neighborhood-size {max(15, neighborhood_size - 5)}"
+                    )
+                    logger.error(error_msg)
+                    raise ValueError(error_msg)
+                else:
+                    logger.warning(
+                        f"  Consider: (1) increasing merge_ratio to {min(0.5, merge_ratio + 0.05):.2f}, "
+                        f"(2) reducing neighborhood_size to {max(15, neighborhood_size - 5)}, "
+                        f"or (3) using claude-sonnet-4-5-20250929 for better specificity"
+                    )
 
             # Step 6: Refine parent names based on children (parallelized)
             step_start = time.time()
