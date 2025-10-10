@@ -19,6 +19,9 @@ from src.lmsys_query_analysis.db.models import (
 @pytest.fixture(name="session")
 def session_fixture():
     """Create an in-memory SQLite database for testing."""
+    # Clear existing metadata to avoid conflicts
+    SQLModel.metadata.clear()
+
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -27,6 +30,9 @@ def session_fixture():
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield session
+
+    # Clean up after test
+    SQLModel.metadata.clear()
 
 
 @pytest.fixture(name="client")
