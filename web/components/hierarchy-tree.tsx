@@ -28,8 +28,10 @@ export function HierarchyTree({ nodes, runId, queryCounts = {}, hierarchyRunId }
   // Build tree structure - find root nodes (no parent)
   const rootNodes = nodes.filter((n) => n.parentClusterId === null);
 
-  // Calculate total queries across all clusters
-  const totalQueries = Object.values(queryCounts).reduce((sum, count) => sum + count, 0);
+  // Calculate total queries from hierarchy nodes (they now include query_count)
+  const totalQueries = nodes
+    .filter(n => n.level === 0) // Only count leaf nodes to avoid double-counting
+    .reduce((sum, n) => sum + (n.queryCount || 0), 0);
 
   // Calculate hierarchy stats
   const maxLevel = Math.max(...nodes.map(n => n.level), 0);
@@ -38,15 +40,10 @@ export function HierarchyTree({ nodes, runId, queryCounts = {}, hierarchyRunId }
   // Helper to calculate total query count for any node (including descendants)
   const getTotalQueryCount = (nodeId: number): number => {
     const currentNode = nodes.find(n => n.clusterId === nodeId);
-    if (!currentNode) return queryCounts[nodeId] || 0;
+    if (!currentNode) return 0;
 
-    if (!currentNode.childrenIds || currentNode.childrenIds.length === 0) {
-      return queryCounts[nodeId] || 0;
-    }
-
-    return currentNode.childrenIds.reduce((sum, childId) => {
-      return sum + getTotalQueryCount(childId);
-    }, 0);
+    // Use the query_count from the node directly (API now calculates this)
+    return currentNode.queryCount || 0;
   };
 
   // Sort root nodes by query count (descending)
@@ -104,7 +101,7 @@ export function HierarchyTree({ nodes, runId, queryCounts = {}, hierarchyRunId }
         <div className="space-y-3">
           {sortedRootNodes.map((node) => (
             <TreeNode
-              key={node.id}
+              key={node.clusterId}
               node={node}
               nodes={nodes}
               runId={runId}
@@ -158,7 +155,8 @@ function TreeNode({ node, nodes, runId, queryCounts = {}, totalQueries, getTotal
   });
 
   const isLeaf = sortedChildren.length === 0;
-  const queryCount = queryCounts[node.clusterId] || 0;
+  // Use the queryCount from the node directly (API now includes it)
+  const queryCount = node.queryCount || 0;
 
   // Calculate total query count for this node (including all descendants)
   const totalQueryCount = getTotalQueryCount(node.clusterId);
@@ -499,7 +497,7 @@ ${JSON.stringify({
               <div className="space-y-2 pl-2">
                 {sortedChildren.map((child) => (
                   <TreeNode
-                    key={child.id}
+                    key={child.clusterId}
                     node={child}
                     nodes={nodes}
                     runId={runId}

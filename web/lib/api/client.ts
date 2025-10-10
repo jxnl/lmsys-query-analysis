@@ -237,24 +237,29 @@ export const hierarchyApi = {
   /**
    * List all hierarchies
    */
-  async listHierarchies() {
+  async listHierarchies(params?: { run_id?: string }) {
+    const queryParams = new URLSearchParams();
+    if (params?.run_id) queryParams.set('run_id', params.run_id);
+
+    const query = queryParams.toString();
     return apiFetch<{
       items: any[];
       total: number;
-    }>('/api/hierarchy/');
+    }>(`/api/hierarchy/${query ? `?${query}` : ''}`);
   },
 
   /**
    * Get hierarchy tree
-   * Cached for 10 minutes - hierarchies are immutable once created
+   * No caching during development to ensure fresh data
    */
   async getHierarchyTree(hierarchyRunId: string) {
     return apiFetch<{
       nodes: any[];
       hierarchy_run_id: string;
       run_id: string;
+      total_queries: number;
     }>(`/api/hierarchy/${hierarchyRunId}`, {
-      next: { revalidate: 600, tags: ['hierarchies', `hierarchy-${hierarchyRunId}`] },
+      next: { revalidate: 0 }, // Disable caching for development
     });
   },
 };

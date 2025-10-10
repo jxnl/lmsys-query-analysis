@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getRun, getHierarchiesForRun, getHierarchyTree, getClusterQueryCounts } from '@/app/actions';
+import { getRun, getHierarchiesForRun, getHierarchyTree } from '@/app/actions';
 import { HierarchyTree } from '@/components/hierarchy-tree';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,12 +22,8 @@ export default async function RunPage({ params }: RunPageProps) {
   const latestHierarchy = hierarchies[0];
 
   let hierarchyTree = null;
-  let queryCounts: Record<number, number> = {};
   if (latestHierarchy) {
-    [hierarchyTree, queryCounts] = await Promise.all([
-      getHierarchyTree(latestHierarchy.hierarchyRunId),
-      getClusterQueryCounts(runId)
-    ]);
+    hierarchyTree = await getHierarchyTree(latestHierarchy.hierarchyRunId);
   }
 
   const runParams = run.parameters as Record<string, any> | null;
@@ -114,7 +110,6 @@ export default async function RunPage({ params }: RunPageProps) {
             <HierarchyTree
               nodes={hierarchyTree}
               runId={runId}
-              queryCounts={queryCounts}
               hierarchyRunId={latestHierarchy.hierarchyRunId}
             />
           ) : (

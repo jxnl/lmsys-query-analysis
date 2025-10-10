@@ -104,18 +104,33 @@ async def get_hierarchy_tree(
             count_stmt = select(func.count()).where(QueryCluster.run_id == run_id)
             total_queries = session.exec(count_stmt).one()
 
+        # Build query count cache for all clusters
+        # Get ALL cluster query counts in a single query (much faster!)
+        count_stmt = (
+            select(QueryCluster.cluster_id, func.count())
+            .where(QueryCluster.run_id == run_id)
+            .group_by(QueryCluster.cluster_id)
+        )
+        cluster_counts = session.exec(count_stmt).all()
+        query_count_cache = {cluster_id: count for cluster_id, count in cluster_counts}
+
+        # Calculate counts for parent nodes by summing children (bottom-up)
+        # Process nodes from LOWEST parent level to HIGHEST (level 0 are leaf nodes, already have counts)
+        # This ensures that when we calculate level N, all level N-1 counts are already available
+        max_level = max(n.level for n in nodes)
+        for level in range(1, max_level + 1):
+            level_nodes = [n for n in nodes if n.level == level]
+            for node in level_nodes:
+                # Sum up children counts
+                children_count = 0
+                for child_id in (node.children_ids or []):
+                    children_count += query_count_cache.get(child_id, 0)
+                query_count_cache[node.cluster_id] = children_count
+
         # Enhance nodes with query counts
         enriched_nodes = []
         for node in nodes:
-            # For leaf nodes (level 0), count queries directly
-            query_count = None
-            if node.level == 0:
-                count_stmt = (
-                    select(func.count())
-                    .where(QueryCluster.run_id == run_id)
-                    .where(QueryCluster.cluster_id == node.cluster_id)
-                )
-                query_count = session.exec(count_stmt).one()
+            query_count = query_count_cache.get(node.cluster_id, 0)
 
             # Calculate percentage
             percentage = None

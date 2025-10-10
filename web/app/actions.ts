@@ -51,21 +51,18 @@ export async function getRun(runId: string): Promise<ClusteringRun | null> {
 
 /**
  * Get all hierarchies for a given run
- * Note: This requires filtering on the client side since the API doesn't have this exact endpoint
  */
 export async function getHierarchiesForRun(runId: string) {
   try {
-    const response = await hierarchyApi.listHierarchies();
-    // Filter hierarchies for this run
-    const hierarchies = response.items.filter((h: any) => h.run_id === runId);
+    const response = await hierarchyApi.listHierarchies({ run_id: runId });
 
     // Group by hierarchy_run_id to get unique hierarchies
     const uniqueHierarchies = new Map();
-    for (const h of hierarchies) {
-      if (!uniqueHierarchies.has(h.hierarchy_run_id)) {
-        uniqueHierarchies.set(h.hierarchy_run_id, {
-          hierarchyRunId: h.hierarchy_run_id,
-          createdAt: h.created_at,
+    for (const h of response.items) {
+      if (!uniqueHierarchies.has(h.hierarchyRunId)) {
+        uniqueHierarchies.set(h.hierarchyRunId, {
+          hierarchyRunId: h.hierarchyRunId,
+          createdAt: h.createdAt,
         });
       }
     }
