@@ -1,8 +1,17 @@
-import { getRuns } from '../actions';
-import { SearchClient } from './search-client';
+import { apiFetch } from "@/lib/api";
+import { SearchClient } from "./search-client";
+import type { components } from "@/lib/api/types";
+
+type ClusteringRun = components["schemas"]["ClusteringRunSummary"];
 
 export default async function SearchPage() {
-  const runs = await getRuns();
+  const response = await apiFetch<{
+    items: ClusteringRun[];
+    total: number;
+    page: number;
+    pages: number;
+  }>("/api/clustering/runs?limit=100");
+  const runs = response.items;
 
   return (
     <div className="container mx-auto py-8 space-y-6">
@@ -17,4 +26,3 @@ export default async function SearchPage() {
     </div>
   );
 }
-

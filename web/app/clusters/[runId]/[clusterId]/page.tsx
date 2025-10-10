@@ -1,49 +1,73 @@
-import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { getClusterSummary, getClusterQueries, getClusterMetadata, getClusterEditHistory } from '@/app/actions';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { ClusterQueriesClient } from './cluster-queries-client';
-import { ClusterMetadataPanel } from './cluster-metadata-panel';
-import { EditHistoryPanel } from './edit-history-panel';
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { apiFetch } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ClusterQueriesClient } from "./cluster-queries-client";
+import { ClusterMetadataPanel } from "./cluster-metadata-panel";
+import { EditHistoryPanel } from "./edit-history-panel";
+import type { components } from "@/lib/api/types";
+
+type ClusterSummary = components["schemas"]["ClusterSummaryResponse"];
+type Query = components["schemas"]["QueryResponse"];
+type ClusterMetadata = components["schemas"]["ClusterMetadata"];
+type ClusterEdit = components["schemas"]["EditHistoryRecord"];
 
 interface ClusterPageProps {
   params: Promise<{ runId: string; clusterId: string }>;
   searchParams: Promise<{ page?: string }>;
 }
 
-export default async function ClusterPage({ params, searchParams }: ClusterPageProps) {
+export default async function ClusterPage({
+  params,
+  searchParams,
+}: ClusterPageProps) {
   const { runId, clusterId: clusterIdStr } = await params;
   const { page: pageStr } = await searchParams;
 
   const clusterId = parseInt(clusterIdStr);
-  const page = parseInt(pageStr || '1');
+  const page = parseInt(pageStr || "1");
 
-  console.log('[ClusterPage] Loading cluster:', runId, clusterId, 'page:', page);
+  // Single API call for cluster detail (summary + queries)
+  const clusterDetail = await apiFetch<{
+    cluster: ClusterSummary;
+    queries: {
+      items: Query[];
+      total: number;
+      page: number;
+      pages: number;
+      limit: number;
+    };
+  }>(
+    `/api/clustering/runs/${runId}/clusters/${clusterId}?page=${page}&limit=50`,
+  );
 
-  // Fetch cluster summary (optional - may not exist if summarization hasn't been run)
-  const summary = await getClusterSummary(runId, clusterId);
-  console.log('[ClusterPage] Summary:', summary ? 'Found' : 'Not found');
-
-  // Fetch initial page of queries
-  const initialData = await getClusterQueries(runId, clusterId, page);
-  console.log('[ClusterPage] Initial data:', {
-    queries: initialData.queries.length,
-    total: initialData.total,
-    page: initialData.page,
-    pages: initialData.pages
-  });
-
-  // Fetch cluster metadata and edit history
-  const metadata = await getClusterMetadata(runId, clusterId);
-  const editHistory = await getClusterEditHistory(runId, clusterId);
-
-  // If no queries found, return 404
-  if (initialData.queries.length === 0 && page === 1) {
-    console.log('[ClusterPage] No queries found, returning 404');
+  if (
+    !clusterDetail ||
+    (clusterDetail.queries.items.length === 0 && page === 1)
+  ) {
     notFound();
   }
+
+  const summary = clusterDetail.cluster;
+  const queriesData = clusterDetail.queries;
+
+  // Fetch cluster metadata and edit history
+  const metadata = await apiFetch<ClusterMetadata>(
+    `/api/curation/clusters/${clusterId}/metadata?run_id=${runId}`,
+  );
+  const historyResponse = await apiFetch<{
+    items: ClusterEdit[];
+    total: number;
+  }>(`/api/curation/clusters/${clusterId}/history?run_id=${runId}`);
+  const editHistory = historyResponse.items;
 
   return (
     <div className="container mx-auto py-8 space-y-6">
@@ -59,16 +83,20 @@ export default async function ClusterPage({ params, searchParams }: ClusterPageP
           </h1>
           {!summary && (
             <p className="text-sm text-muted-foreground mt-1">
-              Run <code className="text-xs bg-muted px-1 py-0.5 rounded">lmsys summarize {runId}</code> to generate cluster summaries
+              Run{" "}
+              <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                lmsys summarize {runId}
+              </code>{" "}
+              to generate cluster summaries
             </p>
           )}
         </div>
         <div className="flex gap-2">
           <Badge variant="outline">Cluster ID: {clusterId}</Badge>
-          {summary?.numQueries ? (
-            <Badge variant="secondary">{summary.numQueries} queries</Badge>
+          {summary?.num_queries ? (
+            <Badge variant="secondary">{summary.num_queries} queries</Badge>
           ) : (
-            <Badge variant="secondary">{initialData.total} queries</Badge>
+            <Badge variant="secondary">{queriesData.total} queries</Badge>
           )}
         </div>
       </div>
@@ -84,27 +112,43 @@ export default async function ClusterPage({ params, searchParams }: ClusterPageP
         </Card>
       )}
 
-      {summary?.representativeQueries && summary.representativeQueries.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Representative Queries</CardTitle>
-            <CardDescription>Examples that best represent this cluster</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {summary.representativeQueries.slice(0, 5).map((query: any, idx: number) => (
-                <li key={idx} className="text-sm border-l-2 border-muted pl-4">
-                  {typeof query === 'string' ? query : query.query_text || JSON.stringify(query)}
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
+      {summary?.representative_queries &&
+        summary.representative_queries.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Representative Queries</CardTitle>
+              <CardDescription>
+                Examples that best represent this cluster
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                {summary.representative_queries
+                  .slice(0, 5)
+                  .map((query: string, idx: number) => (
+                    <li
+                      key={idx}
+                      className="text-sm border-l-2 border-muted pl-4"
+                    >
+                      {query}
+                    </li>
+                  ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <ClusterMetadataPanel metadata={metadata} runId={runId} clusterId={clusterId} />
-        <EditHistoryPanel edits={editHistory} runId={runId} clusterId={clusterId} />
+        <ClusterMetadataPanel
+          metadata={metadata}
+          runId={runId}
+          clusterId={clusterId}
+        />
+        <EditHistoryPanel
+          edits={editHistory}
+          runId={runId}
+          clusterId={clusterId}
+        />
       </div>
 
       <Card>
@@ -116,7 +160,7 @@ export default async function ClusterPage({ params, searchParams }: ClusterPageP
           <ClusterQueriesClient
             runId={runId}
             clusterId={clusterId}
-            initialData={initialData}
+            initialData={queriesData}
           />
         </CardContent>
       </Card>

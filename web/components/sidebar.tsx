@@ -1,19 +1,19 @@
-'use client'
+"use client";
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
-import { Home, Search, FolderTree, Database } from 'lucide-react';
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { Home, Search, FolderTree, Database } from "lucide-react";
 
 const navItems = [
   {
-    title: 'Home',
-    href: '/',
+    title: "Home",
+    href: "/",
     icon: Home,
   },
   {
-    title: 'Search',
-    href: '/search',
+    title: "Search",
+    href: "/search",
     icon: Search,
   },
 ];
@@ -29,21 +29,22 @@ export function Sidebar() {
           <span className="text-lg">LMSYS Analysis</span>
         </Link>
       </div>
-      
+
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+          const isActive =
+            pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;
-          
+
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
                 isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               <Icon className="h-4 w-4" />
@@ -52,7 +53,7 @@ export function Sidebar() {
           );
         })}
       </nav>
-      
+
       <div className="border-t p-4">
         <p className="text-xs text-muted-foreground">
           LMSYS Query Analysis Viewer
@@ -64,4 +65,3 @@ export function Sidebar() {
     </div>
   );
 }
-

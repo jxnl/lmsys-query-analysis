@@ -29,12 +29,15 @@ dependencies = [
     "cohere>=5.0.0",
     "nest-asyncio>=1.6.0",
     "python-dotenv>=1.0.0",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
+    "httpx>=0.27.0",
 ]
 docs = [
     "mkdocs>=1.5.0",
@@ -44,6 +47,7 @@ docs = [
 
 [project.scripts]
 lmsys = "lmsys_query_analysis.cli.main:app"
+lmsys-api = "lmsys_query_analysis.api.app:main"
 
 [build-system]
 requires = ["hatchling"]

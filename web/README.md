@@ -4,7 +4,7 @@ Interactive web interface for exploring LMSYS clustering analysis results.
 
 ## Overview
 
-This Next.js application provides a read-only visualization layer for the LMSYS query analysis tool. It connects directly to the SQLite database and ChromaDB vector store created by the Python CLI.
+This Next.js application provides a read-only visualization layer for the LMSYS query analysis tool. It connects to the FastAPI backend (port 8000) which provides access to clustering data and analysis results.
 
 ## Prerequisites
 
@@ -31,9 +31,11 @@ Open [http://localhost:3000](http://localhost:3000)
 ## Features
 
 ### Zero External Dependencies
+
 **No ChromaDB server required!** All search functionality uses SQL LIKE queries for fast, simple operation. Just start the Next.js server and go.
 
 ### Core Features
+
 - **Sidebar Navigation**: Persistent sidebar with navigation to all pages
 - **Jobs Dashboard**: View all clustering runs with metadata and stats
 - **Search (SQL LIKE queries)**:
@@ -120,6 +122,30 @@ npm run dev
 ```
 
 The app runs on `http://localhost:3000` with hot reload.
+
+### Testing
+
+Run E2E tests with Playwright:
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in headed mode (see browser)
+npm run test:headed
+
+# Run tests with UI mode (interactive)
+npm run test:ui
+```
+
+**Test Coverage:**
+
+- **API Integration** (6 tests): Health checks, fetch runs/queries, search, error handling
+- **Homepage** (3 tests): Page load, navigation, responsive design
+- **Clustering Runs** (2 tests): List display, run details page access
+- **Search** (2 tests): Frontend search functionality, empty search handling
+
+All tests use Playwright with Chromium browser and run against the live development server.
 
 ### Type Safety
 

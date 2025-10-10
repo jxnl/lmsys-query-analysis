@@ -1,10 +1,10 @@
-'use client'
+"use client";
 
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import type { PaginatedQueries } from '@/lib/types/schemas';
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import type { PaginatedQueries } from "@/lib/types";
 
 interface QueryListProps {
   data: PaginatedQueries;
@@ -50,7 +50,7 @@ export function QueryList({ data, onPageChange }: QueryListProps) {
               <CardContent className="pt-4">
                 <div className="space-y-2">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm flex-1">{query.queryText}</p>
+                    <p className="text-sm flex-1">{query.query_text}</p>
                     <div className="flex gap-2 shrink-0">
                       {query.model && (
                         <Badge variant="secondary" className="text-xs">
@@ -66,7 +66,9 @@ export function QueryList({ data, onPageChange }: QueryListProps) {
                   </div>
                   <div className="flex gap-4 text-xs text-muted-foreground">
                     <span>ID: {query.id}</span>
-                    <span>Conversation: {query.conversationId.substring(0, 8)}...</span>
+                    <span>
+                      Conversation: {query.conversation_id.substring(0, 8)}...
+                    </span>
                   </div>
                 </div>
               </CardContent>
