@@ -4,10 +4,12 @@ import { useState, useEffect, createContext, useContext } from 'react';
 import Link from 'next/link';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronRight, ChevronDown, FileText, Loader2, Copy, Check, Maximize2, Minimize2 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import type { ClusterHierarchy, Query } from '@/lib/types';
-import { getClusterQueries } from '@/app/actions';
+import type { components } from '@/lib/api/types';
+import { queriesApi } from '@/lib/api/client';
+
+type ClusterHierarchy = components['schemas']['HierarchyNode'];
+type Query = components['schemas']['QueryResponse'];
 
 // Context for managing expand/collapse state
 const ExpandContext = createContext<{
@@ -26,30 +28,30 @@ export function HierarchyTree({ nodes, runId, queryCounts = {}, hierarchyRunId }
   const [expandAll, setExpandAll] = useState(false);
 
   // Build tree structure - find root nodes (no parent)
-  const rootNodes = nodes.filter((n) => n.parentClusterId === null);
+  const rootNodes = nodes.filter((n) => n.parent_cluster_id === null);
 
   // Calculate total queries from hierarchy nodes (they now include query_count)
   const totalQueries = nodes
     .filter(n => n.level === 0) // Only count leaf nodes to avoid double-counting
-    .reduce((sum, n) => sum + (n.queryCount || 0), 0);
+    .reduce((sum, n) => sum + (n.query_count || 0), 0);
 
   // Calculate hierarchy stats
   const maxLevel = Math.max(...nodes.map(n => n.level), 0);
-  const leafCount = nodes.filter(n => !n.childrenIds || n.childrenIds.length === 0).length;
+  const leafCount = nodes.filter(n => !n.children_ids || n.children_ids.length === 0).length;
 
   // Helper to calculate total query count for any node (including descendants)
   const getTotalQueryCount = (nodeId: number): number => {
-    const currentNode = nodes.find(n => n.clusterId === nodeId);
+    const currentNode = nodes.find(n => n.cluster_id === nodeId);
     if (!currentNode) return 0;
 
     // Use the query_count from the node directly (API now calculates this)
-    return currentNode.queryCount || 0;
+    return currentNode.query_count || 0;
   };
 
   // Sort root nodes by query count (descending)
   const sortedRootNodes = [...rootNodes].sort((a, b) => {
-    const countA = getTotalQueryCount(a.clusterId);
-    const countB = getTotalQueryCount(b.clusterId);
+    const countA = getTotalQueryCount(a.cluster_id);
+    const countB = getTotalQueryCount(b.cluster_id);
     return countB - countA;
   });
 
@@ -101,7 +103,7 @@ export function HierarchyTree({ nodes, runId, queryCounts = {}, hierarchyRunId }
         <div className="space-y-3">
           {sortedRootNodes.map((node) => (
             <TreeNode
-              key={node.clusterId}
+              key={node.cluster_id}
               node={node}
               nodes={nodes}
               runId={runId}
@@ -140,32 +142,32 @@ function TreeNode({ node, nodes, runId, queryCounts = {}, totalQueries, getTotal
     if (expandContext) {
       setIsOpen(expandContext.expandAll);
     }
-  }, [expandContext?.expandAll]);
+  }, [expandContext]);
 
   // Find children nodes
-  const children = node.childrenIds
-    ? nodes.filter((n) => node.childrenIds?.includes(n.clusterId))
+  const children = node.children_ids
+    ? nodes.filter((n) => node.children_ids?.includes(n.cluster_id))
     : [];
 
   // Sort children by total query count (descending)
   const sortedChildren = [...children].sort((a, b) => {
-    const countA = getTotalQueryCount(a.clusterId);
-    const countB = getTotalQueryCount(b.clusterId);
+    const countA = getTotalQueryCount(a.cluster_id);
+    const countB = getTotalQueryCount(b.cluster_id);
     return countB - countA;
   });
 
   const isLeaf = sortedChildren.length === 0;
-  // Use the queryCount from the node directly (API now includes it)
-  const queryCount = node.queryCount || 0;
+  // Use the query_count from the node directly (API now includes it)
+  const queryCount = node.query_count || 0;
 
   // Calculate total query count for this node (including all descendants)
-  const totalQueryCount = getTotalQueryCount(node.clusterId);
+  const totalQueryCount = getTotalQueryCount(node.cluster_id);
 
   // Calculate percentage relative to parent's total
   // For root nodes, use global totalQueries; for children, calculate parent's total
   let parentTotal = totalQueries;
-  if (node.parentClusterId !== null) {
-    parentTotal = getTotalQueryCount(node.parentClusterId);
+  if (node.parent_cluster_id !== null && node.parent_cluster_id !== undefined) {
+    parentTotal = getTotalQueryCount(node.parent_cluster_id);
   }
   const percentage = parentTotal > 0 ? (totalQueryCount / parentTotal) * 100 : 0;
 
@@ -180,14 +182,14 @@ function TreeNode({ node, nodes, runId, queryCounts = {}, totalQueries, getTotal
   // Build hierarchy path (from root to this node)
   const buildHierarchyPath = (): string[] => {
     const path: string[] = [];
-    let currentId: number | null = node.clusterId;
+    let currentId: number | null = node.cluster_id;
 
     while (currentId !== null) {
-      const currentNode = nodes.find(n => n.clusterId === currentId);
+      const currentNode = nodes.find(n => n.cluster_id === currentId);
       if (!currentNode) break;
 
-      path.unshift(`${currentNode.title || `Cluster ${currentNode.clusterId}`} (ID: ${currentNode.clusterId}, Level: ${currentNode.level})`);
-      currentId = currentNode.parentClusterId;
+      path.unshift(`${currentNode.title || `Cluster ${currentNode.cluster_id}`} (ID: ${currentNode.cluster_id}, Level: ${currentNode.level})`);
+      currentId = currentNode.parent_cluster_id ?? null;
     }
 
     return path;
@@ -201,8 +203,8 @@ function TreeNode({ node, nodes, runId, queryCounts = {}, totalQueries, getTotal
     let sampleQueries = queries;
     if (isLeaf && sampleQueries.length === 0) {
       try {
-        const data = await getClusterQueries(runId, node.clusterId, 1, 5);
-        sampleQueries = data.queries;
+        const data = await queriesApi.listQueries({ run_id: runId, cluster_id: node.cluster_id, page: 1, limit: 5 });
+        sampleQueries = data.items;
       } catch (err) {
         console.error('Failed to fetch sample queries:', err);
       }
@@ -212,7 +214,7 @@ function TreeNode({ node, nodes, runId, queryCounts = {}, totalQueries, getTotal
       ? `## Sample Queries (${sampleQueries.length} of ${queryCount})
 ${sampleQueries.map((q, i) => `
 ### Query ${i + 1}
-- **Text**: ${q.queryText}
+- **Text**: ${q.query_text}
 - **Model**: ${q.model || 'N/A'}
 - **Language**: ${q.language || 'N/A'}
 - **ID**: ${q.id}
@@ -228,10 +230,10 @@ No queries available
 
 ## Run Information
 - Run ID: ${runId}
-- Hierarchy Run ID: ${hierarchyRunId || node.hierarchyRunId || 'N/A'}
+- Hierarchy Run ID: ${hierarchyRunId || node.hierarchy_run_id || 'N/A'}
 
 ## Cluster Information
-- Cluster ID: ${node.clusterId}
+- Cluster ID: ${node.cluster_id}
 - Title: ${node.title || 'N/A'}
 - Level: ${node.level}
 - Type: ${isLeaf ? 'Leaf' : 'Parent'}
@@ -247,9 +249,9 @@ ${hierarchyPath.map((p, i) => `${i + 1}. ${p}`).join('\n')}
 - Global Total Queries: ${totalQueries}
 
 ## Structure
-- Parent Cluster ID: ${node.parentClusterId ?? 'None (Root)'}
+- Parent Cluster ID: ${node.parent_cluster_id ?? 'None (Root)'}
 - Children Count: ${sortedChildren.length}
-- Children IDs: ${node.childrenIds?.join(', ') || 'None'}
+- Children IDs: ${node.children_ids?.join(', ') || 'None'}
 
 ## Description
 ${node.description || 'N/A'}
@@ -258,13 +260,12 @@ ${queriesSection}
 ## Database Record
 \`\`\`json
 ${JSON.stringify({
-  id: node.id,
-  hierarchyRunId: node.hierarchyRunId,
-  runId: node.runId,
-  clusterId: node.clusterId,
-  parentClusterId: node.parentClusterId,
+  hierarchy_run_id: node.hierarchy_run_id,
+  run_id: node.run_id,
+  cluster_id: node.cluster_id,
+  parent_cluster_id: node.parent_cluster_id,
   level: node.level,
-  childrenIds: node.childrenIds,
+  children_ids: node.children_ids,
   title: node.title,
   description: node.description,
 }, null, 2)}
@@ -284,9 +285,9 @@ ${JSON.stringify({
   useEffect(() => {
     if (isLeaf && isOpen && queries.length === 0) {
       setIsLoadingQueries(true);
-      getClusterQueries(runId, node.clusterId, 1, 10)
+      queriesApi.listQueries({ run_id: runId, cluster_id: node.cluster_id, page: 1, limit: 10 })
         .then((data) => {
-          setQueries(data.queries);
+          setQueries(data.items);
         })
         .catch((err) => {
           console.error('Failed to load queries:', err);
@@ -295,7 +296,7 @@ ${JSON.stringify({
           setIsLoadingQueries(false);
         });
     }
-  }, [isLeaf, isOpen, runId, node.clusterId, queries.length]);
+  }, [isLeaf, isOpen, runId, node.cluster_id, queries.length, expandContext]);
 
   const displayedQueries = showAllQueries ? queries : queries.slice(0, 5);
 
@@ -323,7 +324,7 @@ ${JSON.stringify({
                   <span className={`font-medium truncate ${
                     sizeCategory === 'large' ? 'text-base' : 'text-sm'
                   }`}>
-                    {node.title || `Cluster ${node.clusterId}`}
+                    {node.title || `Cluster ${node.cluster_id}`}
                   </span>
                   <span className={`text-xs font-medium ${
                     sizeCategory === 'large' ? 'text-blue-600 dark:text-blue-400' :
@@ -366,7 +367,7 @@ ${JSON.stringify({
                   )}
                 </div>
                 <Link
-                  href={`/clusters/${runId}/${node.clusterId}`}
+                  href={`/clusters/${runId}/${node.cluster_id}`}
                   className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-accent"
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -387,9 +388,9 @@ ${JSON.stringify({
                     {displayedQueries.map((query) => (
                       <div key={query.id} className="text-sm p-2.5 bg-muted/50 rounded-md border border-border/50">
                         <p className="whitespace-pre-wrap text-foreground/90">
-                          {query.queryText.length > 200
-                            ? query.queryText.slice(0, 200) + '...'
-                            : query.queryText}
+                          {query.query_text.length > 200
+                            ? query.query_text.slice(0, 200) + '...'
+                            : query.query_text}
                         </p>
                         <div className="flex gap-2 mt-1.5 text-xs text-muted-foreground">
                           {query.model && <span className="font-medium">{query.model}</span>}
@@ -444,7 +445,7 @@ ${JSON.stringify({
                   <span className={`font-semibold truncate ${
                     sizeCategory === 'large' ? 'text-base' : 'text-sm'
                   }`}>
-                    {node.title || `Cluster ${node.clusterId}`}
+                    {node.title || `Cluster ${node.cluster_id}`}
                   </span>
                   <span className={`text-xs font-medium ${
                     sizeCategory === 'large' ? 'text-emerald-600 dark:text-emerald-400' :
@@ -497,7 +498,7 @@ ${JSON.stringify({
               <div className="space-y-2 pl-2">
                 {sortedChildren.map((child) => (
                   <TreeNode
-                    key={child.clusterId}
+                    key={child.cluster_id}
                     node={child}
                     nodes={nodes}
                     runId={runId}

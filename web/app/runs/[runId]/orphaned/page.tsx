@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getRun, getOrphanedQueries } from '@/app/actions';
+import { clusteringApi, curationApi } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,13 +13,14 @@ export default async function OrphanedQueriesPage({ params }: OrphanedQueriesPag
   const { runId } = await params;
 
   // Fetch run metadata
-  const run = await getRun(runId);
+  const run = await clusteringApi.getRun(runId);
   if (!run) {
     notFound();
   }
 
   // Fetch orphaned queries
-  const orphanedResults = await getOrphanedQueries(runId);
+  const orphanedResponse = await curationApi.getOrphanedQueries(runId);
+  const orphanedResults = orphanedResponse.items;
 
   return (
     <div className="container mx-auto py-8 space-y-6">
@@ -62,23 +63,23 @@ export default async function OrphanedQueriesPage({ params }: OrphanedQueriesPag
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {orphanedResults.map(({ orphan, query }) => (
-                <div key={orphan.id} className="border rounded-lg p-4">
+              {orphanedResults.map(({ orphan, query }, index) => (
+                <div key={index} className="border rounded-lg p-4">
                   <div className="flex items-start justify-between gap-4 mb-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs text-muted-foreground">Query {query.id}</span>
-                        {orphan.originalClusterId && (
+                        {(orphan as any).original_cluster_id && (
                           <Badge variant="outline" className="text-xs">
-                            From cluster {orphan.originalClusterId}
+                            From cluster {(orphan as any).original_cluster_id}
                           </Badge>
                         )}
                       </div>
-                      <p className="text-sm">{query.queryText}</p>
+                      <p className="text-sm">{query.query_text}</p>
                     </div>
                     <div className="text-right">
                       <div className="text-xs text-muted-foreground">
-                        {new Date(orphan.orphanedAt).toLocaleDateString()}
+                        {new Date((orphan as any).orphaned_at).toLocaleDateString()}
                       </div>
                     </div>
                   </div>
@@ -88,9 +89,9 @@ export default async function OrphanedQueriesPage({ params }: OrphanedQueriesPag
                     {query.language && <span>Language: {query.language}</span>}
                   </div>
 
-                  {orphan.reason && (
+                  {(orphan as any).reason && (
                     <div className="mt-2 text-xs text-muted-foreground border-t pt-2">
-                      Reason: {orphan.reason}
+                      Reason: {(orphan as any).reason}
                     </div>
                   )}
                 </div>

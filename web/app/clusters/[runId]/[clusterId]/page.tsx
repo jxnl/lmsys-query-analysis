@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getClusterSummary, getClusterQueries, getClusterMetadata, getClusterEditHistory } from '@/app/actions';
+import { queriesApi, curationApi } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,30 +20,20 @@ export default async function ClusterPage({ params, searchParams }: ClusterPageP
   const clusterId = parseInt(clusterIdStr);
   const page = parseInt(pageStr || '1');
 
-  console.log('[ClusterPage] Loading cluster:', runId, clusterId, 'page:', page);
+  // Single API call for cluster detail (summary + queries)
+  const clusterDetail = await queriesApi.getClusterDetail(runId, clusterId, { page, limit: 50 });
 
-  // Fetch cluster summary (optional - may not exist if summarization hasn't been run)
-  const summary = await getClusterSummary(runId, clusterId);
-  console.log('[ClusterPage] Summary:', summary ? 'Found' : 'Not found');
-
-  // Fetch initial page of queries
-  const initialData = await getClusterQueries(runId, clusterId, page);
-  console.log('[ClusterPage] Initial data:', {
-    queries: initialData.queries.length,
-    total: initialData.total,
-    page: initialData.page,
-    pages: initialData.pages
-  });
-
-  // Fetch cluster metadata and edit history
-  const metadata = await getClusterMetadata(runId, clusterId);
-  const editHistory = await getClusterEditHistory(runId, clusterId);
-
-  // If no queries found, return 404
-  if (initialData.queries.length === 0 && page === 1) {
-    console.log('[ClusterPage] No queries found, returning 404');
+  if (!clusterDetail || clusterDetail.queries.items.length === 0 && page === 1) {
     notFound();
   }
+
+  const summary = clusterDetail.cluster;
+  const queriesData = clusterDetail.queries;
+
+  // Fetch cluster metadata and edit history
+  const metadata = await curationApi.getClusterMetadata(runId, clusterId);
+  const historyResponse = await curationApi.getClusterHistory(runId, clusterId);
+  const editHistory = historyResponse.items;
 
   return (
     <div className="container mx-auto py-8 space-y-6">
@@ -65,10 +55,10 @@ export default async function ClusterPage({ params, searchParams }: ClusterPageP
         </div>
         <div className="flex gap-2">
           <Badge variant="outline">Cluster ID: {clusterId}</Badge>
-          {summary?.numQueries ? (
-            <Badge variant="secondary">{summary.numQueries} queries</Badge>
+          {summary?.num_queries ? (
+            <Badge variant="secondary">{summary.num_queries} queries</Badge>
           ) : (
-            <Badge variant="secondary">{initialData.total} queries</Badge>
+            <Badge variant="secondary">{queriesData.total} queries</Badge>
           )}
         </div>
       </div>
@@ -84,7 +74,7 @@ export default async function ClusterPage({ params, searchParams }: ClusterPageP
         </Card>
       )}
 
-      {summary?.representativeQueries && summary.representativeQueries.length > 0 && (
+      {summary?.representative_queries && summary.representative_queries.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Representative Queries</CardTitle>
@@ -92,7 +82,7 @@ export default async function ClusterPage({ params, searchParams }: ClusterPageP
           </CardHeader>
           <CardContent>
             <ul className="space-y-2">
-              {summary.representativeQueries.slice(0, 5).map((query: any, idx: number) => (
+              {summary.representative_queries.slice(0, 5).map((query: any, idx: number) => (
                 <li key={idx} className="text-sm border-l-2 border-muted pl-4">
                   {typeof query === 'string' ? query : query.query_text || JSON.stringify(query)}
                 </li>
@@ -116,7 +106,7 @@ export default async function ClusterPage({ params, searchParams }: ClusterPageP
           <ClusterQueriesClient
             runId={runId}
             clusterId={clusterId}
-            initialData={initialData}
+            initialData={queriesData}
           />
         </CardContent>
       </Card>

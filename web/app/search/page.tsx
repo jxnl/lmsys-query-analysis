@@ -1,8 +1,9 @@
-import { getRuns } from '../actions';
+import { clusteringApi } from '@/lib/api/client';
 import { SearchClient } from './search-client';
 
 export default async function SearchPage() {
-  const runs = await getRuns();
+  const response = await clusteringApi.listRuns({ limit: 100 });
+  const runs = response.items;
 
   return (
     <div className="container mx-auto py-8 space-y-6">

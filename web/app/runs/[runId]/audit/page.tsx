@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getRun, getClusterEditHistory } from '@/app/actions';
+import { clusteringApi, curationApi } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,13 +13,14 @@ export default async function AuditLogPage({ params }: AuditLogPageProps) {
   const { runId } = await params;
 
   // Fetch run metadata
-  const run = await getRun(runId);
+  const run = await clusteringApi.getRun(runId);
   if (!run) {
     notFound();
   }
 
   // Fetch all edits for this run
-  const edits = await getClusterEditHistory(runId);
+  const editsResponse = await curationApi.getAuditLog(runId);
+  const edits = editsResponse.items;
 
   const getEditTypeBadge = (editType: string) => {
     const variants: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }> = {
@@ -76,15 +77,15 @@ export default async function AuditLogPage({ params }: AuditLogPageProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {edits.map((edit) => (
-                <div key={edit.id} className="border rounded-lg p-4">
+              {edits.map((edit, index) => (
+                <div key={index} className="border rounded-lg p-4">
                   <div className="flex items-start justify-between gap-4 mb-2">
                     <div className="flex items-center gap-2">
-                      {getEditTypeBadge(edit.editType)}
-                      {edit.clusterId && (
-                        <Link href={`/clusters/${runId}/${edit.clusterId}`}>
+                      {getEditTypeBadge(edit.edit_type)}
+                      {edit.cluster_id && (
+                        <Link href={`/clusters/${runId}/${edit.cluster_id}`}>
                           <Badge variant="outline" className="hover:bg-accent cursor-pointer">
-                            Cluster {edit.clusterId}
+                            Cluster {edit.cluster_id}
                           </Badge>
                         </Link>
                       )}
@@ -102,43 +103,43 @@ export default async function AuditLogPage({ params }: AuditLogPageProps) {
                   )}
 
                   {/* Show detailed changes */}
-                  {edit.editType === 'rename' && edit.oldValue && edit.newValue && (
+                  {edit.edit_type === 'rename' && edit.old_value && edit.new_value && (
                     <div className="mt-2 p-2 bg-muted rounded text-xs">
                       <div className="font-medium mb-1">Title Change:</div>
-                      <div className="line-through text-muted-foreground">{(edit.oldValue as any).title}</div>
-                      <div>→ {(edit.newValue as any).title}</div>
+                      <div className="line-through text-muted-foreground">{(edit.old_value as any).title}</div>
+                      <div>→ {(edit.new_value as any).title}</div>
                     </div>
                   )}
 
-                  {edit.editType === 'move_query' && edit.oldValue && edit.newValue && (
+                  {edit.edit_type === 'move_query' && edit.old_value && edit.new_value && (
                     <div className="mt-2 p-2 bg-muted rounded text-xs">
                       <div className="font-medium mb-1">Query Movement:</div>
                       <div>
-                        Query {(edit.oldValue as any).query_id}: Cluster {(edit.oldValue as any).cluster_id} → {(edit.newValue as any).cluster_id}
+                        Query {(edit.old_value as any).query_id}: Cluster {(edit.old_value as any).cluster_id} → {(edit.new_value as any).cluster_id}
                       </div>
                     </div>
                   )}
 
-                  {edit.editType === 'merge' && edit.oldValue && edit.newValue && (
+                  {edit.edit_type === 'merge' && edit.old_value && edit.new_value && (
                     <div className="mt-2 p-2 bg-muted rounded text-xs">
                       <div className="font-medium mb-1">Cluster Merge:</div>
                       <div>
-                        Merged {((edit.oldValue as any).source_clusters || []).join(', ')} → Cluster {(edit.newValue as any).target_cluster}
+                        Merged {((edit.old_value as any).source_clusters || []).join(', ')} → Cluster {(edit.new_value as any).target_cluster}
                       </div>
                       <div className="text-muted-foreground">
-                        {(edit.newValue as any).queries_moved} queries moved
+                        {(edit.new_value as any).queries_moved} queries moved
                       </div>
                     </div>
                   )}
 
-                  {edit.editType === 'tag' && edit.newValue && (
+                  {edit.edit_type === 'tag' && edit.new_value && (
                     <div className="mt-2 p-2 bg-muted rounded text-xs">
                       <div className="font-medium mb-1">Metadata Update:</div>
-                      {(edit.newValue as any).quality && (
-                        <div>Quality: {(edit.newValue as any).quality}</div>
+                      {(edit.new_value as any).quality && (
+                        <div>Quality: {(edit.new_value as any).quality}</div>
                       )}
-                      {(edit.newValue as any).coherence_score && (
-                        <div>Coherence: {(edit.newValue as any).coherence_score}/5</div>
+                      {(edit.new_value as any).coherence_score && (
+                        <div>Coherence: {(edit.new_value as any).coherence_score}/5</div>
                       )}
                     </div>
                   )}

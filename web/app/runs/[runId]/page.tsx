@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getRun, getHierarchiesForRun, getHierarchyTree } from '@/app/actions';
+import { clusteringApi, hierarchyApi } from '@/lib/api/client';
 import { HierarchyTree } from '@/components/hierarchy-tree';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,18 +12,19 @@ interface RunPageProps {
 
 export default async function RunPage({ params }: RunPageProps) {
   const { runId } = await params;
-  const run = await getRun(runId);
+  const run = await clusteringApi.getRun(runId);
 
   if (!run) {
     notFound();
   }
 
-  const hierarchies = await getHierarchiesForRun(runId);
-  const latestHierarchy = hierarchies[0];
+  const hierarchiesResponse = await hierarchyApi.listHierarchies({ run_id: runId });
+  const latestHierarchy = hierarchiesResponse.items[0];
 
   let hierarchyTree = null;
   if (latestHierarchy) {
-    hierarchyTree = await getHierarchyTree(latestHierarchy.hierarchyRunId);
+    const treeResponse = await hierarchyApi.getHierarchyTree(latestHierarchy.hierarchy_run_id);
+    hierarchyTree = treeResponse.nodes;
   }
 
   const runParams = run.parameters as Record<string, any> | null;
@@ -37,7 +38,7 @@ export default async function RunPage({ params }: RunPageProps) {
               ← Back to runs
             </Button>
           </Link>
-          <h1 className="text-3xl font-bold mt-2">{run.runId}</h1>
+          <h1 className="text-3xl font-bold mt-2">{run.run_id}</h1>
         </div>
       </div>
 
@@ -56,7 +57,7 @@ export default async function RunPage({ params }: RunPageProps) {
             <CardTitle className="text-sm font-medium">Clusters</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{run.numClusters || 'N/A'}</p>
+            <p className="text-2xl font-bold">{run.num_clusters || 'N/A'}</p>
           </CardContent>
         </Card>
 
@@ -66,7 +67,7 @@ export default async function RunPage({ params }: RunPageProps) {
           </CardHeader>
           <CardContent>
             <p className="text-sm">
-              {new Date(run.createdAt).toLocaleDateString('en-US', {
+              {new Date(run.created_at).toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
@@ -110,7 +111,7 @@ export default async function RunPage({ params }: RunPageProps) {
             <HierarchyTree
               nodes={hierarchyTree}
               runId={runId}
-              hierarchyRunId={latestHierarchy.hierarchyRunId}
+              hierarchyRunId={latestHierarchy.hierarchy_run_id}
             />
           ) : (
             <p className="text-muted-foreground text-center py-8">

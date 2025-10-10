@@ -8,23 +8,6 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 /**
- * Convert snake_case keys to camelCase recursively
- */
-function toCamelCase(obj: any): any {
-  if (Array.isArray(obj)) {
-    return obj.map(toCamelCase);
-  } else if (obj !== null && typeof obj === 'object') {
-    return Object.keys(obj).reduce((result, key) => {
-      // Convert snake_case to camelCase
-      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-      result[camelKey] = toCamelCase(obj[key]);
-      return result;
-    }, {} as any);
-  }
-  return obj;
-}
-
-/**
  * Generic API fetch wrapper with error handling and Next.js caching
  *
  * @param endpoint - API endpoint path
@@ -58,8 +41,7 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit & {
     }
 
     const data = await response.json();
-    // Convert snake_case to camelCase to match frontend types
-    return toCamelCase(data) as T;
+    return data as T;
   } catch (error) {
     console.error(`API fetch error for ${endpoint}:`, error);
     throw error;

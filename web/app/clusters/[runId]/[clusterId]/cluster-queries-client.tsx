@@ -3,16 +3,19 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { DataViewer, type DataViewerData } from '@/components/data-viewer';
-import type { PaginatedQueries } from '@/lib/types';
-import { getClusterQueries, searchQueriesInCluster } from '@/app/actions';
+import type { components } from '@/lib/api/types';
+import { queriesApi } from '@/lib/api/client';
+import { searchQueriesInCluster } from '@/app/actions';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, X } from 'lucide-react';
 
+type PaginatedQueriesResponse = components['schemas']['PaginatedQueriesResponse'];
+
 interface ClusterQueriesClientProps {
   runId: string;
   clusterId: number;
-  initialData: PaginatedQueries;
+  initialData: PaginatedQueriesResponse;
 }
 
 export function ClusterQueriesClient({
@@ -20,33 +23,32 @@ export function ClusterQueriesClient({
   clusterId,
   initialData,
 }: ClusterQueriesClientProps) {
-  // Convert PaginatedQueries to DataViewerData format
-  const convertData = (data: PaginatedQueries): DataViewerData => ({
-    queries: data.queries.map(q => ({
-      ...q,
-      clusters: [], // Queries in cluster view don't show other cluster associations
-    })),
+  // Convert to DataViewer format (minimal transformation)
+  const toDataViewerFormat = (data: PaginatedQueriesResponse): DataViewerData => ({
+    queries: data.items.map(q => ({ ...q, clusters: [] })),
     total: data.total,
     page: data.page,
     pages: data.pages,
     limit: data.limit,
   });
 
-  const [data, setData] = useState(convertData(initialData));
+  const [data, setData] = useState(toDataViewerFormat(initialData));
   const [isPending, startTransition] = useTransition();
   const [searchText, setSearchText] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [currentSearchText, setCurrentSearchText] = useState('');
-  const [searchError, setSearchError] = useState<string | null>(null);
   const router = useRouter();
 
   const handlePageChange = (newPage: number) => {
     startTransition(async () => {
-      const newData = isSearchMode
-        ? await searchQueriesInCluster(currentSearchText, runId, clusterId, newPage)
-        : await getClusterQueries(runId, clusterId, newPage);
-      setData(convertData(newData));
-      // Update URL to reflect current page
+      if (isSearchMode) {
+        const searchResults = await searchQueriesInCluster(currentSearchText, runId, clusterId, newPage);
+        setData(toDataViewerFormat(searchResults));
+      } else {
+        const clusterDetail = await queriesApi.getClusterDetail(runId, clusterId, { page: newPage, limit: 50 });
+        setData(toDataViewerFormat(clusterDetail.queries));
+      }
+
       const params = new URLSearchParams({ page: newPage.toString() });
       if (isSearchMode) params.set('q', currentSearchText);
       router.push(`/clusters/${runId}/${clusterId}?${params}`, { scroll: false });
@@ -59,11 +61,8 @@ export function ClusterQueriesClient({
     startTransition(async () => {
       setIsSearchMode(true);
       setCurrentSearchText(searchText);
-      setSearchError(null);
       const searchResults = await searchQueriesInCluster(searchText, runId, clusterId, 1);
-      
-      setData(convertData(searchResults));
-      // Update URL with search query
+      setData(toDataViewerFormat(searchResults));
       router.push(`/clusters/${runId}/${clusterId}?q=${encodeURIComponent(searchText)}`, { scroll: false });
     });
   };
@@ -74,8 +73,8 @@ export function ClusterQueriesClient({
     setCurrentSearchText('');
 
     startTransition(async () => {
-      const allQueries = await getClusterQueries(runId, clusterId, 1);
-      setData(convertData(allQueries));
+      const clusterDetail = await queriesApi.getClusterDetail(runId, clusterId, { page: 1, limit: 50 });
+      setData(toDataViewerFormat(clusterDetail.queries));
       router.push(`/clusters/${runId}/${clusterId}`, { scroll: false });
     });
   };

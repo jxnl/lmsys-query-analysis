@@ -1,10 +1,11 @@
-import { getRuns } from './actions';
+import { clusteringApi } from '@/lib/api/client';
 import { JobsTable } from '@/components/jobs-table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Database, Search, FolderTree } from 'lucide-react';
 
 export default async function HomePage() {
-  const runs = await getRuns();
+  const response = await clusteringApi.listRuns({ limit: 100 });
+  const runs = response.items;
 
   return (
     <div className="container mx-auto py-8 space-y-6">

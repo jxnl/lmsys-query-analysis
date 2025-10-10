@@ -79,8 +79,8 @@ class NeighborhoodCategories(BaseModel):
         - "Coding Assistance" ❌
         - "Users Automating Tasks" ❌
         """,
-        min_length=10,
-        max_length=35
+        min_length=8,
+        max_length=100
     )
 
 
