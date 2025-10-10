@@ -16,41 +16,35 @@ This repository provides **terminal-based CLI tools for agents to perform compre
 
 The CLI implements specialized tools across multiple categories:
 
-#### 1. Data Loading Tools
-
+**1. Data Loading Tools**
 - Load datasets from Hugging Face or custom sources
 - Generate and backfill embeddings for semantic analysis
 - Manage dataset lifecycle (status checks, clearing)
 
-#### 2. Clustering Tools
-
+**2. Clustering Tools**
 - Run unsupervised clustering (KMeans, HDBSCAN) to discover behavioral patterns
 - List and compare clustering runs with different parameters
 - Get detailed cluster statistics and metadata
 - Identify outliers and anomalies automatically
 
-#### 3. Summarization Tools
-
+**3. Summarization Tools**
 - Generate LLM-powered cluster summaries and descriptions
 - Create multiple summary runs to compare different models or prompts
 - Extract representative queries and key themes
 - Support contrastive analysis (what makes each cluster unique)
 
-#### 4. Hierarchy Tools
-
+**4. Hierarchy Tools**
 - Build multi-level cluster taxonomies using Anthropic Clio methodology
 - Navigate hierarchical structures from high-level themes to specific patterns
 - Organize hundreds of clusters into manageable categories
 
-#### 5. Search & Analysis Tools
-
+**5. Search & Analysis Tools**
 - Semantic search across queries and clusters
 - Filter and aggregate by metadata dimensions
 - Export data for external analysis
 - Compare time periods and detect trends
 
-#### 6. Curation Tools
-
+**6. Curation Tools**
 - Edit cluster assignments and metadata (move, rename, merge, split, tag)
 - Track edit history and audit trails
 - Flag clusters for review and quality annotation
@@ -60,28 +54,24 @@ The CLI implements specialized tools across multiple categories:
 
 Agents use these tools to autonomously explore data and discover insights:
 
-#### Phase 1: Landscape Exploration
-
+**Phase 1: Landscape Exploration**
 - Load dataset and generate embeddings
 - Run clustering to identify behavioral patterns
 - Build hierarchy to organize patterns into themes
 - Generate summaries to understand cluster semantics
 
-#### Phase 2: Anomaly Detection
-
+**Phase 2: Anomaly Detection**
 - Identify outlier clusters (unusual size, latency, error rates)
 - Investigate high-impact patterns affecting significant traffic
 - Search for similar patterns across the dataset
 
-#### Phase 3: Hypothesis Testing
-
+**Phase 3: Hypothesis Testing**
 - Create custom classifications to test hypotheses
 - Drill down into specific clusters to find sub-patterns
 - Compare successful vs. failing interactions
 - Validate findings with statistical analysis
 
-#### Phase 4: Actionable Recommendations
-
+**Phase 4: Actionable Recommendations**
 - Quantify business impact (affected traffic, revenue, cost)
 - Generate engineering fixes with code snippets
 - Estimate implementation effort and ROI
@@ -91,9 +81,9 @@ Agents use these tools to autonomously explore data and discover insights:
 
 All capabilities are accessible through the `lmsys` CLI command in composable workflows: `load → cluster → summarize → merge-clusters → search → inspect → edit → export`
 
-### Web Viewer (Zero External Dependencies)
+### Web Viewer
 
-A **Next.js-based interactive web interface** (`web/`) provides read-only visualization with **no external services required** - just SQLite (no ChromaDB server needed):
+A **Next.js-based interactive web interface** (`web/`) provides read-only visualization of clustering results with **zero external dependencies** (no ChromaDB server required):
 
 - **Jobs Dashboard**: Browse all clustering runs with metadata
 - **Hierarchy Explorer**: Navigate multi-level cluster hierarchies with enhanced visual controls
@@ -116,13 +106,6 @@ npm run dev  # Opens http://localhost:3000
 ```
 
 The viewer uses only SQLite (no ChromaDB server). All search uses SQL LIKE queries. See `web/README.md` for full documentation.
-
-### Agent Guidelines
-
-For specialized agent workflows (cluster-inspector, data-analyst), see `AGENTS.md` which contains:
-- Agent-specific prompts and capabilities
-- Parallel execution patterns for cluster quality improvement
-- Data analysis and insight generation workflows
 
 ### Extensibility
 
@@ -209,15 +192,8 @@ The codebase follows a layered architecture:
 
 1. **CLI Layer** (`cli/main.py`): Typer-based command interface with Rich terminal UI
 2. **Business Logic** (`clustering/`, `db/loader.py`): Clustering algorithms, LLM summarization, hierarchical merging
-3. **Service Layer** (`services/`): Business logic for cluster operations and data management
-   - `curation_service.py`: CRUD operations for cluster editing (move, rename, merge, split, delete, tag)
-   - `cluster_service.py`: Cluster querying and analysis
-   - `query_service.py`: Query operations and retrieval
-   - `export_service.py`: Data export functionality
-   - `run_service.py`: Clustering run management
-4. **Data Layer** (`db/models.py`, `db/connection.py`, `db/chroma.py`): SQLite persistence and ChromaDB vector storage
-5. **SDK Layer** (`semantic/`): Typed client interfaces for programmatic access (ClustersClient, QueriesClient)
-6. **Runner Module** (`runner.py`): High-level workflow orchestration and execution
+3. **Data Layer** (`db/models.py`, `db/connection.py`, `db/chroma.py`): SQLite persistence and ChromaDB vector storage
+4. **SDK Layer** (`semantic/`): Typed client interfaces for programmatic access (ClustersClient, QueriesClient)
 
 ### Database Schema (SQLite + SQLModel)
 
@@ -302,33 +278,6 @@ Implemented in `clustering/hierarchy.py` following Anthropic's Clio approach:
 
 Key Pydantic models: `NeighborhoodCategories`, `DeduplicatedClusters`, `ClusterAssignment`, `RefinedClusterSummary`
 
-### Cluster Curation Service (`services/curation_service.py`)
-
-Comprehensive cluster quality management with full audit trail:
-
-**Query Operations:**
-- Move queries between clusters (single or batch)
-- View query details with all cluster assignments
-
-**Cluster Operations:**
-- Rename clusters (update title/description)
-- Merge multiple clusters into target
-- Split queries from cluster into new cluster
-- Delete clusters (orphan or reassign queries)
-
-**Metadata & Quality:**
-- Tag clusters with coherence scores (1-5 scale)
-- Set quality levels (high/medium/low)
-- Add flags (language_mixing, needs_review, etc.)
-- Attach free-form notes
-
-**Audit & Analysis:**
-- Complete edit history per cluster or run
-- Track orphaned queries with provenance
-- Find problematic clusters by size, language mix, or quality
-
-All operations create audit trail entries in `cluster_edits` table with editor, timestamp, old/new values, and reason.
-
 ### Semantic SDK (`semantic/`)
 
 Provides typed client interfaces for programmatic access:
@@ -367,11 +316,7 @@ src/lmsys_query_analysis/
 │   ├── loader.py            # LMSYS dataset loader with HuggingFace integration
 │   └── chroma.py            # ChromaDB manager (default: ~/.lmsys-query-analysis/chroma/)
 ├── services/
-│   ├── curation_service.py  # Cluster curation business logic (move, rename, merge, split, delete, tag)
-│   ├── cluster_service.py   # Cluster querying and analysis
-│   ├── query_service.py     # Query operations and retrieval
-│   ├── export_service.py    # Data export functionality
-│   └── run_service.py       # Clustering run management
+│   └── curation_service.py  # Cluster curation business logic (move, rename, merge, tag, etc.)
 ├── clustering/
 │   ├── embeddings.py        # Multi-provider embedding wrapper
 │   ├── kmeans.py            # MiniBatchKMeans streaming clustering
@@ -382,13 +327,11 @@ src/lmsys_query_analysis/
 │   ├── types.py             # Shared types for SDK (RunSpace, ClusterHit, etc.)
 │   ├── clusters.py          # ClustersClient for cluster search
 │   └── queries.py           # QueriesClient for query search
-├── utils/
-│   └── logging.py           # Rich-backed logging setup
-└── runner.py                # High-level workflow orchestration and execution
+└── utils/
+    └── logging.py           # Rich-backed logging setup
 
 tests/                       # Pytest suite (20+ tests)
 smoketest.sh                 # End-to-end smoke test script
-web/                         # Next.js web viewer (zero external dependencies)
 ```
 
 ## Coding Style & Naming
