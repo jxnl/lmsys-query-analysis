@@ -14,6 +14,12 @@ from lmsys_query_analysis.db.models import (
 )
 
 
+@pytest.fixture(scope="session")
+def anyio_backend():
+    """Configure pytest-anyio to only use asyncio backend."""
+    return "asyncio"
+
+
 @pytest.fixture
 def temp_db():
     """Create a temporary in-memory SQLite database for testing."""

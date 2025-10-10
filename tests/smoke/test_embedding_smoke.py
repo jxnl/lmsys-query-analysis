@@ -27,6 +27,10 @@ def test_openai_embeddings():
 @pytest.mark.smoke
 def test_cohere_embeddings():
     """Test Cohere embedding generation."""
+    import os
+    if not os.getenv("CO_API_KEY"):
+        pytest.skip("CO_API_KEY not set")
+    
     gen = EmbeddingGenerator(
         model_name="embed-v4.0",
         provider="cohere",
