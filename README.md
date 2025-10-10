@@ -1,20 +1,54 @@
 # LMSYS Query Analysis
 
-**Terminal-based CLI tools for agents to perform comprehensive data analysis on LMSYS queries.**
+**Terminal-based CLI tools for agents to perform comprehensive data analysis on conversational systems.**
 
 This project enables systematic investigation of how people use LLM systems through data-driven analysis workflows. Agents can explore the LMSYS-1M dataset to discover patterns, form hypotheses, and generate insights about user behavior, query complexity, and LLM usage trends.
 
-## Goal
+## Vision: Autonomous AI Research Agent for Conversational System Analysis
 
-Enable terminal-based agents to:
+**Long-term vision**: Every company building AI systems (chatbots, agents, RAG systems, voice assistants) uploads their interaction logs to our platform. An autonomous AI agent with specialized tools explores the data overnight and discovers engineering fixes, prompt improvements, and product opportunities the team didn't know existed.
 
-- **Investigate LLM Usage Patterns**: Discover how users interact with different LLM systems
-- **Identify Query Clusters**: Group similar queries to find common use cases and patterns
-- **Generate Insights**: Use LLM-powered summarization to understand what makes clusters unique
-- **Form Hypotheses**: Systematically explore data to develop testable hypotheses about user behavior
-- **Navigate Semantically**: Search queries and clusters using natural language
+**Current implementation**: This repository provides the foundational tool library and CLI interface that enables agents to perform autonomous data analysis on conversational datasets. Starting with LMSYS-1M query analysis, the tools demonstrate how agents can explore data, form hypotheses, and generate actionable insights without pre-defined workflows.
 
-All through a composable CLI workflow: `load → cluster → summarize → merge-clusters → search → export`
+## Core Capabilities
+
+The CLI implements specialized tools across multiple categories:
+
+**1. Data Loading Tools**
+- Load datasets from Hugging Face or custom sources
+- Generate and backfill embeddings for semantic analysis
+- Manage dataset lifecycle (status checks, clearing)
+
+**2. Clustering Tools**
+- Run unsupervised clustering (KMeans, HDBSCAN) to discover behavioral patterns
+- List and compare clustering runs with different parameters
+- Get detailed cluster statistics and metadata
+- Identify outliers and anomalies automatically
+
+**3. Summarization Tools**
+- Generate LLM-powered cluster summaries and descriptions
+- Create multiple summary runs to compare different models or prompts
+- Extract representative queries and key themes
+- Support contrastive analysis (what makes each cluster unique)
+
+**4. Hierarchy Tools**
+- Build multi-level cluster taxonomies using Anthropic Clio methodology
+- Navigate hierarchical structures from high-level themes to specific patterns
+- Organize hundreds of clusters into manageable categories
+
+**5. Search & Analysis Tools**
+- Semantic search across queries and clusters
+- Filter and aggregate by metadata dimensions
+- Export data for external analysis
+- Compare time periods and detect trends
+
+**6. Curation Tools**
+- Edit cluster assignments and metadata (move, rename, merge, split, tag)
+- Track edit history and audit trails
+- Flag clusters for review and quality annotation
+- Manage orphaned queries and cleanup operations
+
+All through a composable CLI workflow: `load → cluster → summarize → merge-clusters → search → inspect → edit → export`
 
 ## Features
 
@@ -26,6 +60,7 @@ All through a composable CLI workflow: `load → cluster → summarize → merge
 - **LLM Summarization**: Generate titles and descriptions for clusters using any LLM provider
 - **Contrastive Analysis**: Highlight what makes each cluster unique vs. neighbors
 - **CLI Interface**: Rich terminal UI designed for agent workflows
+- **Web Interface**: Interactive Next.js viewer for exploring clustering results
 
 ## Installation
 
@@ -328,6 +363,37 @@ JSON output shapes
 - search (queries):
   - `{ text, run_id, applied_clusters: [{ cluster_id, title, description, num_queries, distance }], results: [{ query_id, distance, snippet, model, language, cluster_id }], facets: { clusters: [{ cluster_id, count, meta: { title } }], language: [{ key, count }], model: [{ key, count }] } }`
 
+## Web Interface
+
+The project includes an interactive web viewer built with Next.js for exploring clustering results:
+
+```bash
+# Start the web interface
+cd web
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to explore your clustering results.
+
+### Web Features
+
+- **Zero External Dependencies**: Uses SQL LIKE queries instead of ChromaDB server
+- **Jobs Dashboard**: View all clustering runs with metadata and stats
+- **Hierarchy Explorer**: Navigate multi-level cluster hierarchies with enhanced visual controls
+  - Expand/collapse all controls
+  - Visual progress bars and color coding by cluster size
+  - Summary statistics (total clusters, leaf count, levels, query count)
+- **Search (SQL LIKE queries)**: Global and cluster-specific search without ChromaDB
+- **Query Browser**: Paginated view of queries within each cluster (50 per page)
+- **Cluster Details**: LLM-generated summaries, descriptions, and representative queries
+
+**Architecture**: Next.js 15 + Drizzle ORM (SQLite) + Zod + ShadCN UI
+
+**Data Flow**: Python CLI creates SQLite database → Next.js reads SQLite (read-only) → Browser UI
+
+The web interface connects directly to the SQLite database created by the Python CLI and provides a read-only visualization layer.
+
 ## Architecture
 
 ### Database Schema (SQLite + SQLModel)
@@ -456,22 +522,37 @@ uv run lmsys -v cluster --n-clusters 200
 ```
 src/lmsys_query_analysis/
 ├── cli/
-│   └── main.py              # Typer CLI commands
+│   ├── main.py              # Typer CLI: load, cluster, summarize, merge-clusters, search, edit
+│   └── commands/
+│       ├── edit.py          # Cluster curation commands (lmsys edit)
+│       └── ...              # Other command modules
 ├── db/
-│   ├── models.py            # SQLModel schemas
-│   ├── connection.py        # Database manager
-│   ├── loader.py            # LMSYS dataset loader
-│   └── chroma.py            # ChromaDB manager
-└── clustering/
-    ├── embeddings.py        # Sentence-transformers wrapper
-    ├── kmeans.py            # MiniBatchKMeans clustering (streaming)
-    ├── hdbscan_clustering.py # HDBSCAN density-based clustering
-    ├── hierarchy.py         # LLM-driven hierarchical merging (Clio-style)
-    └── summarizer.py        # LLM summarization with instructor
-
-tests/                       # Test suite with 20+ tests
-utils/
+│   ├── models.py            # SQLModel schemas (Query, ClusteringRun, ClusterEdit, etc.)
+│   ├── connection.py        # Database manager (default: ~/.lmsys-query-analysis/queries.db)
+│   ├── loader.py            # LMSYS dataset loader with HuggingFace integration
+│   └── chroma.py            # ChromaDB manager (default: ~/.lmsys-query-analysis/chroma/)
+├── services/
+│   └── curation_service.py  # Cluster curation business logic (move, rename, merge, tag, etc.)
+├── clustering/
+│   ├── embeddings.py        # Multi-provider embedding wrapper
+│   ├── kmeans.py            # MiniBatchKMeans streaming clustering
+│   ├── hdbscan_clustering.py # HDBSCAN density-based clustering
+│   ├── hierarchy.py         # LLM-driven hierarchical merging (Clio-style)
+│   └── summarizer.py        # LLM summarization with instructor
+├── semantic/
+│   ├── types.py             # Shared types for SDK (RunSpace, ClusterHit, etc.)
+│   ├── clusters.py          # ClustersClient for cluster search
+│   └── queries.py           # QueriesClient for query search
+└── utils/
     └── logging.py           # Rich-backed logging setup
+
+web/                         # Next.js web interface
+├── app/                     # App Router pages
+├── components/              # React components
+└── lib/                     # Database client and types
+
+tests/                       # Pytest suite (20+ tests)
+smoketest.sh                 # End-to-end smoke test script
 ```
 
 ## Configuration
