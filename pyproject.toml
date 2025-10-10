@@ -28,6 +28,7 @@ dependencies = [
     "tenacity>=8.0.0",
     "cohere>=5.0.0",
     "nest-asyncio>=1.6.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [dependency-groups]
@@ -51,3 +52,35 @@ build-backend = "hatchling.build"
 markers = [
     "smoke: quick smoke tests that may hit external APIs",
 ]
+
+[tool.coverage.run]
+source = ["src/lmsys_query_analysis"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/conftest.py",
+    "*/examples/*",
+    "*/.venv/*",
+    "*/venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "def __str__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+    "@overload",
+]
+ignore_errors = true
+precision = 2
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "htmlcov"

@@ -1,7 +1,11 @@
 """Main CLI entry point for LMSYS query analysis."""
 
 import typer
+from dotenv import load_dotenv
 from ..utils.logging import setup_logging
+
+# Load .env file at startup
+load_dotenv()
 
 # Import command modules
 from .commands import (

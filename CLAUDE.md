@@ -29,9 +29,9 @@ Agents can use this tool to:
 
 All capabilities are accessible through the `lmsys` CLI command in a composable workflow: `load → cluster → summarize → merge-clusters → search → export`
 
-### Web Viewer
+### Web Viewer (Zero External Dependencies)
 
-A **Next.js-based interactive web interface** (`web/`) provides read-only visualization of clustering results with **zero external dependencies** (no ChromaDB server required):
+A **Next.js-based interactive web interface** (`web/`) provides read-only visualization with **no external services required** - just SQLite (no ChromaDB server needed):
 
 - **Jobs Dashboard**: Browse all clustering runs with metadata
 - **Hierarchy Explorer**: Navigate multi-level cluster hierarchies with enhanced visual controls
@@ -54,6 +54,13 @@ npm run dev  # Opens http://localhost:3000
 ```
 
 The viewer uses only SQLite (no ChromaDB server). All search uses SQL LIKE queries. See `web/README.md` for full documentation.
+
+### Agent Guidelines
+
+For specialized agent workflows (cluster-inspector, data-analyst), see `AGENTS.md` which contains:
+- Agent-specific prompts and capabilities
+- Parallel execution patterns for cluster quality improvement
+- Data analysis and insight generation workflows
 
 ### Extensibility
 
@@ -140,8 +147,15 @@ The codebase follows a layered architecture:
 
 1. **CLI Layer** (`cli/main.py`): Typer-based command interface with Rich terminal UI
 2. **Business Logic** (`clustering/`, `db/loader.py`): Clustering algorithms, LLM summarization, hierarchical merging
-3. **Data Layer** (`db/models.py`, `db/connection.py`, `db/chroma.py`): SQLite persistence and ChromaDB vector storage
-4. **SDK Layer** (`semantic/`): Typed client interfaces for programmatic access (ClustersClient, QueriesClient)
+3. **Service Layer** (`services/`): Business logic for cluster operations and data management
+   - `curation_service.py`: CRUD operations for cluster editing (move, rename, merge, split, delete, tag)
+   - `cluster_service.py`: Cluster querying and analysis
+   - `query_service.py`: Query operations and retrieval
+   - `export_service.py`: Data export functionality
+   - `run_service.py`: Clustering run management
+4. **Data Layer** (`db/models.py`, `db/connection.py`, `db/chroma.py`): SQLite persistence and ChromaDB vector storage
+5. **SDK Layer** (`semantic/`): Typed client interfaces for programmatic access (ClustersClient, QueriesClient)
+6. **Runner Module** (`runner.py`): High-level workflow orchestration and execution
 
 ### Database Schema (SQLite + SQLModel)
 
@@ -226,6 +240,33 @@ Implemented in `clustering/hierarchy.py` following Anthropic's Clio approach:
 
 Key Pydantic models: `NeighborhoodCategories`, `DeduplicatedClusters`, `ClusterAssignment`, `RefinedClusterSummary`
 
+### Cluster Curation Service (`services/curation_service.py`)
+
+Comprehensive cluster quality management with full audit trail:
+
+**Query Operations:**
+- Move queries between clusters (single or batch)
+- View query details with all cluster assignments
+
+**Cluster Operations:**
+- Rename clusters (update title/description)
+- Merge multiple clusters into target
+- Split queries from cluster into new cluster
+- Delete clusters (orphan or reassign queries)
+
+**Metadata & Quality:**
+- Tag clusters with coherence scores (1-5 scale)
+- Set quality levels (high/medium/low)
+- Add flags (language_mixing, needs_review, etc.)
+- Attach free-form notes
+
+**Audit & Analysis:**
+- Complete edit history per cluster or run
+- Track orphaned queries with provenance
+- Find problematic clusters by size, language mix, or quality
+
+All operations create audit trail entries in `cluster_edits` table with editor, timestamp, old/new values, and reason.
+
 ### Semantic SDK (`semantic/`)
 
 Provides typed client interfaces for programmatic access:
@@ -264,7 +305,11 @@ src/lmsys_query_analysis/
 │   ├── loader.py            # LMSYS dataset loader with HuggingFace integration
 │   └── chroma.py            # ChromaDB manager (default: ~/.lmsys-query-analysis/chroma/)
 ├── services/
-│   └── curation_service.py  # Cluster curation business logic (move, rename, merge, tag, etc.)
+│   ├── curation_service.py  # Cluster curation business logic (move, rename, merge, split, delete, tag)
+│   ├── cluster_service.py   # Cluster querying and analysis
+│   ├── query_service.py     # Query operations and retrieval
+│   ├── export_service.py    # Data export functionality
+│   └── run_service.py       # Clustering run management
 ├── clustering/
 │   ├── embeddings.py        # Multi-provider embedding wrapper
 │   ├── kmeans.py            # MiniBatchKMeans streaming clustering
@@ -275,11 +320,13 @@ src/lmsys_query_analysis/
 │   ├── types.py             # Shared types for SDK (RunSpace, ClusterHit, etc.)
 │   ├── clusters.py          # ClustersClient for cluster search
 │   └── queries.py           # QueriesClient for query search
-└── utils/
-    └── logging.py           # Rich-backed logging setup
+├── utils/
+│   └── logging.py           # Rich-backed logging setup
+└── runner.py                # High-level workflow orchestration and execution
 
 tests/                       # Pytest suite (20+ tests)
 smoketest.sh                 # End-to-end smoke test script
+web/                         # Next.js web viewer (zero external dependencies)
 ```
 
 ## Coding Style & Naming

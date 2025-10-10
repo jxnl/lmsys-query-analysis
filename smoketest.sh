@@ -144,6 +144,38 @@ else
   warn "Chroma path missing, skipping search"
 fi
 
+log "Generate cluster summaries"
+if $UV_CMD run lmsys summarize "$RUN_ID" --alias "smoke-test-v1" --db-path "$DB_PATH" >/dev/null 2>&1; then
+  ok "Cluster summaries generated"
+else
+  warn "Summarization failed (likely missing API key, skipping hierarchy test)"
+fi
+
+log "Test hierarchical merge"
+if $UV_CMD run lmsys merge-clusters "$RUN_ID" --db-path "$DB_PATH" --num-levels 2 >/dev/null 2>&1; then
+  ok "Hierarchical merge completed"
+  
+  # Check hierarchy was created
+  HIER_COUNT=$($UV_CMD run python - <<'PY'
+from sqlmodel import select, func
+from lmsys_query_analysis.db.connection import Database
+from lmsys_query_analysis.db.models import ClusterHierarchy
+import os
+db = Database(os.environ['DB_PATH'])
+with db.get_session() as s:
+    count = s.exec(select(func.count()).select_from(ClusterHierarchy)).one()
+    print(count)
+PY
+)
+  if [ "$HIER_COUNT" -gt 0 ]; then
+    ok "Hierarchy saved to database ($HIER_COUNT nodes)"
+  else
+    warn "No hierarchy nodes found in database"
+  fi
+else
+  warn "Hierarchical merge failed (likely missing API key or summarization skipped)"
+fi
+
 if [ "${SMOKE_HDBSCAN:-0}" = "1" ]; then
   log "Run HDBSCAN clustering (tiny params)"
   if $UV_CMD run lmsys cluster hdbscan \

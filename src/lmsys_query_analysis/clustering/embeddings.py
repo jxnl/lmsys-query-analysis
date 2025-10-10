@@ -276,9 +276,17 @@ class EmbeddingGenerator:
             else:
                 return await self._async_openai_batches(texts, batch_size, None, None)
 
-        # Simple approach: always create a new event loop for this operation
-        # This avoids nested event loop issues
-        all_embeddings = asyncio.run(_run())
+        # Check if we're already in an async context
+        try:
+            asyncio.get_running_loop()
+            # We're in an async context - run in a separate thread with its own event loop
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, _run())
+                all_embeddings = future.result()
+        except RuntimeError:
+            # No event loop running, safe to use asyncio.run()
+            all_embeddings = asyncio.run(_run())
 
         elapsed = time.perf_counter() - start
         if len(texts) > 0:
@@ -375,9 +383,17 @@ class EmbeddingGenerator:
             else:
                 return await self._async_cohere_batches(texts, batch_size, None, None)
 
-        # Simple approach: always create a new event loop for this operation
-        # This avoids nested event loop issues
-        all_embeddings = asyncio.run(_run())
+        # Check if we're already in an async context
+        try:
+            asyncio.get_running_loop()
+            # We're in an async context - run in a separate thread with its own event loop
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, _run())
+                all_embeddings = future.result()
+        except RuntimeError:
+            # No event loop running, safe to use asyncio.run()
+            all_embeddings = asyncio.run(_run())
 
         elapsed = time.perf_counter() - start
         if len(texts) > 0:
