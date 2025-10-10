@@ -1,14 +1,9 @@
 """Test hierarchy endpoint query count calculation."""
 
-import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, create_engine, SQLModel
-from sqlmodel.pool import StaticPool
 
-from src.lmsys_query_analysis.api.main import app
-from src.lmsys_query_analysis.api.dependencies import get_db
-from src.lmsys_query_analysis.db.connection import Database
-from src.lmsys_query_analysis.db.models import (
+from lmsys_query_analysis.db.connection import Database
+from lmsys_query_analysis.db.models import (
     Query,
     ClusteringRun,
     QueryCluster,
@@ -16,53 +11,7 @@ from src.lmsys_query_analysis.db.models import (
 )
 
 
-@pytest.fixture(name="session")
-def session_fixture():
-    """Create an in-memory SQLite database for testing."""
-    # Clear existing metadata to avoid conflicts
-    SQLModel.metadata.clear()
-
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    SQLModel.metadata.create_all(engine)
-    with Session(engine) as session:
-        yield session
-
-    # Clean up after test
-    SQLModel.metadata.clear()
-
-
-@pytest.fixture(name="client")
-def client_fixture(session: Session):
-    """Create a test client with database dependency override."""
-    def get_session_override():
-        return session
-
-    # Create a mock database object
-    class MockDB:
-        def get_session(self):
-            return MockSessionContext(session)
-
-    class MockSessionContext:
-        def __init__(self, session):
-            self.session = session
-
-        def __enter__(self):
-            return self.session
-
-        def __exit__(self, *args):
-            pass
-
-    app.dependency_overrides[get_db] = lambda: MockDB()
-    client = TestClient(app)
-    yield client
-    app.dependency_overrides.clear()
-
-
-def test_hierarchy_query_counts_bottom_up(session: Session, client: TestClient):
+def test_hierarchy_query_counts_bottom_up(db: Database, client: TestClient):
     """Test that hierarchy query counts are calculated bottom-up correctly.
 
     This test creates a 3-level hierarchy:
@@ -72,111 +21,112 @@ def test_hierarchy_query_counts_bottom_up(session: Session, client: TestClient):
 
     This ensures the bottom-up aggregation works correctly at all levels.
     """
-    # Create test data
-    run_id = "test-run-1"
+    with db.get_session() as session:
+        # Create test data
+        run_id = "test-run-1"
 
-    # Create clustering run
-    run = ClusteringRun(
-        run_id=run_id,
-        algorithm="test",
-        num_clusters=5,
-        parameters={"test": True},
-    )
-    session.add(run)
-
-    # Create queries and assign to leaf clusters
-    # Leaf cluster 0: 5 queries
-    for i in range(5):
-        query = Query(
-            conversation_id=f"conv-0-{i}",
-            model="test-model",
-            query_text=f"Query {i}",
+        # Create clustering run
+        run = ClusteringRun(
+            run_id=run_id,
+            algorithm="test",
+            num_clusters=5,
+            parameters={"test": True},
         )
-        session.add(query)
-        session.flush()
-        qc = QueryCluster(run_id=run_id, query_id=query.id, cluster_id=0)
-        session.add(qc)
+        session.add(run)
 
-    # Leaf cluster 1: 10 queries
-    for i in range(10):
-        query = Query(
-            conversation_id=f"conv-1-{i}",
-            model="test-model",
-            query_text=f"Query {i}",
+        # Create queries and assign to leaf clusters
+        # Leaf cluster 0: 5 queries
+        for i in range(5):
+            query = Query(
+                conversation_id=f"conv-0-{i}",
+                model="test-model",
+                query_text=f"Query {i}",
+            )
+            session.add(query)
+            session.flush()
+            qc = QueryCluster(run_id=run_id, query_id=query.id, cluster_id=0)
+            session.add(qc)
+
+        # Leaf cluster 1: 10 queries
+        for i in range(10):
+            query = Query(
+                conversation_id=f"conv-1-{i}",
+                model="test-model",
+                query_text=f"Query {i}",
+            )
+            session.add(query)
+            session.flush()
+            qc = QueryCluster(run_id=run_id, query_id=query.id, cluster_id=1)
+            session.add(qc)
+
+        # Leaf cluster 2: 15 queries
+        for i in range(15):
+            query = Query(
+                conversation_id=f"conv-2-{i}",
+                model="test-model",
+                query_text=f"Query {i}",
+            )
+            session.add(query)
+            session.flush()
+            qc = QueryCluster(run_id=run_id, query_id=query.id, cluster_id=2)
+            session.add(qc)
+
+        # Create hierarchy
+        hierarchy_run_id = "hier-test-run-1"
+
+        # Level 0 (leaf clusters)
+        leaf0 = ClusterHierarchy(
+            hierarchy_run_id=hierarchy_run_id,
+            run_id=run_id,
+            cluster_id=0,
+            parent_cluster_id=100,  # Parent is mid-level cluster
+            level=0,
+            children_ids=[],
+            title="Leaf Cluster 0",
         )
-        session.add(query)
-        session.flush()
-        qc = QueryCluster(run_id=run_id, query_id=query.id, cluster_id=1)
-        session.add(qc)
-
-    # Leaf cluster 2: 15 queries
-    for i in range(15):
-        query = Query(
-            conversation_id=f"conv-2-{i}",
-            model="test-model",
-            query_text=f"Query {i}",
+        leaf1 = ClusterHierarchy(
+            hierarchy_run_id=hierarchy_run_id,
+            run_id=run_id,
+            cluster_id=1,
+            parent_cluster_id=100,
+            level=0,
+            children_ids=[],
+            title="Leaf Cluster 1",
         )
-        session.add(query)
-        session.flush()
-        qc = QueryCluster(run_id=run_id, query_id=query.id, cluster_id=2)
-        session.add(qc)
+        leaf2 = ClusterHierarchy(
+            hierarchy_run_id=hierarchy_run_id,
+            run_id=run_id,
+            cluster_id=2,
+            parent_cluster_id=100,
+            level=0,
+            children_ids=[],
+            title="Leaf Cluster 2",
+        )
 
-    # Create hierarchy
-    hierarchy_run_id = "hier-test-run-1"
+        # Level 1 (mid-level cluster containing all leaf clusters)
+        mid = ClusterHierarchy(
+            hierarchy_run_id=hierarchy_run_id,
+            run_id=run_id,
+            cluster_id=100,
+            parent_cluster_id=200,  # Parent is root cluster
+            level=1,
+            children_ids=[0, 1, 2],
+            title="Mid-Level Cluster",
+        )
 
-    # Level 0 (leaf clusters)
-    leaf0 = ClusterHierarchy(
-        hierarchy_run_id=hierarchy_run_id,
-        run_id=run_id,
-        cluster_id=0,
-        parent_cluster_id=100,  # Parent is mid-level cluster
-        level=0,
-        children_ids=[],
-        title="Leaf Cluster 0",
-    )
-    leaf1 = ClusterHierarchy(
-        hierarchy_run_id=hierarchy_run_id,
-        run_id=run_id,
-        cluster_id=1,
-        parent_cluster_id=100,
-        level=0,
-        children_ids=[],
-        title="Leaf Cluster 1",
-    )
-    leaf2 = ClusterHierarchy(
-        hierarchy_run_id=hierarchy_run_id,
-        run_id=run_id,
-        cluster_id=2,
-        parent_cluster_id=100,
-        level=0,
-        children_ids=[],
-        title="Leaf Cluster 2",
-    )
+        # Level 2 (root cluster containing mid-level cluster)
+        root = ClusterHierarchy(
+            hierarchy_run_id=hierarchy_run_id,
+            run_id=run_id,
+            cluster_id=200,
+            parent_cluster_id=None,
+            level=2,
+            children_ids=[100],
+            title="Root Cluster",
+        )
 
-    # Level 1 (mid-level cluster containing all leaf clusters)
-    mid = ClusterHierarchy(
-        hierarchy_run_id=hierarchy_run_id,
-        run_id=run_id,
-        cluster_id=100,
-        parent_cluster_id=200,  # Parent is root cluster
-        level=1,
-        children_ids=[0, 1, 2],
-        title="Mid-Level Cluster",
-    )
-
-    # Level 2 (root cluster containing mid-level cluster)
-    root = ClusterHierarchy(
-        hierarchy_run_id=hierarchy_run_id,
-        run_id=run_id,
-        cluster_id=200,
-        parent_cluster_id=None,
-        level=2,
-        children_ids=[100],
-        title="Root Cluster",
-    )
-
-    session.add_all([leaf0, leaf1, leaf2, mid, root])
-    session.commit()
+        session.add_all([leaf0, leaf1, leaf2, mid, root])
+        session.commit()
 
     # Test the API endpoint
     response = client.get(f"/api/hierarchy/{hierarchy_run_id}")
@@ -200,42 +150,43 @@ def test_hierarchy_query_counts_bottom_up(session: Session, client: TestClient):
     assert data["total_queries"] == 30, "Total queries should be 30"
 
 
-def test_hierarchy_empty_clusters(session: Session, client: TestClient):
+def test_hierarchy_empty_clusters(db: Database, client: TestClient):
     """Test that clusters with no queries show 0 count."""
-    run_id = "test-run-empty"
-    hierarchy_run_id = "hier-test-run-empty"
+    with db.get_session() as session:
+        run_id = "test-run-empty"
+        hierarchy_run_id = "hier-test-run-empty"
 
-    # Create clustering run
-    run = ClusteringRun(
-        run_id=run_id,
-        algorithm="test",
-        num_clusters=2,
-        parameters={"test": True},
-    )
-    session.add(run)
+        # Create clustering run
+        run = ClusteringRun(
+            run_id=run_id,
+            algorithm="test",
+            num_clusters=2,
+            parameters={"test": True},
+        )
+        session.add(run)
 
-    # Create hierarchy with no queries
-    leaf = ClusterHierarchy(
-        hierarchy_run_id=hierarchy_run_id,
-        run_id=run_id,
-        cluster_id=0,
-        parent_cluster_id=100,
-        level=0,
-        children_ids=[],
-        title="Empty Leaf",
-    )
-    root = ClusterHierarchy(
-        hierarchy_run_id=hierarchy_run_id,
-        run_id=run_id,
-        cluster_id=100,
-        parent_cluster_id=None,
-        level=1,
-        children_ids=[0],
-        title="Empty Root",
-    )
+        # Create hierarchy with no queries
+        leaf = ClusterHierarchy(
+            hierarchy_run_id=hierarchy_run_id,
+            run_id=run_id,
+            cluster_id=0,
+            parent_cluster_id=100,
+            level=0,
+            children_ids=[],
+            title="Empty Leaf",
+        )
+        root = ClusterHierarchy(
+            hierarchy_run_id=hierarchy_run_id,
+            run_id=run_id,
+            cluster_id=100,
+            parent_cluster_id=None,
+            level=1,
+            children_ids=[0],
+            title="Empty Root",
+        )
 
-    session.add_all([leaf, root])
-    session.commit()
+        session.add_all([leaf, root])
+        session.commit()
 
     # Test the API endpoint
     response = client.get(f"/api/hierarchy/{hierarchy_run_id}")
