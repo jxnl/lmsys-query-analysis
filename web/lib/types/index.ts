@@ -5,24 +5,29 @@
  * The source types are auto-generated from the FastAPI OpenAPI spec.
  */
 
-import type { components } from '../api/types';
+import type { components } from "../api/types";
 
 // Response models
-export type Query = components['schemas']['QueryResponse'];
-export type ClusteringRun = components['schemas']['ClusteringRunSummary'];
-export type ClusteringRunDetail = components['schemas']['ClusteringRunDetail'];
-export type ClusterSummary = components['schemas']['ClusterSummaryResponse'];
-export type ClusterHierarchy = components['schemas']['HierarchyNode'];
-export type ClusterMetadata = components['schemas']['ClusterMetadata'];
-export type ClusterEdit = components['schemas']['EditHistoryRecord'];
+export type Query = components["schemas"]["QueryResponse"];
+export type ClusteringRun = components["schemas"]["ClusteringRunSummary"];
+export type ClusteringRunDetail = components["schemas"]["ClusteringRunDetail"];
+export type ClusterSummary = components["schemas"]["ClusterSummaryResponse"];
+export type ClusterHierarchy = components["schemas"]["HierarchyNode"];
+export type ClusterMetadata = components["schemas"]["ClusterMetadata"];
+export type ClusterEdit = components["schemas"]["EditHistoryRecord"];
 
 // Paginated responses
-export type PaginatedQueriesResponse = components['schemas']['PaginatedQueriesResponse'];
-export type ClusteringRunListResponse = components['schemas']['ClusteringRunListResponse'];
-export type ClusterListResponse = components['schemas']['ClusterListResponse'];
-export type HierarchyTreeResponse = components['schemas']['HierarchyTreeResponse'];
-export type SearchQueriesResponse = components['schemas']['SearchQueriesResponse'];
-export type SearchClustersResponse = components['schemas']['SearchClustersResponse'];
+export type PaginatedQueriesResponse =
+  components["schemas"]["PaginatedQueriesResponse"];
+export type ClusteringRunListResponse =
+  components["schemas"]["ClusteringRunListResponse"];
+export type ClusterListResponse = components["schemas"]["ClusterListResponse"];
+export type HierarchyTreeResponse =
+  components["schemas"]["HierarchyTreeResponse"];
+export type SearchQueriesResponse =
+  components["schemas"]["SearchQueriesResponse"];
+export type SearchClustersResponse =
+  components["schemas"]["SearchClustersResponse"];
 
 // Additional utility types
 export type PaginatedQueries = {

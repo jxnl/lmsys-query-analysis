@@ -31,9 +31,11 @@ Open [http://localhost:3000](http://localhost:3000)
 ## Features
 
 ### Zero External Dependencies
+
 **No ChromaDB server required!** All search functionality uses SQL LIKE queries for fast, simple operation. Just start the Next.js server and go.
 
 ### Core Features
+
 - **Sidebar Navigation**: Persistent sidebar with navigation to all pages
 - **Jobs Dashboard**: View all clustering runs with metadata and stats
 - **Search (SQL LIKE queries)**:
@@ -137,6 +139,7 @@ npm run test:ui
 ```
 
 **Test Coverage:**
+
 - **API Integration** (6 tests): Health checks, fetch runs/queries, search, error handling
 - **Homepage** (3 tests): Page load, navigation, responsive design
 - **Clustering Runs** (2 tests): List display, run details page access

@@ -4,1831 +4,1831 @@
  */
 
 export interface paths {
-    "/api/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Health Check
-         * @description Health check endpoint.
-         */
-        get: operations["health_check_api_health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+  "/api/health": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/clustering/runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List all clustering runs
-         * @description List all clustering runs with optional filtering.
-         *
-         *     Returns paginated list of clustering run summaries with basic metadata.
-         */
-        get: operations["list_runs_api_clustering_runs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Health Check
+     * @description Health check endpoint.
+     */
+    get: operations["health_check_api_health_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/clustering/runs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/clustering/runs/{run_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get clustering run details
-         * @description Get detailed information about a specific clustering run.
-         *
-         *     Returns run metadata including parameters, cluster count, and metrics.
-         */
-        get: operations["get_run_api_clustering_runs__run_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * List all clustering runs
+     * @description List all clustering runs with optional filtering.
+     *
+     *     Returns paginated list of clustering run summaries with basic metadata.
+     */
+    get: operations["list_runs_api_clustering_runs_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/clustering/runs/{run_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/clustering/runs/{run_id}/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get clustering run status
-         * @description Get the current status of a clustering run (for polling).
-         *
-         *     Used by clients to poll long-running clustering jobs.
-         */
-        get: operations["get_run_status_api_clustering_runs__run_id__status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Get clustering run details
+     * @description Get detailed information about a specific clustering run.
+     *
+     *     Returns run metadata including parameters, cluster count, and metrics.
+     */
+    get: operations["get_run_api_clustering_runs__run_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/clustering/runs/{run_id}/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/clustering/runs/{run_id}/clusters": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List clusters for a run with aggregations
-         * @description List all clusters for a run with optional aggregations.
-         *
-         *     Supports:
-         *     - Query counts per cluster (include_counts=true)
-         *     - Percentages of total queries (include_percentages=true)
-         *     - Filtering by summary_run_id or alias
-         *     - Pagination
-         */
-        get: operations["list_clusters_api_clustering_runs__run_id__clusters_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Get clustering run status
+     * @description Get the current status of a clustering run (for polling).
+     *
+     *     Used by clients to poll long-running clustering jobs.
+     */
+    get: operations["get_run_status_api_clustering_runs__run_id__status_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/clustering/runs/{run_id}/clusters": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/clustering/kmeans": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create KMeans clustering run (Not Implemented)
-         * @description Create a new KMeans clustering run.
-         *
-         *     **Not implemented yet.** This endpoint will be available in Phase 2.
-         */
-        post: operations["create_kmeans_run_api_clustering_kmeans_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * List clusters for a run with aggregations
+     * @description List all clusters for a run with optional aggregations.
+     *
+     *     Supports:
+     *     - Query counts per cluster (include_counts=true)
+     *     - Percentages of total queries (include_percentages=true)
+     *     - Filtering by summary_run_id or alias
+     *     - Pagination
+     */
+    get: operations["list_clusters_api_clustering_runs__run_id__clusters_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/clustering/kmeans": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/clustering/hdbscan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create HDBSCAN clustering run (Not Implemented)
-         * @description Create a new HDBSCAN clustering run.
-         *
-         *     **Not implemented yet.** This endpoint will be available in Phase 2.
-         */
-        post: operations["create_hdbscan_run_api_clustering_hdbscan_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Create KMeans clustering run (Not Implemented)
+     * @description Create a new KMeans clustering run.
+     *
+     *     **Not implemented yet.** This endpoint will be available in Phase 2.
+     */
+    post: operations["create_kmeans_run_api_clustering_kmeans_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/clustering/hdbscan": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/queries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List queries with optional filtering
-         * @description List queries with optional filtering by run_id, cluster_id, and model.
-         *
-         *     Returns paginated list of queries with metadata.
-         */
-        get: operations["list_queries_api_queries_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Create HDBSCAN clustering run (Not Implemented)
+     * @description Create a new HDBSCAN clustering run.
+     *
+     *     **Not implemented yet.** This endpoint will be available in Phase 2.
+     */
+    post: operations["create_hdbscan_run_api_clustering_hdbscan_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/queries": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/clustering/runs/{run_id}/clusters/{cluster_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get cluster details with paginated queries
-         * @description Get detailed cluster information including summary and paginated queries.
-         *
-         *     Returns:
-         *     - Cluster summary (title, description, representative queries)
-         *     - Paginated list of queries in the cluster
-         *     - Query count and percentage of run
-         */
-        get: operations["get_cluster_detail_api_clustering_runs__run_id__clusters__cluster_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * List queries with optional filtering
+     * @description List queries with optional filtering by run_id, cluster_id, and model.
+     *
+     *     Returns paginated list of queries with metadata.
+     */
+    get: operations["list_queries_api_queries_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/clustering/runs/{run_id}/clusters/{cluster_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/hierarchy/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List all hierarchy runs
-         * @description List all hierarchy runs with optional filtering by clustering run_id.
-         */
-        get: operations["list_hierarchies_api_hierarchy__get"];
-        put?: never;
-        /**
-         * Create hierarchy (Not Implemented)
-         * @description Create a new hierarchy run.
-         *
-         *     **Not implemented yet.** This endpoint will be available in Phase 2.
-         */
-        post: operations["create_hierarchy_api_hierarchy__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Get cluster details with paginated queries
+     * @description Get detailed cluster information including summary and paginated queries.
+     *
+     *     Returns:
+     *     - Cluster summary (title, description, representative queries)
+     *     - Paginated list of queries in the cluster
+     *     - Query count and percentage of run
+     */
+    get: operations["get_cluster_detail_api_clustering_runs__run_id__clusters__cluster_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/hierarchy/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/hierarchy/{hierarchy_run_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get full hierarchy tree
-         * @description Get the full hierarchy tree for a hierarchy run.
-         *
-         *     Returns all nodes with parent-child relationships, query counts, and optional percentages.
-         */
-        get: operations["get_hierarchy_tree_api_hierarchy__hierarchy_run_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * List all hierarchy runs
+     * @description List all hierarchy runs with optional filtering by clustering run_id.
+     */
+    get: operations["list_hierarchies_api_hierarchy__get"];
+    put?: never;
+    /**
+     * Create hierarchy (Not Implemented)
+     * @description Create a new hierarchy run.
+     *
+     *     **Not implemented yet.** This endpoint will be available in Phase 2.
+     */
+    post: operations["create_hierarchy_api_hierarchy__post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/hierarchy/{hierarchy_run_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/summaries/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List all summary runs
-         * @description List all summary runs with optional filtering by clustering run_id.
-         */
-        get: operations["list_summaries_api_summaries__get"];
-        put?: never;
-        /**
-         * Create summary run (Not Implemented)
-         * @description Create a new summary run.
-         *
-         *     **Not implemented yet.** This endpoint will be available in Phase 2.
-         */
-        post: operations["create_summary_api_summaries__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Get full hierarchy tree
+     * @description Get the full hierarchy tree for a hierarchy run.
+     *
+     *     Returns all nodes with parent-child relationships, query counts, and optional percentages.
+     */
+    get: operations["get_hierarchy_tree_api_hierarchy__hierarchy_run_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/summaries/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/summaries/{summary_run_id}/clusters/{cluster_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get cluster summary
-         * @description Get the summary for a specific cluster in a summary run.
-         */
-        get: operations["get_cluster_summary_api_summaries__summary_run_id__clusters__cluster_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * List all summary runs
+     * @description List all summary runs with optional filtering by clustering run_id.
+     */
+    get: operations["list_summaries_api_summaries__get"];
+    put?: never;
+    /**
+     * Create summary run (Not Implemented)
+     * @description Create a new summary run.
+     *
+     *     **Not implemented yet.** This endpoint will be available in Phase 2.
+     */
+    post: operations["create_summary_api_summaries__post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/summaries/{summary_run_id}/clusters/{cluster_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/search/queries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Search queries (semantic or full-text)
-         * @description Search queries using semantic (ChromaDB) or full-text (SQL LIKE) search.
-         *
-         *     **Modes:**
-         *     - `fulltext`: SQL LIKE search on query_text (fast, no embeddings needed)
-         *     - `semantic`: ChromaDB vector search (requires embeddings and API keys)
-         *
-         *     **Semantic search options:**
-         *     - `within_clusters`: Pre-filter by finding top N clusters semantically
-         *     - `cluster_ids`: Hard filter by specific cluster IDs
-         */
-        get: operations["search_queries_api_search_queries_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Get cluster summary
+     * @description Get the summary for a specific cluster in a summary run.
+     */
+    get: operations["get_cluster_summary_api_summaries__summary_run_id__clusters__cluster_id__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/search/queries": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/search/clusters": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Search clusters (semantic or full-text)
-         * @description Search cluster summaries using semantic or full-text search.
-         *
-         *     **Modes:**
-         *     - `fulltext`: SQL LIKE search on title/description
-         *     - `semantic`: ChromaDB vector search on embedded summaries
-         */
-        get: operations["search_clusters_api_search_clusters_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Search queries (semantic or full-text)
+     * @description Search queries using semantic (ChromaDB) or full-text (SQL LIKE) search.
+     *
+     *     **Modes:**
+     *     - `fulltext`: SQL LIKE search on query_text (fast, no embeddings needed)
+     *     - `semantic`: ChromaDB vector search (requires embeddings and API keys)
+     *
+     *     **Semantic search options:**
+     *     - `within_clusters`: Pre-filter by finding top N clusters semantically
+     *     - `cluster_ids`: Hard filter by specific cluster IDs
+     */
+    get: operations["search_queries_api_search_queries_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/search/clusters": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/curation/clusters/{cluster_id}/metadata": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get cluster metadata
-         * @description Get quality metadata for a cluster (coherence score, quality, flags, notes).
-         */
-        get: operations["get_cluster_metadata_api_curation_clusters__cluster_id__metadata_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Search clusters (semantic or full-text)
+     * @description Search cluster summaries using semantic or full-text search.
+     *
+     *     **Modes:**
+     *     - `fulltext`: SQL LIKE search on title/description
+     *     - `semantic`: ChromaDB vector search on embedded summaries
+     */
+    get: operations["search_clusters_api_search_clusters_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/curation/clusters/{cluster_id}/metadata": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/curation/clusters/{cluster_id}/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get cluster edit history
-         * @description Get the edit history for a specific cluster.
-         */
-        get: operations["get_cluster_history_api_curation_clusters__cluster_id__history_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Get cluster metadata
+     * @description Get quality metadata for a cluster (coherence score, quality, flags, notes).
+     */
+    get: operations["get_cluster_metadata_api_curation_clusters__cluster_id__metadata_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/curation/clusters/{cluster_id}/history": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/curation/runs/{run_id}/audit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get full audit log for a run
-         * @description Get the full edit history (audit log) for a clustering run.
-         */
-        get: operations["get_run_audit_api_curation_runs__run_id__audit_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Get cluster edit history
+     * @description Get the edit history for a specific cluster.
+     */
+    get: operations["get_cluster_history_api_curation_clusters__cluster_id__history_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/curation/runs/{run_id}/audit": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/curation/runs/{run_id}/orphaned": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get orphaned queries for a run
-         * @description Get all orphaned queries for a clustering run.
-         */
-        get: operations["get_orphaned_queries_api_curation_runs__run_id__orphaned_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Get full audit log for a run
+     * @description Get the full edit history (audit log) for a clustering run.
+     */
+    get: operations["get_run_audit_api_curation_runs__run_id__audit_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/curation/runs/{run_id}/orphaned": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/curation/queries/{query_id}/move": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Move query to different cluster (Not Implemented)
-         * @description Move a query to a different cluster.
-         *
-         *     **Not implemented yet.** This endpoint will be available in Phase 2.
-         */
-        post: operations["move_query_api_curation_queries__query_id__move_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Get orphaned queries for a run
+     * @description Get all orphaned queries for a clustering run.
+     */
+    get: operations["get_orphaned_queries_api_curation_runs__run_id__orphaned_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/curation/queries/{query_id}/move": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/curation/clusters/{cluster_id}/rename": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Rename cluster (Not Implemented)
-         * @description Rename a cluster.
-         *
-         *     **Not implemented yet.** This endpoint will be available in Phase 2.
-         */
-        post: operations["rename_cluster_api_curation_clusters__cluster_id__rename_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Move query to different cluster (Not Implemented)
+     * @description Move a query to a different cluster.
+     *
+     *     **Not implemented yet.** This endpoint will be available in Phase 2.
+     */
+    post: operations["move_query_api_curation_queries__query_id__move_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/curation/clusters/{cluster_id}/rename": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Root
-         * @description Root endpoint with API information.
-         */
-        get: operations["root__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Rename cluster (Not Implemented)
+     * @description Rename a cluster.
+     *
+     *     **Not implemented yet.** This endpoint will be available in Phase 2.
+     */
+    post: operations["rename_cluster_api_curation_clusters__cluster_id__rename_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
+    /**
+     * Root
+     * @description Root endpoint with API information.
+     */
+    get: operations["root__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: {
-        /**
-         * ClusterDetailResponse
-         * @description Detailed cluster view with paginated queries.
-         */
-        ClusterDetailResponse: {
-            cluster: components["schemas"]["ClusterSummaryResponse"];
-            queries: components["schemas"]["PaginatedQueriesResponse"];
-        };
-        /**
-         * ClusterInfo
-         * @description Cluster info attached to a query.
-         */
-        ClusterInfo: {
-            /** Run Id */
-            run_id: string;
-            /** Cluster Id */
-            cluster_id: number;
-            /** Title */
-            title?: string | null;
-            /** Confidence Score */
-            confidence_score?: number | null;
-        };
-        /**
-         * ClusterListResponse
-         * @description Paginated list of clusters with optional aggregations.
-         */
-        ClusterListResponse: {
-            /** Items */
-            items: components["schemas"]["ClusterSummaryResponse"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Pages */
-            pages: number;
-            /** Limit */
-            limit: number;
-            /** Total Queries */
-            total_queries?: number | null;
-        };
-        /**
-         * ClusterMetadata
-         * @description Cluster quality metadata.
-         */
-        ClusterMetadata: {
-            /** Coherence Score */
-            coherence_score?: number | null;
-            /** Quality */
-            quality?: ("high" | "medium" | "low") | null;
-            /** Notes */
-            notes?: string | null;
-            /** Flags */
-            flags?: string[] | null;
-            /** Last Edited */
-            last_edited?: string | null;
-        };
-        /**
-         * ClusterSearchResult
-         * @description Cluster search result.
-         */
-        ClusterSearchResult: {
-            /** Run Id */
-            run_id: string;
-            /** Cluster Id */
-            cluster_id: number;
-            /** Title */
-            title?: string | null;
-            /** Description */
-            description?: string | null;
-            /** Summary */
-            summary?: string | null;
-            /** Num Queries */
-            num_queries?: number | null;
-            /** Distance */
-            distance?: number | null;
-        };
-        /**
-         * ClusterSummaryResponse
-         * @description Cluster summary with LLM-generated metadata.
-         */
-        ClusterSummaryResponse: {
-            /** Run Id */
-            run_id: string;
-            /** Cluster Id */
-            cluster_id: number;
-            /** Title */
-            title?: string | null;
-            /** Description */
-            description?: string | null;
-            /** Summary */
-            summary?: string | null;
-            /** Num Queries */
-            num_queries?: number | null;
-            /** Representative Queries */
-            representative_queries?: string[] | null;
-            /** Summary Run Id */
-            summary_run_id?: string | null;
-            /** Alias */
-            alias?: string | null;
-            /** Query Count */
-            query_count?: number | null;
-            /** Percentage */
-            percentage?: number | null;
-        };
-        /**
-         * ClusteringRunDetail
-         * @description Detailed clustering run with metrics.
-         */
-        ClusteringRunDetail: {
-            /** Run Id */
-            run_id: string;
-            /** Algorithm */
-            algorithm: string;
-            /** Num Clusters */
-            num_clusters?: number | null;
-            /** Description */
-            description?: string | null;
-            /** Parameters */
-            parameters?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Status
-             * @default completed
-             * @enum {string}
-             */
-            status: "pending" | "running" | "completed" | "failed";
-            /** Metrics */
-            metrics?: {
-                [key: string]: unknown;
-            } | null;
-            /** Latest Errors */
-            latest_errors?: string[] | null;
-        };
-        /**
-         * ClusteringRunListResponse
-         * @description Paginated list of clustering runs.
-         */
-        ClusteringRunListResponse: {
-            /** Items */
-            items: components["schemas"]["ClusteringRunSummary"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Pages */
-            pages: number;
-            /** Limit */
-            limit: number;
-        };
-        /**
-         * ClusteringRunStatusResponse
-         * @description Status of a clustering run (for polling).
-         */
-        ClusteringRunStatusResponse: {
-            /** Run Id */
-            run_id: string;
-            /** Status */
-            status: string;
-            /** Processed */
-            processed?: number | null;
-        };
-        /**
-         * ClusteringRunSummary
-         * @description Summary of a clustering run.
-         */
-        ClusteringRunSummary: {
-            /** Run Id */
-            run_id: string;
-            /** Algorithm */
-            algorithm: string;
-            /** Num Clusters */
-            num_clusters?: number | null;
-            /** Description */
-            description?: string | null;
-            /** Parameters */
-            parameters?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Status
-             * @default completed
-             * @enum {string}
-             */
-            status: "pending" | "running" | "completed" | "failed";
-        };
-        /**
-         * EditHistoryRecord
-         * @description Single edit history record.
-         */
-        EditHistoryRecord: {
-            /**
-             * Timestamp
-             * Format: date-time
-             */
-            timestamp: string;
-            /** Cluster Id */
-            cluster_id?: number | null;
-            /** Edit Type */
-            edit_type: string;
-            /** Editor */
-            editor: string;
-            /** Reason */
-            reason?: string | null;
-            /** Old Value */
-            old_value?: {
-                [key: string]: unknown;
-            } | null;
-            /** New Value */
-            new_value?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /**
-         * EditHistoryResponse
-         * @description Paginated edit history.
-         */
-        EditHistoryResponse: {
-            /** Items */
-            items: components["schemas"]["EditHistoryRecord"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Pages */
-            pages: number;
-            /** Limit */
-            limit: number;
-        };
-        /**
-         * ErrorDetail
-         * @description Error detail structure.
-         */
-        ErrorDetail: {
-            /** Type */
-            type: string;
-            /** Message */
-            message: string;
-        };
-        /**
-         * ErrorResponse
-         * @description Standard error response.
-         */
-        ErrorResponse: {
-            error: components["schemas"]["ErrorDetail"];
-        };
-        /**
-         * FacetBucket
-         * @description Single facet bucket with count.
-         */
-        FacetBucket: {
-            /** Key */
-            key: unknown;
-            /** Count */
-            count: number;
-            /** Percentage */
-            percentage?: number | null;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
-        };
-        /**
-         * HierarchyListResponse
-         * @description Paginated list of hierarchy runs.
-         */
-        HierarchyListResponse: {
-            /** Items */
-            items: components["schemas"]["HierarchyRunInfo"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Pages */
-            pages: number;
-            /** Limit */
-            limit: number;
-        };
-        /**
-         * HierarchyNode
-         * @description Single node in a cluster hierarchy.
-         */
-        HierarchyNode: {
-            /** Hierarchy Run Id */
-            hierarchy_run_id: string;
-            /** Run Id */
-            run_id: string;
-            /** Cluster Id */
-            cluster_id: number;
-            /** Parent Cluster Id */
-            parent_cluster_id?: number | null;
-            /** Level */
-            level: number;
-            /** Children Ids */
-            children_ids: number[];
-            /** Title */
-            title?: string | null;
-            /** Description */
-            description?: string | null;
-            /** Query Count */
-            query_count?: number | null;
-            /** Percentage */
-            percentage?: number | null;
-        };
-        /**
-         * HierarchyRunInfo
-         * @description Metadata about a hierarchy run.
-         */
-        HierarchyRunInfo: {
-            /** Hierarchy Run Id */
-            hierarchy_run_id: string;
-            /** Run Id */
-            run_id: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-        };
-        /**
-         * HierarchyTreeResponse
-         * @description Full hierarchy tree with all nodes.
-         */
-        HierarchyTreeResponse: {
-            /** Nodes */
-            nodes: components["schemas"]["HierarchyNode"][];
-            /** Total Queries */
-            total_queries?: number | null;
-        };
-        /**
-         * OrphanInfo
-         * @description Information about an orphaned query.
-         */
-        OrphanInfo: {
-            /** Orphan */
-            orphan: {
-                [key: string]: unknown;
-            };
-            query: components["schemas"]["QueryResponse"];
-        };
-        /**
-         * OrphanedQueriesResponse
-         * @description Paginated orphaned queries.
-         */
-        OrphanedQueriesResponse: {
-            /** Items */
-            items: components["schemas"]["OrphanInfo"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Pages */
-            pages: number;
-            /** Limit */
-            limit: number;
-        };
-        /**
-         * PaginatedQueriesResponse
-         * @description Paginated list of queries.
-         */
-        PaginatedQueriesResponse: {
-            /** Items */
-            items: components["schemas"]["QueryResponse"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Pages */
-            pages: number;
-            /** Limit */
-            limit: number;
-        };
-        /**
-         * QueryResponse
-         * @description Single query response.
-         */
-        QueryResponse: {
-            /** Id */
-            id: number;
-            /** Conversation Id */
-            conversation_id: string;
-            /** Model */
-            model: string;
-            /** Query Text */
-            query_text: string;
-            /** Language */
-            language?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-        };
-        /**
-         * QuerySearchResult
-         * @description Query search result with cluster context.
-         */
-        QuerySearchResult: {
-            query: components["schemas"]["QueryResponse"];
-            /** Clusters */
-            clusters: components["schemas"]["ClusterInfo"][];
-            /** Distance */
-            distance?: number | null;
-        };
-        /**
-         * SearchClustersResponse
-         * @description Cluster search results.
-         */
-        SearchClustersResponse: {
-            /** Items */
-            items: components["schemas"]["ClusterSearchResult"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Pages */
-            pages: number;
-            /** Limit */
-            limit: number;
-        };
-        /**
-         * SearchFacets
-         * @description Faceted search results.
-         */
-        SearchFacets: {
-            /** Clusters */
-            clusters?: components["schemas"]["FacetBucket"][] | null;
-            /** Language */
-            language?: components["schemas"]["FacetBucket"][] | null;
-            /** Model */
-            model?: components["schemas"]["FacetBucket"][] | null;
-        };
-        /**
-         * SearchQueriesResponse
-         * @description Query search results with facets.
-         */
-        SearchQueriesResponse: {
-            /** Items */
-            items: components["schemas"]["QuerySearchResult"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Pages */
-            pages: number;
-            /** Limit */
-            limit: number;
-            facets?: components["schemas"]["SearchFacets"] | null;
-            /** Applied Clusters */
-            applied_clusters?: components["schemas"]["ClusterSearchResult"][] | null;
-        };
-        /**
-         * SummaryRunListResponse
-         * @description Paginated list of summary runs.
-         */
-        SummaryRunListResponse: {
-            /** Items */
-            items: components["schemas"]["SummaryRunSummary"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Pages */
-            pages: number;
-            /** Limit */
-            limit: number;
-        };
-        /**
-         * SummaryRunSummary
-         * @description Summary of a summarization run.
-         */
-        SummaryRunSummary: {
-            /** Summary Run Id */
-            summary_run_id: string;
-            /** Run Id */
-            run_id: string;
-            /** Alias */
-            alias?: string | null;
-            /** Model */
-            model: string;
-            /**
-             * Generated At
-             * Format: date-time
-             */
-            generated_at: string;
-            /**
-             * Status
-             * @default completed
-             * @enum {string}
-             */
-            status: "pending" | "running" | "completed" | "failed";
-        };
-        /** ValidationError */
-        ValidationError: {
-            /** Location */
-            loc: (string | number)[];
-            /** Message */
-            msg: string;
-            /** Error Type */
-            type: string;
-        };
+  schemas: {
+    /**
+     * ClusterDetailResponse
+     * @description Detailed cluster view with paginated queries.
+     */
+    ClusterDetailResponse: {
+      cluster: components["schemas"]["ClusterSummaryResponse"];
+      queries: components["schemas"]["PaginatedQueriesResponse"];
     };
-    responses: never;
-    parameters: never;
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+    /**
+     * ClusterInfo
+     * @description Cluster info attached to a query.
+     */
+    ClusterInfo: {
+      /** Run Id */
+      run_id: string;
+      /** Cluster Id */
+      cluster_id: number;
+      /** Title */
+      title?: string | null;
+      /** Confidence Score */
+      confidence_score?: number | null;
+    };
+    /**
+     * ClusterListResponse
+     * @description Paginated list of clusters with optional aggregations.
+     */
+    ClusterListResponse: {
+      /** Items */
+      items: components["schemas"]["ClusterSummaryResponse"][];
+      /** Total */
+      total: number;
+      /** Page */
+      page: number;
+      /** Pages */
+      pages: number;
+      /** Limit */
+      limit: number;
+      /** Total Queries */
+      total_queries?: number | null;
+    };
+    /**
+     * ClusterMetadata
+     * @description Cluster quality metadata.
+     */
+    ClusterMetadata: {
+      /** Coherence Score */
+      coherence_score?: number | null;
+      /** Quality */
+      quality?: ("high" | "medium" | "low") | null;
+      /** Notes */
+      notes?: string | null;
+      /** Flags */
+      flags?: string[] | null;
+      /** Last Edited */
+      last_edited?: string | null;
+    };
+    /**
+     * ClusterSearchResult
+     * @description Cluster search result.
+     */
+    ClusterSearchResult: {
+      /** Run Id */
+      run_id: string;
+      /** Cluster Id */
+      cluster_id: number;
+      /** Title */
+      title?: string | null;
+      /** Description */
+      description?: string | null;
+      /** Summary */
+      summary?: string | null;
+      /** Num Queries */
+      num_queries?: number | null;
+      /** Distance */
+      distance?: number | null;
+    };
+    /**
+     * ClusterSummaryResponse
+     * @description Cluster summary with LLM-generated metadata.
+     */
+    ClusterSummaryResponse: {
+      /** Run Id */
+      run_id: string;
+      /** Cluster Id */
+      cluster_id: number;
+      /** Title */
+      title?: string | null;
+      /** Description */
+      description?: string | null;
+      /** Summary */
+      summary?: string | null;
+      /** Num Queries */
+      num_queries?: number | null;
+      /** Representative Queries */
+      representative_queries?: string[] | null;
+      /** Summary Run Id */
+      summary_run_id?: string | null;
+      /** Alias */
+      alias?: string | null;
+      /** Query Count */
+      query_count?: number | null;
+      /** Percentage */
+      percentage?: number | null;
+    };
+    /**
+     * ClusteringRunDetail
+     * @description Detailed clustering run with metrics.
+     */
+    ClusteringRunDetail: {
+      /** Run Id */
+      run_id: string;
+      /** Algorithm */
+      algorithm: string;
+      /** Num Clusters */
+      num_clusters?: number | null;
+      /** Description */
+      description?: string | null;
+      /** Parameters */
+      parameters?: {
+        [key: string]: unknown;
+      } | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Status
+       * @default completed
+       * @enum {string}
+       */
+      status: "pending" | "running" | "completed" | "failed";
+      /** Metrics */
+      metrics?: {
+        [key: string]: unknown;
+      } | null;
+      /** Latest Errors */
+      latest_errors?: string[] | null;
+    };
+    /**
+     * ClusteringRunListResponse
+     * @description Paginated list of clustering runs.
+     */
+    ClusteringRunListResponse: {
+      /** Items */
+      items: components["schemas"]["ClusteringRunSummary"][];
+      /** Total */
+      total: number;
+      /** Page */
+      page: number;
+      /** Pages */
+      pages: number;
+      /** Limit */
+      limit: number;
+    };
+    /**
+     * ClusteringRunStatusResponse
+     * @description Status of a clustering run (for polling).
+     */
+    ClusteringRunStatusResponse: {
+      /** Run Id */
+      run_id: string;
+      /** Status */
+      status: string;
+      /** Processed */
+      processed?: number | null;
+    };
+    /**
+     * ClusteringRunSummary
+     * @description Summary of a clustering run.
+     */
+    ClusteringRunSummary: {
+      /** Run Id */
+      run_id: string;
+      /** Algorithm */
+      algorithm: string;
+      /** Num Clusters */
+      num_clusters?: number | null;
+      /** Description */
+      description?: string | null;
+      /** Parameters */
+      parameters?: {
+        [key: string]: unknown;
+      } | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Status
+       * @default completed
+       * @enum {string}
+       */
+      status: "pending" | "running" | "completed" | "failed";
+    };
+    /**
+     * EditHistoryRecord
+     * @description Single edit history record.
+     */
+    EditHistoryRecord: {
+      /**
+       * Timestamp
+       * Format: date-time
+       */
+      timestamp: string;
+      /** Cluster Id */
+      cluster_id?: number | null;
+      /** Edit Type */
+      edit_type: string;
+      /** Editor */
+      editor: string;
+      /** Reason */
+      reason?: string | null;
+      /** Old Value */
+      old_value?: {
+        [key: string]: unknown;
+      } | null;
+      /** New Value */
+      new_value?: {
+        [key: string]: unknown;
+      } | null;
+    };
+    /**
+     * EditHistoryResponse
+     * @description Paginated edit history.
+     */
+    EditHistoryResponse: {
+      /** Items */
+      items: components["schemas"]["EditHistoryRecord"][];
+      /** Total */
+      total: number;
+      /** Page */
+      page: number;
+      /** Pages */
+      pages: number;
+      /** Limit */
+      limit: number;
+    };
+    /**
+     * ErrorDetail
+     * @description Error detail structure.
+     */
+    ErrorDetail: {
+      /** Type */
+      type: string;
+      /** Message */
+      message: string;
+    };
+    /**
+     * ErrorResponse
+     * @description Standard error response.
+     */
+    ErrorResponse: {
+      error: components["schemas"]["ErrorDetail"];
+    };
+    /**
+     * FacetBucket
+     * @description Single facet bucket with count.
+     */
+    FacetBucket: {
+      /** Key */
+      key: unknown;
+      /** Count */
+      count: number;
+      /** Percentage */
+      percentage?: number | null;
+      /** Meta */
+      meta?: {
+        [key: string]: unknown;
+      } | null;
+    };
+    /** HTTPValidationError */
+    HTTPValidationError: {
+      /** Detail */
+      detail?: components["schemas"]["ValidationError"][];
+    };
+    /**
+     * HierarchyListResponse
+     * @description Paginated list of hierarchy runs.
+     */
+    HierarchyListResponse: {
+      /** Items */
+      items: components["schemas"]["HierarchyRunInfo"][];
+      /** Total */
+      total: number;
+      /** Page */
+      page: number;
+      /** Pages */
+      pages: number;
+      /** Limit */
+      limit: number;
+    };
+    /**
+     * HierarchyNode
+     * @description Single node in a cluster hierarchy.
+     */
+    HierarchyNode: {
+      /** Hierarchy Run Id */
+      hierarchy_run_id: string;
+      /** Run Id */
+      run_id: string;
+      /** Cluster Id */
+      cluster_id: number;
+      /** Parent Cluster Id */
+      parent_cluster_id?: number | null;
+      /** Level */
+      level: number;
+      /** Children Ids */
+      children_ids: number[];
+      /** Title */
+      title?: string | null;
+      /** Description */
+      description?: string | null;
+      /** Query Count */
+      query_count?: number | null;
+      /** Percentage */
+      percentage?: number | null;
+    };
+    /**
+     * HierarchyRunInfo
+     * @description Metadata about a hierarchy run.
+     */
+    HierarchyRunInfo: {
+      /** Hierarchy Run Id */
+      hierarchy_run_id: string;
+      /** Run Id */
+      run_id: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+    };
+    /**
+     * HierarchyTreeResponse
+     * @description Full hierarchy tree with all nodes.
+     */
+    HierarchyTreeResponse: {
+      /** Nodes */
+      nodes: components["schemas"]["HierarchyNode"][];
+      /** Total Queries */
+      total_queries?: number | null;
+    };
+    /**
+     * OrphanInfo
+     * @description Information about an orphaned query.
+     */
+    OrphanInfo: {
+      /** Orphan */
+      orphan: {
+        [key: string]: unknown;
+      };
+      query: components["schemas"]["QueryResponse"];
+    };
+    /**
+     * OrphanedQueriesResponse
+     * @description Paginated orphaned queries.
+     */
+    OrphanedQueriesResponse: {
+      /** Items */
+      items: components["schemas"]["OrphanInfo"][];
+      /** Total */
+      total: number;
+      /** Page */
+      page: number;
+      /** Pages */
+      pages: number;
+      /** Limit */
+      limit: number;
+    };
+    /**
+     * PaginatedQueriesResponse
+     * @description Paginated list of queries.
+     */
+    PaginatedQueriesResponse: {
+      /** Items */
+      items: components["schemas"]["QueryResponse"][];
+      /** Total */
+      total: number;
+      /** Page */
+      page: number;
+      /** Pages */
+      pages: number;
+      /** Limit */
+      limit: number;
+    };
+    /**
+     * QueryResponse
+     * @description Single query response.
+     */
+    QueryResponse: {
+      /** Id */
+      id: number;
+      /** Conversation Id */
+      conversation_id: string;
+      /** Model */
+      model: string;
+      /** Query Text */
+      query_text: string;
+      /** Language */
+      language?: string | null;
+      /** Timestamp */
+      timestamp?: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+    };
+    /**
+     * QuerySearchResult
+     * @description Query search result with cluster context.
+     */
+    QuerySearchResult: {
+      query: components["schemas"]["QueryResponse"];
+      /** Clusters */
+      clusters: components["schemas"]["ClusterInfo"][];
+      /** Distance */
+      distance?: number | null;
+    };
+    /**
+     * SearchClustersResponse
+     * @description Cluster search results.
+     */
+    SearchClustersResponse: {
+      /** Items */
+      items: components["schemas"]["ClusterSearchResult"][];
+      /** Total */
+      total: number;
+      /** Page */
+      page: number;
+      /** Pages */
+      pages: number;
+      /** Limit */
+      limit: number;
+    };
+    /**
+     * SearchFacets
+     * @description Faceted search results.
+     */
+    SearchFacets: {
+      /** Clusters */
+      clusters?: components["schemas"]["FacetBucket"][] | null;
+      /** Language */
+      language?: components["schemas"]["FacetBucket"][] | null;
+      /** Model */
+      model?: components["schemas"]["FacetBucket"][] | null;
+    };
+    /**
+     * SearchQueriesResponse
+     * @description Query search results with facets.
+     */
+    SearchQueriesResponse: {
+      /** Items */
+      items: components["schemas"]["QuerySearchResult"][];
+      /** Total */
+      total: number;
+      /** Page */
+      page: number;
+      /** Pages */
+      pages: number;
+      /** Limit */
+      limit: number;
+      facets?: components["schemas"]["SearchFacets"] | null;
+      /** Applied Clusters */
+      applied_clusters?: components["schemas"]["ClusterSearchResult"][] | null;
+    };
+    /**
+     * SummaryRunListResponse
+     * @description Paginated list of summary runs.
+     */
+    SummaryRunListResponse: {
+      /** Items */
+      items: components["schemas"]["SummaryRunSummary"][];
+      /** Total */
+      total: number;
+      /** Page */
+      page: number;
+      /** Pages */
+      pages: number;
+      /** Limit */
+      limit: number;
+    };
+    /**
+     * SummaryRunSummary
+     * @description Summary of a summarization run.
+     */
+    SummaryRunSummary: {
+      /** Summary Run Id */
+      summary_run_id: string;
+      /** Run Id */
+      run_id: string;
+      /** Alias */
+      alias?: string | null;
+      /** Model */
+      model: string;
+      /**
+       * Generated At
+       * Format: date-time
+       */
+      generated_at: string;
+      /**
+       * Status
+       * @default completed
+       * @enum {string}
+       */
+      status: "pending" | "running" | "completed" | "failed";
+    };
+    /** ValidationError */
+    ValidationError: {
+      /** Location */
+      loc: (string | number)[];
+      /** Message */
+      msg: string;
+      /** Error Type */
+      type: string;
+    };
+  };
+  responses: never;
+  parameters: never;
+  requestBodies: never;
+  headers: never;
+  pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    health_check_api_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
+  health_check_api_health_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    list_runs_api_clustering_runs_get: {
-        parameters: {
-            query?: {
-                /** @description Filter by algorithm (kmeans, hdbscan) */
-                algorithm?: string | null;
-                /** @description Page number */
-                page?: number;
-                /** @description Items per page */
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClusteringRunListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+        content: {
+          "application/json": unknown;
         };
+      };
     };
-    get_run_api_clustering_runs__run_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClusteringRunDetail"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  list_runs_api_clustering_runs_get: {
+    parameters: {
+      query?: {
+        /** @description Filter by algorithm (kmeans, hdbscan) */
+        algorithm?: string | null;
+        /** @description Page number */
+        page?: number;
+        /** @description Items per page */
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    get_run_status_api_clustering_runs__run_id__status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClusteringRunStatusResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["ClusteringRunListResponse"];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
     };
-    list_clusters_api_clustering_runs__run_id__clusters_get: {
-        parameters: {
-            query?: {
-                /** @description Include query counts per cluster */
-                include_counts?: boolean;
-                /** @description Include percentages of total queries */
-                include_percentages?: boolean;
-                /** @description Filter by specific summary run ID */
-                summary_run_id?: string | null;
-                /** @description Filter by summary alias */
-                alias?: string | null;
-                /** @description Limit number of clusters */
-                limit?: number | null;
-                /** @description Page number */
-                page?: number;
-                /** @description Items per page */
-                page_limit?: number;
-            };
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClusterListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  get_run_api_clustering_runs__run_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        run_id: string;
+      };
+      cookie?: never;
     };
-    create_kmeans_run_api_clustering_kmeans_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["ClusteringRunDetail"];
         };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
     };
-    create_hdbscan_run_api_clustering_hdbscan_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
+  };
+  get_run_status_api_clustering_runs__run_id__status_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        run_id: string;
+      };
+      cookie?: never;
     };
-    list_queries_api_queries_get: {
-        parameters: {
-            query?: {
-                /** @description Filter by run ID */
-                run_id?: string | null;
-                /** @description Filter by cluster ID */
-                cluster_id?: number | null;
-                /** @description Filter by model name */
-                model?: string | null;
-                /** @description Page number */
-                page?: number;
-                /** @description Items per page */
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedQueriesResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["ClusteringRunStatusResponse"];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
     };
-    get_cluster_detail_api_clustering_runs__run_id__clusters__cluster_id__get: {
-        parameters: {
-            query?: {
-                /** @description Page number for queries */
-                page?: number;
-                /** @description Queries per page */
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                run_id: string;
-                cluster_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClusterDetailResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  list_clusters_api_clustering_runs__run_id__clusters_get: {
+    parameters: {
+      query?: {
+        /** @description Include query counts per cluster */
+        include_counts?: boolean;
+        /** @description Include percentages of total queries */
+        include_percentages?: boolean;
+        /** @description Filter by specific summary run ID */
+        summary_run_id?: string | null;
+        /** @description Filter by summary alias */
+        alias?: string | null;
+        /** @description Limit number of clusters */
+        limit?: number | null;
+        /** @description Page number */
+        page?: number;
+        /** @description Items per page */
+        page_limit?: number;
+      };
+      header?: never;
+      path: {
+        run_id: string;
+      };
+      cookie?: never;
     };
-    list_hierarchies_api_hierarchy__get: {
-        parameters: {
-            query?: {
-                /** @description Filter by clustering run ID */
-                run_id?: string | null;
-                /** @description Page number */
-                page?: number;
-                /** @description Items per page */
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HierarchyListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["ClusterListResponse"];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
     };
-    create_hierarchy_api_hierarchy__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
+  };
+  create_kmeans_run_api_clustering_kmeans_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    get_hierarchy_tree_api_hierarchy__hierarchy_run_id__get: {
-        parameters: {
-            query?: {
-                /** @description Include query count percentages */
-                include_percentages?: boolean;
-            };
-            header?: never;
-            path: {
-                hierarchy_run_id: string;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      501: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HierarchyTreeResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+        content: {
+          "application/json": unknown;
         };
+      };
     };
-    list_summaries_api_summaries__get: {
-        parameters: {
-            query?: {
-                /** @description Filter by clustering run ID */
-                run_id?: string | null;
-                /** @description Page number */
-                page?: number;
-                /** @description Items per page */
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SummaryRunListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  create_hdbscan_run_api_clustering_hdbscan_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    create_summary_api_summaries__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      501: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
+        content: {
+          "application/json": unknown;
         };
+      };
     };
-    get_cluster_summary_api_summaries__summary_run_id__clusters__cluster_id__get: {
-        parameters: {
-            query?: {
-                /** @description Clustering run ID (optional but recommended) */
-                run_id?: string | null;
-            };
-            header?: never;
-            path: {
-                summary_run_id: string;
-                cluster_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClusterSummaryResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  list_queries_api_queries_get: {
+    parameters: {
+      query?: {
+        /** @description Filter by run ID */
+        run_id?: string | null;
+        /** @description Filter by cluster ID */
+        cluster_id?: number | null;
+        /** @description Filter by model name */
+        model?: string | null;
+        /** @description Page number */
+        page?: number;
+        /** @description Items per page */
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    search_queries_api_search_queries_get: {
-        parameters: {
-            query: {
-                /** @description Search text */
-                text: string;
-                /** @description Search mode */
-                mode?: "semantic" | "fulltext";
-                /** @description Filter by run ID */
-                run_id?: string | null;
-                /** @description Comma-separated cluster IDs */
-                cluster_ids?: string | null;
-                /** @description Semantic filter: find top clusters first */
-                within_clusters?: string | null;
-                /** @description How many clusters for within_clusters */
-                top_clusters?: number;
-                /** @description Page number */
-                page?: number;
-                /** @description Results per page */
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SearchQueriesResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["PaginatedQueriesResponse"];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
     };
-    search_clusters_api_search_clusters_get: {
-        parameters: {
-            query: {
-                /** @description Search text */
-                text: string;
-                /** @description Search mode */
-                mode?: "semantic" | "fulltext";
-                /** @description Filter by run ID */
-                run_id?: string | null;
-                /** @description Number of results */
-                n_results?: number;
-                /** @description Page number */
-                page?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SearchClustersResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  get_cluster_detail_api_clustering_runs__run_id__clusters__cluster_id__get: {
+    parameters: {
+      query?: {
+        /** @description Page number for queries */
+        page?: number;
+        /** @description Queries per page */
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        run_id: string;
+        cluster_id: number;
+      };
+      cookie?: never;
     };
-    get_cluster_metadata_api_curation_clusters__cluster_id__metadata_get: {
-        parameters: {
-            query: {
-                /** @description Clustering run ID */
-                run_id: string;
-            };
-            header?: never;
-            path: {
-                cluster_id: number;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClusterMetadata"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["ClusterDetailResponse"];
         };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
     };
-    get_cluster_history_api_curation_clusters__cluster_id__history_get: {
-        parameters: {
-            query: {
-                /** @description Clustering run ID */
-                run_id: string;
-                /** @description Page number */
-                page?: number;
-                /** @description Items per page */
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                cluster_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EditHistoryResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  list_hierarchies_api_hierarchy__get: {
+    parameters: {
+      query?: {
+        /** @description Filter by clustering run ID */
+        run_id?: string | null;
+        /** @description Page number */
+        page?: number;
+        /** @description Items per page */
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    get_run_audit_api_curation_runs__run_id__audit_get: {
-        parameters: {
-            query?: {
-                /** @description Page number */
-                page?: number;
-                /** @description Items per page */
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EditHistoryResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["HierarchyListResponse"];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
     };
-    get_orphaned_queries_api_curation_runs__run_id__orphaned_get: {
-        parameters: {
-            query?: {
-                /** @description Page number */
-                page?: number;
-                /** @description Items per page */
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OrphanedQueriesResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  create_hierarchy_api_hierarchy__post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    move_query_api_curation_queries__query_id__move_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      501: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
+        content: {
+          "application/json": unknown;
         };
+      };
     };
-    rename_cluster_api_curation_clusters__cluster_id__rename_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
+  };
+  get_hierarchy_tree_api_hierarchy__hierarchy_run_id__get: {
+    parameters: {
+      query?: {
+        /** @description Include query count percentages */
+        include_percentages?: boolean;
+      };
+      header?: never;
+      path: {
+        hierarchy_run_id: string;
+      };
+      cookie?: never;
     };
-    root__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["HierarchyTreeResponse"];
         };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
     };
+  };
+  list_summaries_api_summaries__get: {
+    parameters: {
+      query?: {
+        /** @description Filter by clustering run ID */
+        run_id?: string | null;
+        /** @description Page number */
+        page?: number;
+        /** @description Items per page */
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SummaryRunListResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_summary_api_summaries__post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      501: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+    };
+  };
+  get_cluster_summary_api_summaries__summary_run_id__clusters__cluster_id__get: {
+    parameters: {
+      query?: {
+        /** @description Clustering run ID (optional but recommended) */
+        run_id?: string | null;
+      };
+      header?: never;
+      path: {
+        summary_run_id: string;
+        cluster_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ClusterSummaryResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  search_queries_api_search_queries_get: {
+    parameters: {
+      query: {
+        /** @description Search text */
+        text: string;
+        /** @description Search mode */
+        mode?: "semantic" | "fulltext";
+        /** @description Filter by run ID */
+        run_id?: string | null;
+        /** @description Comma-separated cluster IDs */
+        cluster_ids?: string | null;
+        /** @description Semantic filter: find top clusters first */
+        within_clusters?: string | null;
+        /** @description How many clusters for within_clusters */
+        top_clusters?: number;
+        /** @description Page number */
+        page?: number;
+        /** @description Results per page */
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SearchQueriesResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  search_clusters_api_search_clusters_get: {
+    parameters: {
+      query: {
+        /** @description Search text */
+        text: string;
+        /** @description Search mode */
+        mode?: "semantic" | "fulltext";
+        /** @description Filter by run ID */
+        run_id?: string | null;
+        /** @description Number of results */
+        n_results?: number;
+        /** @description Page number */
+        page?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SearchClustersResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_cluster_metadata_api_curation_clusters__cluster_id__metadata_get: {
+    parameters: {
+      query: {
+        /** @description Clustering run ID */
+        run_id: string;
+      };
+      header?: never;
+      path: {
+        cluster_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ClusterMetadata"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_cluster_history_api_curation_clusters__cluster_id__history_get: {
+    parameters: {
+      query: {
+        /** @description Clustering run ID */
+        run_id: string;
+        /** @description Page number */
+        page?: number;
+        /** @description Items per page */
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        cluster_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EditHistoryResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_run_audit_api_curation_runs__run_id__audit_get: {
+    parameters: {
+      query?: {
+        /** @description Page number */
+        page?: number;
+        /** @description Items per page */
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EditHistoryResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_orphaned_queries_api_curation_runs__run_id__orphaned_get: {
+    parameters: {
+      query?: {
+        /** @description Page number */
+        page?: number;
+        /** @description Items per page */
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        run_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OrphanedQueriesResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  move_query_api_curation_queries__query_id__move_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      501: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+    };
+  };
+  rename_cluster_api_curation_clusters__cluster_id__rename_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      501: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+    };
+  };
+  root__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+    };
+  };
 }
