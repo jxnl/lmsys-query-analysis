@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import type { ClusteringRun } from '@/lib/types/schemas';
+import type { ClusteringRun } from '@/lib/types';
 
 interface JobsTableProps {
   runs: ClusteringRun[];

@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { DataViewer, type DataViewerData } from '@/components/data-viewer';
-import type { PaginatedQueries } from '@/lib/types/schemas';
+import type { PaginatedQueries } from '@/lib/types';
 import { getClusterQueries, searchQueriesInCluster } from '@/app/actions';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';

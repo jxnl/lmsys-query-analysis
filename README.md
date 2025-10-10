@@ -363,12 +363,40 @@ JSON output shapes
 - search (queries):
   - `{ text, run_id, applied_clusters: [{ cluster_id, title, description, num_queries, distance }], results: [{ query_id, distance, snippet, model, language, cluster_id }], facets: { clusters: [{ cluster_id, count, meta: { title } }], language: [{ key, count }], model: [{ key, count }] } }`
 
-## Web Interface
+## Web Interface & API
 
-The project includes an interactive web viewer built with Next.js for exploring clustering results:
+The project includes both a **FastAPI REST backend** and an **interactive Next.js web viewer** for exploring clustering results.
+
+### Quick Start (Both Services)
 
 ```bash
-# Start the web interface
+# Start both FastAPI backend and Next.js frontend together
+./scripts/start-dev.sh
+
+# View logs from both services
+./scripts/logs.sh
+
+# Stop both services
+./scripts/stop-dev.sh
+```
+
+This will start:
+- **FastAPI** on `http://localhost:8000` (API docs at `/docs`)
+- **Next.js** on `http://localhost:3000` (Web UI)
+
+### Running Services Individually
+
+**FastAPI API only:**
+```bash
+# Using convenience command
+uv run lmsys-api
+
+# Or using uvicorn directly
+uv run uvicorn lmsys_query_analysis.api.app:app --reload
+```
+
+**Next.js UI only:**
+```bash
 cd web
 npm install
 npm run dev
@@ -376,23 +404,37 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) to explore your clustering results.
 
-### Web Features
+### FastAPI Backend Features
 
-- **Zero External Dependencies**: Uses SQL LIKE queries instead of ChromaDB server
+- **RESTful API**: Expose all CLI functionality over HTTP
+- **Semantic Search**: ChromaDB-powered vector search for queries and clusters
+- **Full-Text Search**: SQL LIKE search (no embeddings needed)
+- **Aggregations**: Query counts, percentages, facets
+- **Type-Safe**: OpenAPI spec auto-generates TypeScript types for Next.js
+- **Shared Services**: Reuses same business logic as CLI (no code duplication)
+- **Embedded ChromaDB**: No separate vector database server needed
+
+See [docs/API.md](docs/API.md) for full API documentation.
+
+### Web UI Features
+
 - **Jobs Dashboard**: View all clustering runs with metadata and stats
 - **Hierarchy Explorer**: Navigate multi-level cluster hierarchies with enhanced visual controls
   - Expand/collapse all controls
   - Visual progress bars and color coding by cluster size
   - Summary statistics (total clusters, leaf count, levels, query count)
-- **Search (SQL LIKE queries)**: Global and cluster-specific search without ChromaDB
+- **Search**: Global and cluster-specific search (upgradable to semantic via API)
 - **Query Browser**: Paginated view of queries within each cluster (50 per page)
 - **Cluster Details**: LLM-generated summaries, descriptions, and representative queries
 
-**Architecture**: Next.js 15 + Drizzle ORM (SQLite) + Zod + ShadCN UI
+**Architecture**:
+- **Backend**: FastAPI + ChromaDB (embedded) + SQLModel
+- **Frontend**: Next.js 15 + Type-safe API client + ShadCN UI
+- **Data Flow**: CLI/API writes → SQLite + ChromaDB → Next.js reads via REST API
 
-**Data Flow**: Python CLI creates SQLite database → Next.js reads SQLite (read-only) → Browser UI
-
-The web interface connects directly to the SQLite database created by the Python CLI and provides a read-only visualization layer.
+The web interface can connect to either:
+1. **Direct SQLite** (current, read-only)
+2. **FastAPI REST API** (new, supports semantic search)
 
 ## Architecture
 

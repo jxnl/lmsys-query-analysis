@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ClusterEdit } from '@/lib/db/schema';
+import { ClusterEdit } from '@/lib/types';
 
 interface EditHistoryPanelProps {
   edits: ClusterEdit[];

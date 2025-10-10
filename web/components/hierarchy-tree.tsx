@@ -6,7 +6,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ChevronRight, ChevronDown, FileText, Loader2, Copy, Check, Maximize2, Minimize2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import type { ClusterHierarchy, Query } from '@/lib/types/schemas';
+import type { ClusterHierarchy, Query } from '@/lib/types';
 import { getClusterQueries } from '@/app/actions';
 
 // Context for managing expand/collapse state

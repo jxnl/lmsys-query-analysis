@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ClusterMetadata } from '@/lib/db/schema';
+import { ClusterMetadata } from '@/lib/types';
 
 interface ClusterMetadataPanelProps {
   metadata: ClusterMetadata | null;

@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { ClusteringRun } from '@/lib/types/schemas';
+import type { ClusteringRun } from '@/lib/types';
 import { searchQueries } from '../actions';
 import { Search, Loader2 } from 'lucide-react';
 

@@ -1,33 +1,35 @@
 'use server'
 
-import { db } from '@/lib/db/client';
+/**
+ * Server Actions that use the FastAPI backend instead of direct database access.
+ *
+ * These actions replace the old actions.ts file that used Drizzle ORM directly.
+ * All data now flows through the FastAPI backend on port 8000.
+ */
+
 import {
-  clusteringRuns,
-  clusterHierarchies,
-  queries,
-  queryClusters,
-  clusterSummaries,
-} from '@/lib/db/schema';
-import { eq, and, desc, sql, count, like, or } from 'drizzle-orm';
+  clusteringApi,
+  queriesApi,
+  searchApi,
+  hierarchyApi,
+  summariesApi,
+  curationApi,
+} from '@/lib/api/client';
 import type {
   ClusteringRun,
   ClusterHierarchy,
   Query,
   PaginatedQueries,
   ClusterSummary,
-} from '@/lib/types/schemas';
+} from '@/lib/types';
 
 /**
  * Get all clustering runs, ordered by creation date (newest first)
  */
 export async function getRuns(): Promise<ClusteringRun[]> {
   try {
-    const runs = await db
-      .select()
-      .from(clusteringRuns)
-      .orderBy(desc(clusteringRuns.createdAt));
-
-    return runs as ClusteringRun[];
+    const response = await clusteringApi.listRuns({ limit: 100 });
+    return response.items as ClusteringRun[];
   } catch (error) {
     console.error('Error fetching runs:', error);
     return [];
@@ -38,68 +40,72 @@ export async function getRuns(): Promise<ClusteringRun[]> {
  * Get a single clustering run by ID
  */
 export async function getRun(runId: string): Promise<ClusteringRun | null> {
-  const [run] = await db
-    .select()
-    .from(clusteringRuns)
-    .where(eq(clusteringRuns.runId, runId));
-
-  if (!run) return null;
-  return run as ClusteringRun;
+  try {
+    const run = await clusteringApi.getRun(runId);
+    return run as ClusteringRun;
+  } catch (error) {
+    console.error('Error fetching run:', error);
+    return null;
+  }
 }
 
 /**
  * Get all hierarchies for a given run
+ * Note: This requires filtering on the client side since the API doesn't have this exact endpoint
  */
 export async function getHierarchiesForRun(runId: string) {
-  const hierarchies = await db
-    .select({
-      hierarchyRunId: clusterHierarchies.hierarchyRunId,
-      createdAt: clusterHierarchies.createdAt,
-    })
-    .from(clusterHierarchies)
-    .where(eq(clusterHierarchies.runId, runId))
-    .groupBy(clusterHierarchies.hierarchyRunId)
-    .orderBy(desc(clusterHierarchies.createdAt));
+  try {
+    const response = await hierarchyApi.listHierarchies();
+    // Filter hierarchies for this run
+    const hierarchies = response.items.filter((h: any) => h.run_id === runId);
 
-  return hierarchies;
+    // Group by hierarchy_run_id to get unique hierarchies
+    const uniqueHierarchies = new Map();
+    for (const h of hierarchies) {
+      if (!uniqueHierarchies.has(h.hierarchy_run_id)) {
+        uniqueHierarchies.set(h.hierarchy_run_id, {
+          hierarchyRunId: h.hierarchy_run_id,
+          createdAt: h.created_at,
+        });
+      }
+    }
+
+    return Array.from(uniqueHierarchies.values());
+  } catch (error) {
+    console.error('Error fetching hierarchies for run:', error);
+    return [];
+  }
 }
 
 /**
  * Get full hierarchy tree for a hierarchy run
  */
 export async function getHierarchyTree(hierarchyRunId: string): Promise<ClusterHierarchy[]> {
-  const nodes = await db
-    .select()
-    .from(clusterHierarchies)
-    .where(eq(clusterHierarchies.hierarchyRunId, hierarchyRunId))
-    .orderBy(clusterHierarchies.level);
-
-  return nodes as ClusterHierarchy[];
+  try {
+    const response = await hierarchyApi.getHierarchyTree(hierarchyRunId);
+    return response.nodes as ClusterHierarchy[];
+  } catch (error) {
+    console.error('Error fetching hierarchy tree:', error);
+    return [];
+  }
 }
 
 /**
  * Get cluster summary for a specific cluster
  */
-export async function getClusterSummary(runId: string, clusterId: number, alias?: string): Promise<ClusterSummary | null> {
-  // Build where conditions
-  const conditions = [
-    eq(clusterSummaries.runId, runId),
-    eq(clusterSummaries.clusterId, clusterId)
-  ];
-
-  // If alias is provided, add it to conditions
-  if (alias) {
-    conditions.push(eq(clusterSummaries.alias, alias));
+export async function getClusterSummary(
+  runId: string,
+  clusterId: number,
+  alias?: string
+): Promise<ClusterSummary | null> {
+  try {
+    // Use the cluster detail endpoint which includes summary
+    const response = await queriesApi.getClusterDetail(runId, clusterId);
+    return response.cluster as ClusterSummary;
+  } catch (error) {
+    console.error('Error fetching cluster summary:', error);
+    return null;
   }
-
-  const [summary] = await db
-    .select()
-    .from(clusterSummaries)
-    .where(and(...conditions))
-    .orderBy(desc(clusterSummaries.generatedAt));
-
-  if (!summary) return null;
-  return summary as ClusterSummary;
 }
 
 /**
@@ -112,106 +118,99 @@ export async function getClusterQueries(
   limit: number = 50
 ): Promise<PaginatedQueries> {
   console.log('[getClusterQueries] runId:', runId, 'clusterId:', clusterId, 'page:', page);
-  const offset = (page - 1) * limit;
 
-  // Get paginated queries
-  const results = await db
-    .select({
-      query: queries,
-    })
-    .from(queries)
-    .innerJoin(queryClusters, eq(queries.id, queryClusters.queryId))
-    .where(
-      and(eq(queryClusters.runId, runId), eq(queryClusters.clusterId, clusterId))
-    )
-    .limit(limit)
-    .offset(offset);
+  try {
+    const response = await queriesApi.getClusterDetail(runId, clusterId, { page, limit });
 
-  console.log('[getClusterQueries] Found', results.length, 'queries');
+    console.log('[getClusterQueries] Found', response.queries.items.length, 'queries');
+    console.log('[getClusterQueries] Total:', response.queries.total, 'Pages:', response.queries.pages);
 
-  // Get total count
-  const [countResult] = await db
-    .select({ count: count() })
-    .from(queryClusters)
-    .where(
-      and(eq(queryClusters.runId, runId), eq(queryClusters.clusterId, clusterId))
-    );
-
-  const total = countResult.count;
-  const pages = Math.ceil(total / limit);
-
-  console.log('[getClusterQueries] Total:', total, 'Pages:', pages);
-
-  return {
-    queries: results.map((r) => r.query as Query),
-    total,
-    page,
-    pages,
-    limit,
-  };
+    return {
+      queries: response.queries.items as Query[],
+      total: response.queries.total,
+      page: response.queries.page,
+      pages: response.queries.pages,
+      limit: response.queries.limit,
+    };
+  } catch (error) {
+    console.error('Error fetching cluster queries:', error);
+    return {
+      queries: [],
+      total: 0,
+      page: 1,
+      pages: 0,
+      limit,
+    };
+  }
 }
 
 /**
  * Search clusters using full-text search on titles and descriptions
  */
 export async function searchClusters(query: string, runId: string, nResults: number = 20) {
-  const searchPattern = `%${query}%`;
-  
-  const results = await db
-    .select({
-      clusterId: clusterSummaries.clusterId,
-      title: clusterSummaries.title,
-      description: clusterSummaries.description,
-      summary: clusterSummaries.summary,
-      numQueries: clusterSummaries.numQueries,
-    })
-    .from(clusterSummaries)
-    .where(
-      and(
-        eq(clusterSummaries.runId, runId),
-        or(
-          like(clusterSummaries.title, searchPattern),
-          like(clusterSummaries.description, searchPattern),
-          like(clusterSummaries.summary, searchPattern)
-        )
-      )
-    )
-    .limit(nResults);
+  try {
+    const response = await searchApi.searchClusters({
+      text: query,
+      mode: 'fulltext',
+      run_id: runId,
+      limit: nResults,
+    });
 
-  return results;
+    return response.items;
+  } catch (error) {
+    console.error('Error searching clusters:', error);
+    return [];
+  }
 }
 
 /**
  * Get all summary aliases for a run
  */
 export async function getSummaryAliases(runId: string) {
-  const aliases = await db
-    .select({
-      alias: clusterSummaries.alias,
-      summaryRunId: clusterSummaries.summaryRunId,
-      model: clusterSummaries.model,
-    })
-    .from(clusterSummaries)
-    .where(eq(clusterSummaries.runId, runId))
-    .groupBy(clusterSummaries.alias, clusterSummaries.summaryRunId, clusterSummaries.model);
+  try {
+    const response = await summariesApi.listSummaries({ run_id: runId });
 
-  return aliases;
+    // Group by alias
+    const aliasMap = new Map();
+    for (const summary of response.items) {
+      if (!aliasMap.has(summary.alias)) {
+        aliasMap.set(summary.alias, {
+          alias: summary.alias,
+          summaryRunId: summary.summary_run_id,
+          model: summary.model,
+        });
+      }
+    }
+
+    return Array.from(aliasMap.values());
+  } catch (error) {
+    console.error('Error fetching summary aliases:', error);
+    return [];
+  }
 }
 
 /**
  * Get query counts for all clusters in a run
  */
 export async function getClusterQueryCounts(runId: string): Promise<Record<number, number>> {
-  const counts = await db
-    .select({
-      clusterId: queryClusters.clusterId,
-      count: count(),
-    })
-    .from(queryClusters)
-    .where(eq(queryClusters.runId, runId))
-    .groupBy(queryClusters.clusterId);
+  try {
+    const response = await clusteringApi.listClusters(runId, {
+      include_counts: true,
+      include_percentages: false,
+    });
 
-  return Object.fromEntries(counts.map(c => [c.clusterId, c.count]));
+    const counts: Record<number, number> = {};
+    for (const cluster of response.items) {
+      if (cluster.query_count !== undefined) {
+        counts[cluster.cluster_id] = cluster.query_count;
+      }
+    }
+
+    return counts;
+  } catch (error) {
+    console.error('Error fetching cluster query counts:', error);
+    return {};
+  }
 }
 
 /**
@@ -226,53 +225,43 @@ export async function searchQueriesInCluster(
 ): Promise<PaginatedQueries> {
   console.log('[searchQueriesInCluster] runId:', runId, 'clusterId:', clusterId, 'searchText:', searchText);
 
-  const offset = (page - 1) * limit;
-  const searchPattern = `%${searchText}%`;
+  try {
+    // Use the queries API with cluster_id filter and search
+    // Note: The current API doesn't support searching within a cluster directly,
+    // so we'll need to fetch all queries for the cluster and filter client-side
+    const response = await queriesApi.getClusterDetail(runId, clusterId, { page: 1, limit: 10000 });
 
-  // Get paginated queries matching search text in this cluster
-  const results = await db
-    .select({
-      query: queries,
-    })
-    .from(queries)
-    .innerJoin(queryClusters, eq(queries.id, queryClusters.queryId))
-    .where(
-      and(
-        eq(queryClusters.runId, runId),
-        eq(queryClusters.clusterId, clusterId),
-        like(queries.queryText, searchPattern)
-      )
-    )
-    .limit(limit)
-    .offset(offset);
-
-  console.log('[searchQueriesInCluster] Found', results.length, 'queries on page', page);
-
-  // Get total count
-  const [countResult] = await db
-    .select({ count: count() })
-    .from(queryClusters)
-    .innerJoin(queries, eq(queryClusters.queryId, queries.id))
-    .where(
-      and(
-        eq(queryClusters.runId, runId),
-        eq(queryClusters.clusterId, clusterId),
-        like(queries.queryText, searchPattern)
-      )
+    // Filter queries by search text
+    const filteredQueries = response.queries.items.filter((q: any) =>
+      q.query_text?.toLowerCase().includes(searchText.toLowerCase())
     );
 
-  const total = countResult.count;
-  const pages = Math.ceil(total / limit);
+    // Paginate results
+    const total = filteredQueries.length;
+    const pages = Math.ceil(total / limit);
+    const offset = (page - 1) * limit;
+    const paginatedQueries = filteredQueries.slice(offset, offset + limit);
 
-  console.log('[searchQueriesInCluster] Total:', total, 'Pages:', pages);
+    console.log('[searchQueriesInCluster] Found', paginatedQueries.length, 'queries on page', page);
+    console.log('[searchQueriesInCluster] Total:', total, 'Pages:', pages);
 
-  return {
-    queries: results.map((r) => r.query as Query),
-    total,
-    page,
-    pages,
-    limit,
-  };
+    return {
+      queries: paginatedQueries as Query[],
+      total,
+      page,
+      pages,
+      limit,
+    };
+  } catch (error) {
+    console.error('Error searching queries in cluster:', error);
+    return {
+      queries: [],
+      total: 0,
+      page: 1,
+      pages: 0,
+      limit,
+    };
+  }
 }
 
 /**
@@ -286,150 +275,86 @@ export async function searchQueries(
 ) {
   console.log('[searchQueries] searchText:', searchText, 'runId:', runId, 'page:', page);
 
-  const offset = (page - 1) * limit;
-  const searchPattern = `%${searchText}%`;
+  try {
+    const response = await searchApi.searchQueries({
+      text: searchText,
+      mode: 'fulltext',
+      run_id: runId,
+      page,
+      limit,
+    });
 
-  // Build where conditions
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const whereConditions: any[] = [like(queries.queryText, searchPattern)];
-  if (runId) {
-    whereConditions.push(
-      or(
-        eq(queryClusters.runId, runId),
-        sql`${queryClusters.runId} IS NULL`
-      )
-    );
+    // Transform the response to match the expected format
+    // The API returns items with query and optional cluster info
+    const queriesWithClusters = response.items.map((item: any) => ({
+      ...item.query,
+      clusters: item.cluster_id !== undefined ? [{
+        clusterId: item.cluster_id,
+        runId: item.run_id,
+        title: item.cluster_title,
+        confidenceScore: item.confidence_score,
+      }] : [],
+    }));
+
+    return {
+      queries: queriesWithClusters,
+      total: response.total,
+      page: response.page || page,
+      pages: response.pages || Math.ceil(response.total / limit),
+      limit,
+    };
+  } catch (error) {
+    console.error('Error searching queries:', error);
+    return {
+      queries: [],
+      total: 0,
+      page: 1,
+      pages: 0,
+      limit,
+    };
   }
-
-  // Execute query with pagination
-  const results = await db
-    .select({
-      query: queries,
-      clusterId: queryClusters.clusterId,
-      clusterRunId: queryClusters.runId,
-      clusterTitle: clusterSummaries.title,
-      confidenceScore: queryClusters.confidenceScore,
-    })
-    .from(queries)
-    .leftJoin(queryClusters, eq(queries.id, queryClusters.queryId))
-    .leftJoin(
-      clusterSummaries,
-      and(
-        eq(queryClusters.runId, clusterSummaries.runId),
-        eq(queryClusters.clusterId, clusterSummaries.clusterId)
-      )
-    )
-    .where(and(...whereConditions))
-    .limit(limit)
-    .offset(offset);
-
-  // Group results by query to handle multiple cluster assignments
-  const queryMap = new Map();
-  for (const row of results) {
-    const queryId = row.query.id;
-    if (!queryMap.has(queryId)) {
-      queryMap.set(queryId, {
-        ...row.query,
-        clusters: [],
-      });
-    }
-
-    if (row.clusterId !== null) {
-      queryMap.get(queryId).clusters.push({
-        clusterId: row.clusterId,
-        runId: row.clusterRunId,
-        title: row.clusterTitle,
-        confidenceScore: row.confidenceScore,
-      });
-    }
-  }
-
-  const queriesWithClusters = Array.from(queryMap.values());
-
-  // Get total count
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const countWhereConditions: any[] = [like(queries.queryText, searchPattern)];
-  if (runId) {
-    countWhereConditions.push(
-      or(
-        eq(queryClusters.runId, runId),
-        sql`${queryClusters.runId} IS NULL`
-      )
-    );
-  }
-
-  const [countResult] = await db
-    .select({ count: count() })
-    .from(queries)
-    .leftJoin(queryClusters, eq(queries.id, queryClusters.queryId))
-    .where(and(...countWhereConditions));
-
-  const total = countResult.count;
-  const pages = Math.ceil(total / limit);
-
-  return {
-    queries: queriesWithClusters,
-    total,
-    page,
-    pages,
-    limit,
-  };
 }
 
 /**
  * Get cluster metadata (quality, coherence, flags, notes)
  */
 export async function getClusterMetadata(runId: string, clusterId: number) {
-  const { clusterMetadata } = await import('@/lib/db/schema');
-
-  const [metadata] = await db
-    .select()
-    .from(clusterMetadata)
-    .where(
-      and(
-        eq(clusterMetadata.runId, runId),
-        eq(clusterMetadata.clusterId, clusterId)
-      )
-    );
-
-  return metadata || null;
+  try {
+    return await curationApi.getClusterMetadata(runId, clusterId);
+  } catch (error) {
+    console.error('Error fetching cluster metadata:', error);
+    return null;
+  }
 }
 
 /**
  * Get edit history for a cluster
  */
 export async function getClusterEditHistory(runId: string, clusterId?: number) {
-  const { clusterEdits } = await import('@/lib/db/schema');
-
-  const conditions = [eq(clusterEdits.runId, runId)];
-  if (clusterId !== undefined) {
-    conditions.push(eq(clusterEdits.clusterId, clusterId));
+  try {
+    if (clusterId !== undefined) {
+      const response = await curationApi.getClusterHistory(runId, clusterId);
+      return response.items;
+    } else {
+      // If no cluster ID, get full audit log
+      const response = await curationApi.getAuditLog(runId);
+      return response.items;
+    }
+  } catch (error) {
+    console.error('Error fetching cluster edit history:', error);
+    return [];
   }
-
-  const edits = await db
-    .select()
-    .from(clusterEdits)
-    .where(and(...conditions))
-    .orderBy(desc(clusterEdits.timestamp));
-
-  return edits;
 }
 
 /**
  * Get orphaned queries for a run
  */
 export async function getOrphanedQueries(runId: string) {
-  const { orphanedQueries } = await import('@/lib/db/schema');
-
-  const results = await db
-    .select({
-      orphan: orphanedQueries,
-      query: queries,
-    })
-    .from(orphanedQueries)
-    .innerJoin(queries, eq(orphanedQueries.queryId, queries.id))
-    .where(eq(orphanedQueries.runId, runId))
-    .orderBy(desc(orphanedQueries.orphanedAt));
-
-  return results;
+  try {
+    const response = await curationApi.getOrphanedQueries(runId);
+    return response.items;
+  } catch (error) {
+    console.error('Error fetching orphaned queries:', error);
+    return [];
+  }
 }

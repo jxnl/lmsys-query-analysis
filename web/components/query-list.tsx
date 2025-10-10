@@ -4,7 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { PaginatedQueries } from '@/lib/types/schemas';
+import type { PaginatedQueries } from '@/lib/types';
 
 interface QueryListProps {
   data: PaginatedQueries;
