@@ -212,7 +212,7 @@ class EmbeddingGenerator:
     async def generate_embeddings_async(
         self,
         texts: List[str],
-        batch_size: int = 32,
+        batch_size: int = 100,
         show_progress: bool = True,
     ) -> np.ndarray:
         """Generate embeddings for a list of texts asynchronously.

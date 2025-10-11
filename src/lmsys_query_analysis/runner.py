@@ -42,6 +42,7 @@ class BaseCluster(BaseModel):
     cluster_id: int
     title: str
     description: str
+    representative_queries: Optional[List[str]] = None
 
 
 class AnalysisRunner:
@@ -279,7 +280,8 @@ def extract_base_clusters(db: Database, run_id: str, min_clusters: int = 10) -> 
                 BaseCluster(
                     cluster_id=summary.cluster_id,
                     title=summary.title or f"Cluster {summary.cluster_id}",
-                    description=summary.summary or f"Cluster {summary.cluster_id} (no description)"
+                    description=summary.summary or f"Cluster {summary.cluster_id} (no description)",
+                    representative_queries=summary.representative_queries
                 )
                 for summary in summaries
             ]
@@ -327,10 +329,14 @@ async def create_hierarchy(db: Database, run_id: str, config: RunnerConfig) -> s
         hierarchy_run_id, hierarchy_data = await merge_clusters_hierarchical(
             base_clusters=base_clusters_dicts,
             run_id=run_id,
+            db=db,
             embedding_model=config.embedding_model,
             embedding_provider=config.embedding_provider,
             llm_provider=config.llm_provider,
-            llm_model=config.llm_model,
+            category_model=config.category_model,
+            dedup_model=config.dedup_model,
+            assignment_model=config.assignment_model,
+            refinement_model=config.refinement_model,
             target_levels=config.hierarchy_levels,
             merge_ratio=config.merge_ratio,
             neighborhood_size=config.neighborhood_size,

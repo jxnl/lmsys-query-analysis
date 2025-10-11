@@ -124,7 +124,7 @@ uv run lmsys runs --latest
 
 # Generate summaries (requires OPENAI_API_KEY or other LLM provider)
 uv run lmsys summarize <RUN_ID> --alias v1 \
-  --use-chroma --max-queries 80 --concurrency 6
+  --use-chroma --max-queries 80 --concurrency 100
 
 # Merge clusters into hierarchy (uses openai/gpt-4o-mini by default)
 uv run lmsys merge-clusters <RUN_ID> \
@@ -215,9 +215,6 @@ uv run lmsys summarize <RUN_ID> --cluster-id 5
 # Adjust number of queries sent to LLM
 uv run lmsys summarize <RUN_ID> --max-queries 100
 
-# Speed up with concurrency and optional rate limiting
-uv run lmsys summarize <RUN_ID> --concurrency 8 --rpm 60
-
 # Notes:
 # - With --use-chroma, summaries are also embedded and written to Chroma using the
 #   same embedding model/provider recorded on the clustering run.
@@ -245,7 +242,6 @@ uv run lmsys merge-clusters <RUN_ID> \
   --merge-ratio 0.5 \                           # Merge aggressiveness (0.5 = 100->50->25)
   --model openai/gpt-4o-mini \                  # LLM for merging (default: openai/gpt-4o-mini)
   --embedding-model cohere/embed-v4.0 \         # Embedding model (default: cohere/embed-v4.0)
-  --concurrency 8 \                             # Parallel LLM requests
   --neighborhood-size 40                        # Clusters per LLM context (Clio default)
 
 # Use Claude for higher quality merging, this gets summaries from the summary-run-id which is used in merging

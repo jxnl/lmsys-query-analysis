@@ -48,6 +48,12 @@ class RunnerConfig(BaseModel):
         description="LLM provider for summarization and hierarchy"
     )
     llm_model: str = Field(default="gpt-4o-mini", description="LLM model name")
+    
+    # Selective model configuration for hierarchy
+    category_model: str = Field(default="gpt-5-mini", description="Model for category generation (quality-critical)")
+    dedup_model: str = Field(default="gpt-5-mini", description="Model for deduplication (quality-critical)")
+    assignment_model: str = Field(default="gpt-4o-mini", description="Model for cluster assignment (high-volume, cost-sensitive)")
+    refinement_model: str = Field(default="gpt-4o-mini", description="Model for cluster refinement (high-volume, cost-sensitive)")
 
     # Database configuration
     db_path: Optional[str] = Field(default=None, description="Persistent database path")

@@ -12,6 +12,7 @@ from ...db.connection import get_db
 from ...services import cluster_service
 from ...db.models import ClusterSummary, ClusterHierarchy
 from ...clustering.hierarchy import merge_clusters_hierarchical
+from ...types import BaseCluster
 from sqlmodel import select
 
 console = Console()
@@ -22,8 +23,20 @@ def merge_clusters_cmd(
     run_id: str = typer.Argument(..., help="Clustering run ID to create hierarchy from"),
     db_path: str = db_path_option,
     summary_run_id: str = typer.Option(None, help="Specific summary run ID to merge (defaults to latest)"),
-    model: str = typer.Option(
-        "openai/gpt-4o-mini", help="LLM (provider/model) for merging"
+    category_model: str = typer.Option(
+        "gpt-5-mini", help="Model for category generation (quality-critical)"
+    ),
+    dedup_model: str = typer.Option(
+        "gpt-5-mini", help="Model for deduplication (quality-critical)"
+    ),
+    assignment_model: str = typer.Option(
+        "gpt-4o-mini", help="Model for cluster assignment (high-volume, cost-sensitive)"
+    ),
+    refinement_model: str = typer.Option(
+        "gpt-4o-mini", help="Model for cluster refinement (high-volume, cost-sensitive)"
+    ),
+    llm_provider: str = typer.Option(
+        "openai", help="LLM provider (openai/anthropic/groq)"
     ),
     embedding_model: str = embedding_model_option,
     target_levels: int = typer.Option(
@@ -56,7 +69,6 @@ def merge_clusters_cmd(
         uv run lmsys merge-clusters kmeans-100-20251004-170442 --target-levels 3
     """
     embed_model, embed_provider = parse_embedding_model(embedding_model)
-    llm_provider, llm_model = model.split("/", 1)
     db = get_db(db_path)
     
     with db.get_session() as session:
@@ -87,11 +99,11 @@ def merge_clusters_cmd(
             raise typer.Exit(1)
         
         base_clusters = [
-            {
-                "cluster_id": s.cluster_id,
-                "title": s.title or f"Cluster {s.cluster_id}",
-                "description": s.description or "No description"
-            }
+            BaseCluster(
+                cluster_id=s.cluster_id,
+                title=s.title or f"Cluster {s.cluster_id}",
+                description=s.description or "No description"
+            )
             for s in summaries
         ]
         
@@ -104,10 +116,14 @@ def merge_clusters_cmd(
             return await merge_clusters_hierarchical(
                 base_clusters,
                 run_id,
+                db,
                 embedding_model=embed_model,
                 embedding_provider=embed_provider,
                 llm_provider=llm_provider,
-                llm_model=llm_model,
+                category_model=category_model,
+                dedup_model=dedup_model,
+                assignment_model=assignment_model,
+                refinement_model=refinement_model,
                 target_levels=target_levels,
                 merge_ratio=merge_ratio,
                 neighborhood_size=neighborhood_size,

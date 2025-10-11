@@ -9,24 +9,93 @@ Implements Anthropic's Clio-style hierarchical clustering approach:
 6. Repeat for multiple hierarchy levels
 """
 
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict, Tuple, TYPE_CHECKING
 import logging
 from datetime import datetime
+import random
+import time
 
+from cohere.types import usage
 import numpy as np
 import anyio
+import asyncio
 import instructor
 from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from sklearn.cluster import MiniBatchKMeans
+from jinja2 import Environment
 from .embeddings import EmbeddingGenerator
 from aiolimiter import AsyncLimiter
 from tenacity import retry, stop_after_attempt, wait_exponential
+from ..runner import BaseCluster
+from ..utils.logging import trace
+
+if TYPE_CHECKING:
+    from ..db.connection import Database
 
 console = Console()
 logger = logging.getLogger(__name__)
 
+
+# ==============================================================================
+# Jinja2 Templates for LLM Prompts
+# ==============================================================================
+
+def _create_neighborhood_categories_template():
+    """Create Jinja2 template for neighborhood category generation."""
+    env = Environment()
+    return env.from_string("""Review these clusters and create a behavioral taxonomy with roughly {{ target_count }} categories:
+
+<cluster_list>
+{% for cluster in clusters -%}
+<cluster>{{ cluster.title }}: {{ cluster.description }}
+{% if cluster.representative_queries -%}
+Examples:
+{% for query in cluster.representative_queries[:3] -%}
+- {{ query }}
+{% endfor -%}
+{% endif -%}
+</cluster>
+{% endfor -%}
+</cluster_list>
+
+Your task is to identify USER BEHAVIORS and MENTAL MODELS, then create {{ target_count }} higher-level category names.
+
+Think like the Anthropic Education Report:
+1. Identify behavioral patterns (how do users phrase requests? What do they assume?)
+2. Find user segments (novices vs experts, different mental models)
+3. Map along taxonomic dimensions (expertise level, autonomy/agency, task type, output expectations)
+4. Look for product insights (expectation gaps, unmet needs, emerging use cases)
+
+Guidelines:
+1. FOCUS ON BEHAVIORS, not just topics (e.g., "Novice Programmers Seeking Complete Solutions" not "Programming")
+2. Create names specific enough for product decisions, broad enough to encompass 2-5 clusters
+3. Avoid generic terms ("General Queries", "Various Topics", "Diverse Requests", "Technical Tasks", "Professional Use")
+4. Explicitly describe harmful/sensitive patterns for observability (e.g., "Jailbreak via Roleplay Prompts")
+5. Ensure categories represent distinct user segments or interaction patterns
+6. Think: what would a PM or UX researcher want to know?
+7. PREFER SPECIFICITY: Include concrete domains, technologies, or use cases in category names
+8. Each category should be DISTINCT and NON-OVERLAPPING with others
+
+CRITICAL: Prioritize SPECIFICITY over hitting target count exactly.
+- Minimum output: {{ target_count }} categories
+- Target output: {{ int(target_count * 1.3) }} categories (30% more is GOOD)
+- Maximum output: {{ int(target_count * 1.5) }} categories
+
+It's better to have {{ int(target_count * 1.5) }} specific categories than {{ target_count }} generic ones.
+When in doubt, CREATE MORE CATEGORIES rather than merging into generic buckets.
+
+Provide your category names focusing on user behavior and mental models.""")
+
+
+
+class BaseCluster(BaseModel):
+    """Base cluster model for hierarchical merging."""
+    cluster_id: int
+    title: str
+    description: str
+    representative_queries: Optional[List[str]] = None
 
 # ==============================================================================
 # Pydantic Models for Structured LLM Responses
@@ -35,14 +104,6 @@ logger = logging.getLogger(__name__)
 class NeighborhoodCategories(BaseModel):
     """Response for generating higher-level categories from a neighborhood of clusters."""
 
-    scratchpad: str = Field(
-        description="""Brief analysis identifying:
-        1. Common behavioral patterns (how users interact with LLMs)
-        2. User segments or mental models (novices vs experts, use case types)
-        3. 2-4 main taxonomic dimensions (e.g., expertise level, task type, domain)
-
-        Keep to 1-2 paragraphs maximum. Think like the Anthropic Education Report - create frameworks, not just lists."""
-    )
     categories: List[str] = Field(
         description="""List of broader category names based on behavioral patterns and user segments.
 
@@ -99,13 +160,6 @@ class DeduplicatedClusters(BaseModel):
 class ClusterAssignment(BaseModel):
     """Response for assigning a cluster to its best-fit parent category."""
 
-    scratchpad: str = Field(
-        description="""Step-by-step reasoning (2-4 sentences):
-        1. Key characteristics of the cluster being assigned
-        2. Which parent categories could potentially fit
-        3. Why the chosen parent is the best match
-        """
-    )
     assigned_cluster: str = Field(
         description="""Exact name of the chosen parent cluster.
 
@@ -165,14 +219,78 @@ class RefinedClusterSummary(BaseModel):
 
 
 # ==============================================================================
+# Representative Query Selection Helper
+# ==============================================================================
+
+@trace
+def select_representative_queries_from_db(
+    db: "Database",
+    run_id: str,
+    child_cluster_ids: List[int],
+    max_queries: int = 10
+) -> List[str]:
+    """Select representative queries from child clusters by querying the database.
+    
+    Args:
+        db: Database connection
+        run_id: Clustering run ID
+        child_cluster_ids: List of child cluster IDs
+        max_queries: Maximum number of queries to select
+        
+    Returns:
+        List of representative query texts
+    """
+    from sqlmodel import select
+    from ..db.models import Query, QueryCluster
+    
+    if not child_cluster_ids:
+        return []
+    
+    # Query the database for queries in these clusters
+    with db.get_session() as session:
+        # Get queries from child clusters
+        statement = (
+            select(Query.query_text)
+            .join(QueryCluster, Query.id == QueryCluster.query_id)
+            .where(QueryCluster.run_id == run_id)
+            .where(QueryCluster.cluster_id.in_(child_cluster_ids))
+        )
+        
+        query_texts = session.exec(statement).all()
+    
+    if not query_texts:
+        return []
+    
+    # Deduplicate queries (case-insensitive, trimmed)
+    seen = set()
+    unique_queries = []
+    for q in query_texts:
+        q = (q or "").strip()
+        key = " ".join(q.lower().split())
+        if key and key not in seen:
+            seen.add(key)
+            unique_queries.append(q)
+    
+    # Select up to max_queries using random sampling
+    k = min(max_queries, len(unique_queries))
+    if k <= 0:
+        return []
+    
+    # Randomly sample k queries
+    return random.sample(unique_queries, k)
+
+
+# ==============================================================================
 # Neighborhood Clustering Helper
 # ==============================================================================
 
+@trace
 def create_neighborhoods(
+    ids: List[int],
     embeddings: np.ndarray,
     n_neighborhoods: int,
     random_state: int = 42
-) -> np.ndarray:
+) -> List[tuple[int, int]]:
     """Cluster embeddings into neighborhoods using MiniBatchKMeans.
 
     Args:
@@ -188,7 +306,7 @@ def create_neighborhoods(
         random_state=random_state,
         batch_size=1000
     )
-    return clusterer.fit_predict(embeddings)
+    return list(zip(ids, clusterer.fit_predict(embeddings)))
 
 
 # ==============================================================================
@@ -199,76 +317,80 @@ def create_neighborhoods(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10)
 )
+@trace
 async def generate_neighborhood_categories(
     client: instructor.AsyncInstructor,
-    clusters: List[Dict[str, str]],
+    clusters: List[BaseCluster],
     target_count: int = 10
 ) -> NeighborhoodCategories:
     """Generate higher-level category names for a neighborhood of clusters.
 
     Args:
         client: Async instructor client
-        clusters: List of dicts with 'title' and 'description'
+        clusters: List of BaseCluster objects with title and description
         target_count: Target number of categories to generate
 
     Returns:
-        NeighborhoodCategories with scratchpad and category list
+        NeighborhoodCategories with category list
     """
-    cluster_str = "\n".join([
-        f"<cluster>{c['title']}: {c['description']}</cluster>"
-        for c in clusters
-    ])
+    user_prompt = """Review these clusters and create a behavioral taxonomy with roughly {{ target_count }} categories:
+
+    <cluster_list>
+    {% for cluster in clusters -%}
+    <cluster>{{ cluster.title }}: {{ cluster.description }}
+    {% if cluster.representative_queries -%}
+    Examples:
+    {% for query in cluster.representative_queries[:3] -%}
+    - {{ query }}
+    {% endfor -%}
+    {% endif -%}
+    </cluster>
+    {% endfor -%}
+    </cluster_list>
+
+    Your task is to identify USER BEHAVIORS and MENTAL MODELS, then create {{ target_count }} higher-level category names.
+
+    Think like the Anthropic Education Report:
+    1. Identify behavioral patterns (how do users phrase requests? What do they assume?)
+    2. Find user segments (novices vs experts, different mental models)
+    3. Map along taxonomic dimensions (expertise level, autonomy/agency, task type, output expectations)
+    4. Look for product insights (expectation gaps, unmet needs, emerging use cases)
+
+    Guidelines:
+    1. FOCUS ON BEHAVIORS, not just topics (e.g., "Novice Programmers Seeking Complete Solutions" not "Programming")
+    2. Create names specific enough for product decisions, broad enough to encompass 2-5 clusters
+    3. Avoid generic terms ("General Queries", "Various Topics", "Diverse Requests", "Technical Tasks", "Professional Use")
+    4. Explicitly describe harmful/sensitive patterns for observability (e.g., "Jailbreak via Roleplay Prompts")
+    5. Ensure categories represent distinct user segments or interaction patterns
+    6. Think: what would a PM or UX researcher want to know?
+    7. PREFER SPECIFICITY: Include concrete domains, technologies, or use cases in category names
+    8. Each category should be DISTINCT and NON-OVERLAPPING with others
+
+    CRITICAL: Prioritize SPECIFICITY over hitting target count exactly.
+    - Minimum output: {{ target_count }} categories
+    - Target output: {{ int(target_count * 1.3) }} categories (30% more is GOOD)
+    - Maximum output: {{ int(target_count * 1.5) }} categories
+
+    It's better to have {{ int(target_count * 1.5) }} specific categories than {{ target_count }} generic ones.
+    When in doubt, CREATE MORE CATEGORIES rather than merging into generic buckets.
+
+    Provide your category names focusing on user behavior and mental models."""
 
     system_prompt = """You are a behavioral researcher and taxonomist analyzing how people interact with LLMs. Your goal is to create a framework that reveals user mental models, behaviors, and product opportunities - not just topic categories."""
 
-    user_prompt = f"""Review these clusters and create a behavioral taxonomy with roughly {target_count} categories:
-
-<cluster_list>
-{cluster_str}
-</cluster_list>
-
-Your task is to identify USER BEHAVIORS and MENTAL MODELS, then create {target_count} higher-level category names.
-
-Think like the Anthropic Education Report:
-1. Identify behavioral patterns (how do users phrase requests? What do they assume?)
-2. Find user segments (novices vs experts, different mental models)
-3. Map along taxonomic dimensions (expertise level, autonomy/agency, task type, output expectations)
-4. Look for product insights (expectation gaps, unmet needs, emerging use cases)
-
-Guidelines:
-1. FOCUS ON BEHAVIORS, not just topics (e.g., "Novice Programmers Seeking Complete Solutions" not "Programming")
-2. Create names specific enough for product decisions, broad enough to encompass 2-5 clusters
-3. Avoid generic terms ("General Queries", "Various Topics", "Diverse Requests", "Technical Tasks", "Professional Use")
-4. Explicitly describe harmful/sensitive patterns for observability (e.g., "Jailbreak via Roleplay Prompts")
-5. Ensure categories represent distinct user segments or interaction patterns
-6. Think: what would a PM or UX researcher want to know?
-7. PREFER SPECIFICITY: Include concrete domains, technologies, or use cases in category names
-8. Each category should be DISTINCT and NON-OVERLAPPING with others
-
-CRITICAL: Prioritize SPECIFICITY over hitting target count exactly.
-- Minimum output: {target_count} categories
-- Target output: {int(target_count * 1.3)} categories (30% more is GOOD)
-- Maximum output: {int(target_count * 1.5)} categories
-
-It's better to have {int(target_count * 1.5)} specific categories than {target_count} generic ones.
-When in doubt, CREATE MORE CATEGORIES rather than merging into generic buckets.
-
-First, use <scratchpad> to:
-- Identify 2-4 main behavioral patterns or user segments
-- Note taxonomic dimensions (e.g., expertise, task complexity, autonomy)
-- Consider what this reveals about how people conceptualize AI
-- Check: are my categories specific enough? Do they avoid generic terms?
-
-Then provide your category names focusing on user behavior and mental models."""
-
     response = await client.chat.completions.create(
+        model="gpt-5", # this needs a smarter model
+        reasoning_effort="medium",
         response_model=NeighborhoodCategories,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
-        ]
+        ],
+        context={
+            "clusters": clusters,
+            "target_count": target_count
+        }
     )
-
     return response
 
 
@@ -276,6 +398,7 @@ Then provide your category names focusing on user behavior and mental models."""
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10)
 )
+@trace
 async def deduplicate_cluster_names(
     client: instructor.AsyncInstructor,
     candidate_names: List[str],
@@ -291,42 +414,48 @@ async def deduplicate_cluster_names(
     Returns:
         DeduplicatedClusters with unique cluster list
     """
-    names_str = "\n".join([f"- {name}" for name in candidate_names])
+    user_prompt = """Deduplicate these cluster names to create ~{{ target_count }} distinct categories:
+
+    <candidate_names>
+    {% for name in candidate_names -%}
+    - {{ name }}
+    {% endfor -%}
+    </candidate_names>
+
+    Task:
+    1. Identify ONLY near-duplicate names (>90% semantic overlap - essentially the same category)
+    2. DEFAULT ACTION: KEEP categories separate unless they are obvious duplicates
+    3. Merge ONLY when:
+    - Names are near-identical (e.g., "Python Coding" vs "Python Code Generation" → merge)
+    - One is a clear subset of another (e.g., "React Debugging" under "React Development" → keep separate if both have substance)
+    4. DO NOT merge based on:
+    - Same domain but different use cases (e.g., "SQL Query Writing" vs "SQL Performance Optimization" → KEEP BOTH)
+    - Same technology but different user segments (e.g., "Novice Python Help" vs "Expert Python Architecture" → KEEP BOTH)
+    - Similar topics but different behaviors (e.g., "Homework Help" vs "Professional Code Review" → KEEP BOTH)
+
+    CRITICAL RULES:
+    - Better to have {{ int(target_count * 1.4) }} specific categories than {{ target_count }} generic ones
+    - When unsure, DO NOT MERGE
+    - Preserve domain-specific and behavior-specific distinctions
+    - Only merge if you can't distinguish the categories meaningfully
+
+    Output {{ int(target_count * 0.9) }} to {{ int(target_count * 1.5) }} final cluster names.
+    Acceptable range is wide - QUALITY (specificity) matters more than QUANTITY (hitting exact target)."""
 
     system_prompt = """You are a taxonomist creating a clear, distinct taxonomy from potentially overlapping category names."""
 
-    user_prompt = f"""Deduplicate these cluster names to create ~{target_count} distinct categories:
-
-<candidate_names>
-{names_str}
-</candidate_names>
-
-Task:
-1. Identify ONLY near-duplicate names (>90% semantic overlap - essentially the same category)
-2. DEFAULT ACTION: KEEP categories separate unless they are obvious duplicates
-3. Merge ONLY when:
-   - Names are near-identical (e.g., "Python Coding" vs "Python Code Generation" → merge)
-   - One is a clear subset of another (e.g., "React Debugging" under "React Development" → keep separate if both have substance)
-4. DO NOT merge based on:
-   - Same domain but different use cases (e.g., "SQL Query Writing" vs "SQL Performance Optimization" → KEEP BOTH)
-   - Same technology but different user segments (e.g., "Novice Python Help" vs "Expert Python Architecture" → KEEP BOTH)
-   - Similar topics but different behaviors (e.g., "Homework Help" vs "Professional Code Review" → KEEP BOTH)
-
-CRITICAL RULES:
-- Better to have {int(target_count * 1.4)} specific categories than {target_count} generic ones
-- When unsure, DO NOT MERGE
-- Preserve domain-specific and behavior-specific distinctions
-- Only merge if you can't distinguish the categories meaningfully
-
-Output {int(target_count * 0.9)} to {int(target_count * 1.5)} final cluster names.
-Acceptable range is wide - QUALITY (specificity) matters more than QUANTITY (hitting exact target)."""
-
     response = await client.chat.completions.create(
+        model="gpt-5-mini",
+        reasoning_effort="medium",
         response_model=DeduplicatedClusters,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
-        ]
+        ],
+        context={
+            "candidate_names": candidate_names,
+            "target_count": target_count
+        }
     )
 
     return response
@@ -336,51 +465,63 @@ Acceptable range is wide - QUALITY (specificity) matters more than QUANTITY (hit
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10)
 )
+@trace
 async def assign_to_parent_cluster(
     client: instructor.AsyncInstructor,
-    child_cluster: Dict[str, str],
+    child_cluster: BaseCluster,
     parent_candidates: List[str]
 ) -> ClusterAssignment:
     """Assign a child cluster to the best-fit parent category.
 
     Args:
         client: Async instructor client
-        child_cluster: Dict with 'title' and 'description' of cluster to assign
+        child_cluster: BaseCluster object with title and description
         parent_candidates: List of parent cluster names
 
     Returns:
         ClusterAssignment with reasoning and chosen parent
     """
-    parents_str = "\n".join([f"<cluster>{name}</cluster>" for name in parent_candidates])
+    user_prompt = """Categorize this specific cluster into one of the provided higher-level clusters:
+
+    <specific_cluster>
+    Title: {{ child_cluster.title }}
+    Description: {{ child_cluster.description }}
+    {% if child_cluster.representative_queries -%}
+    Examples:
+    {% for query in child_cluster.representative_queries[:3] -%}
+    - {{ query }}
+    {% endfor -%}
+    {% endif -%}
+    </specific_cluster>
+
+    <higher_level_clusters>
+    {% for parent in parent_candidates -%}
+    <cluster>{{ parent }}</cluster>
+    {% endfor -%}
+    </higher_level_clusters>
+
+    Steps:
+    1. Analyze the key characteristics of the specific cluster
+    2. Consider which higher-level clusters could potentially fit
+    3. Determine the BEST match (you MUST choose one)
+    4. Be sensible - don't force poor fits
+
+    Provide the exact parent cluster name."""
 
     system_prompt = """You are categorizing clusters for observability, monitoring, and content moderation."""
 
-    user_prompt = f"""Categorize this specific cluster into one of the provided higher-level clusters:
-
-<specific_cluster>
-Title: {child_cluster['title']}
-Description: {child_cluster['description']}
-</specific_cluster>
-
-<higher_level_clusters>
-{parents_str}
-</higher_level_clusters>
-
-Steps:
-1. Analyze the key characteristics of the specific cluster
-2. Consider which higher-level clusters could potentially fit
-3. Determine the BEST match (you MUST choose one)
-4. Be sensible - don't force poor fits
-
-Use <scratchpad> for reasoning (2-4 sentences), then provide the exact parent cluster name."""
-
-    logger.debug(f"Assigning '{child_cluster['title'][:60]}...' to one of {len(parent_candidates)} parent options")
+    logger.debug(f"Assigning '{child_cluster.title[:60]}...' to one of {len(parent_candidates)} parent options")
     response = await client.chat.completions.create(
+        reasoning_effort="medium",
         response_model=ClusterAssignment,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
-        ]
+        ],
+        context={
+            "child_cluster": child_cluster,
+            "parent_candidates": parent_candidates
+        }
     )
     logger.debug(f"  → Assigned to: '{response.assigned_cluster}'")
     return response
@@ -390,27 +531,37 @@ Use <scratchpad> for reasoning (2-4 sentences), then provide the exact parent cl
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10)
 )
+@trace
 async def refine_parent_cluster(
     client: instructor.AsyncInstructor,
-    child_clusters: List[str]
+    child_clusters: List[BaseCluster]
 ) -> RefinedClusterSummary:
     """Refine a parent cluster's title and description based on its children.
 
     Args:
         client: Async instructor client
-        child_clusters: List of child cluster titles assigned to this parent
+        child_clusters: List of BaseCluster objects assigned to this parent
 
     Returns:
         RefinedClusterSummary with title and summary
     """
-    children_str = "\n".join([f"<cluster>{title}</cluster>" for title in child_clusters])
 
     system_prompt = """You are a behavioral researcher creating insight-driven cluster summaries. Focus on what these patterns reveal about user behavior, mental models, and product opportunities."""
 
-    user_prompt = f"""Analyze this group of related clusters and create a behavioral insight summary:
+    # Create Jinja2 template for child clusters
+    user_prompt = """Analyze this group of related clusters and create a behavioral insight summary:
 
 <child_clusters>
-{children_str}
+{% for cluster in child_clusters -%}
+<cluster>{{ cluster.title }}: {{ cluster.description }}
+{% if cluster.representative_queries -%}
+Examples:
+{% for query in cluster.representative_queries[:2] -%}
+- {{ query }}
+{% endfor -%}
+{% endif -%}
+</cluster>
+{% endfor -%}
 </child_clusters>
 
 Requirements:
@@ -458,11 +609,15 @@ Example BAD (too generic):
 """
 
     response = await client.chat.completions.create(
+        reasoning_effort="medium",
         response_model=RefinedClusterSummary,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
-        ]
+        ],
+        context={
+            "child_clusters": child_clusters
+        }
     )
 
     return response
@@ -472,17 +627,22 @@ Example BAD (too generic):
 # Core Hierarchical Merging Algorithm
 # ==============================================================================
 
+@trace
 async def merge_clusters_hierarchical(
-    base_clusters: List[Dict],
+    base_clusters: List[BaseCluster],
     run_id: str,
+    db: "Database",
     embedding_model: str = "text-embedding-3-small",
     embedding_provider: str = "openai",
     llm_provider: str = "openai",
-    llm_model: str = "gpt-4o-mini",
+    category_model: str = "gpt-5-mini",      # For generate_neighborhood_categories (quality-critical)
+    dedup_model: str = "gpt-5-mini",         # For deduplicate_cluster_names (quality-critical)
+    assignment_model: str = "gpt-4o-mini",    # For assign_to_parent_cluster (high-volume, cost-sensitive)
+    refinement_model: str = "gpt-4o-mini",   # For refine_parent_cluster (high-volume, cost-sensitive)
     target_levels: int = 3,
     merge_ratio: float = 0.35,  # Changed from 0.2 to 0.35 to reduce over-merging
     neighborhood_size: int = 20,  # Changed from 40 to 20 for more specific categories
-    concurrency: int = 8,
+    concurrency: int = 100,
     rpm: Optional[int] = None
 ) -> Tuple[str, List[Dict]]:
     """Perform hierarchical merging of clusters using LLM-driven categorization.
@@ -497,11 +657,16 @@ async def merge_clusters_hierarchical(
     7. Repeat for multiple levels
 
     Args:
-        base_clusters: List of dicts with 'cluster_id', 'title', 'description'
+        base_clusters: List of BaseCluster objects with cluster_id, title, and description
         run_id: Clustering run ID
+        db: Database connection for querying representative queries
         embedding_model: Sentence transformer model for embeddings
+        embedding_provider: Embedding provider (openai/cohere)
         llm_provider: LLM provider (anthropic/openai/groq)
-        llm_model: LLM model name
+        category_model: Model for generate_neighborhood_categories (quality-critical)
+        dedup_model: Model for deduplicate_cluster_names (quality-critical)
+        assignment_model: Model for assign_to_parent_cluster (high-volume, cost-sensitive)
+        refinement_model: Model for refine_parent_cluster (high-volume, cost-sensitive)
         target_levels: Number of hierarchy levels to create
         merge_ratio: Target ratio for merging (0.2 = 200->40->8)
         neighborhood_size: Average clusters per neighborhood
@@ -528,54 +693,46 @@ async def merge_clusters_hierarchical(
 
     # Initialize embedding model
     logger.info(f"Loading embedding model: {embedding_provider}/{embedding_model}")
-    if embedding_provider == "cohere":
-        embedder = EmbeddingGenerator(
-            model_name=embedding_model,
-            provider=embedding_provider,
-            output_dimension=256,  # Cohere v4 with 256 dims
-            concurrency=100
-        )
-    else:
-        embedder = EmbeddingGenerator(
-            model_name=embedding_model,
-            provider=embedding_provider,
-            concurrency=100
-        )
+    embedder = EmbeddingGenerator(
+        model_name=embedding_model,
+        provider=embedding_provider,
+        concurrency=100
+    )
 
-    # Initialize LLM client
-    logger.info(f"Initializing LLM: {llm_provider}/{llm_model}")
+    # Initialize LLM clients for different tasks
+    logger.info(f"Initializing LLM clients:")
+    logger.info(f"  Category generation: {llm_provider}/{category_model}")
+    logger.info(f"  Deduplication: {llm_provider}/{dedup_model}")
+    logger.info(f"  Assignment: {llm_provider}/{assignment_model}")
+    logger.info(f"  Refinement: {llm_provider}/{refinement_model}")
 
-    # Build full model string for instructor (e.g., "openai/gpt-4o-mini")
-    full_model = f"{llm_provider}/{llm_model}"
-    client = instructor.from_provider(full_model, async_client=True)
+    # Build full model strings for instructor
+    category_client = instructor.from_provider(f"{llm_provider}/{category_model}", async_client=True)
+    dedup_client = instructor.from_provider(f"{llm_provider}/{dedup_model}", async_client=True)
+    assignment_client = instructor.from_provider(f"{llm_provider}/{assignment_model}", async_client=True)
+    refinement_client = instructor.from_provider(f"{llm_provider}/{refinement_model}", async_client=True)
 
-    # Rate limiter
-    limiter = None
-    if rpm:
-        limiter = AsyncLimiter(rpm, 60.0)
 
     # Initialize hierarchy storage
-    hierarchy = []
-    logger.info(f"Initialized hierarchy: {hierarchy_run_id}")
-
     # Level 0: Add base clusters as leaves
-    logger.info(f"Building level 0 with {len(base_clusters)} leaf clusters")
-    for cluster in base_clusters:
-        hierarchy.append({
+    hierarchy = [
+        {
             "hierarchy_run_id": hierarchy_run_id,
             "run_id": run_id,
-            "cluster_id": cluster["cluster_id"],
+            "cluster_id": cluster.cluster_id,
             "parent_cluster_id": None,
             "level": 0,
             "children_ids": [],
-            "title": cluster["title"],
-            "description": cluster["description"]
-        })
-
+            "title": cluster.title,
+            "description": cluster.description,
+        } for cluster in base_clusters
+    ]
+    logger.info(f"Initialized hierarchy: {hierarchy_run_id}")
+    
     # Current level clusters (start with base)
     current_clusters = base_clusters
     current_level = 0
-    next_cluster_id = max(c["cluster_id"] for c in base_clusters) + 1
+    next_cluster_id = max(c.cluster_id for c in base_clusters) + 1
     logger.debug(f"Next available cluster ID: {next_cluster_id}")
 
     # Build hierarchy iteratively
@@ -602,11 +759,26 @@ async def merge_clusters_hierarchical(
                 total=n_current
             )
 
-            # Step 1: Embed cluster summaries
-            logger.info(f"Step 1/4: Embedding {n_current} cluster summaries...")
-            texts = [f"{c['title']}: {c['description']}" for c in current_clusters]
+            # Step 1: Embed cluster representative queries
+            logger.info(f"Step 1/4: Embedding {n_current} cluster representative queries...")
+            ids = [c.cluster_id for c in current_clusters]
             
-            embeddings = await embedder.generate_embeddings_async(texts, batch_size=96, show_progress=False)
+            # Get representative queries for each cluster
+            texts = []
+            for cluster in current_clusters:
+                cluster_reps = select_representative_queries_from_db(db, run_id, [cluster.cluster_id], max_queries=5)
+                if cluster_reps:
+                    # Use representative queries for embedding
+                    cluster_text = " ".join(cluster_reps)
+                else:
+                    # Fallback to title and description if no representative queries
+                    cluster_text = f"{cluster.title}: {cluster.description}"
+                texts.append(cluster_text)
+            
+            time = time.time()
+            embeddings = await embedder.generate_embeddings_async(texts, show_progress=False)
+            time_end = time.time()
+            logger.info(f"Time taken to embed {n_current} clusters at level {current_level}: {time_end - time:.2f} seconds")
 
             # Step 2: Create neighborhoods
             n_neighborhoods = max(n_current // neighborhood_size, 1)
@@ -616,47 +788,40 @@ async def merge_clusters_hierarchical(
                 f"(avg size: {avg_neighborhood_size:.1f} clusters)"
             )
             
-            neighborhood_labels = create_neighborhoods(embeddings, n_neighborhoods)
+            neighborhood_labels = create_neighborhoods(ids, embeddings, n_neighborhoods) 
 
             # Step 3: Generate higher-level categories per neighborhood (parallelized)
             logger.info(f"Step 3/4: Generating categories from {n_neighborhoods} neighborhoods...")
-            all_candidates = []
+            all_candidates: List[str] = []
 
             # Prepare neighborhood data
             neighborhood_data = []
             for neigh_id in range(n_neighborhoods):
                 neigh_clusters = [
                     current_clusters[i]
-                    for i in range(len(current_clusters))
-                    if neighborhood_labels[i] == neigh_id
+                    for i, (_, label) in enumerate(neighborhood_labels)
+                    if label == neigh_id
                 ]
                 target_cat = int(len(neigh_clusters) * merge_ratio)
                 neighborhood_data.append((neigh_id, neigh_clusters, target_cat))
                 logger.debug(f"  Neighborhood {neigh_id + 1}/{n_neighborhoods}: {len(neigh_clusters)} clusters → {target_cat} categories")
 
             # Worker function for parallel neighborhood processing
-            async def process_neighborhood(neigh_id: int, neigh_clusters: List[Dict], target_cat: int):
+            async def process_neighborhood(neigh_id: int, neigh_clusters: List[BaseCluster], target_cat: int):
                 """Process a single neighborhood and return results."""
                 async with semaphore:
                     try:
-                        if limiter:
-                            async with limiter:
-                                categories = await generate_neighborhood_categories(
-                                    client, neigh_clusters, target_count=target_cat
-                                )
-                        else:
-                            categories = await generate_neighborhood_categories(
-                                client, neigh_clusters, target_count=target_cat
-                            )
-                        
-                        logger.info(f"  Neighborhood {neigh_id + 1}: generated {len(categories.categories)} categories")
-                        # Show the generated category names at debug level
+                        logger.info(f"  Neighborhood {neigh_id + 1}: Attempting to generate {target_cat} categories for {len(neigh_clusters)} clusters")
+                        categories = await generate_neighborhood_categories(
+                            category_client, neigh_clusters, target_count=target_cat
+                        )
+                        logger.info(f"  Neighborhood {neigh_id + 1}: Generated {len(categories.categories)} categories")
                         for cat_name in categories.categories:
-                            logger.debug(f"    • {cat_name}")
+                            logger.info(f"    • {cat_name}")
                         
                         return neigh_id, categories.categories
                     except Exception as e:
-                        logger.error(f"Failed to process neighborhood {neigh_id + 1}: {e}")
+                        logger.error(f"  Neighborhood {neigh_id + 1}: Failed to process: {e}")
                         raise
 
             # Run all neighborhoods in parallel with concurrency control
@@ -668,7 +833,7 @@ async def merge_clusters_hierarchical(
                 for neigh_id, neigh_clusters, target_cat in neighborhood_data
             ]
             
-            import asyncio
+            logger.info(f"Running {len(tasks)} neighborhoods in parallel")
             results = await asyncio.gather(*tasks)
             
             # Sort results by neighborhood ID to maintain order
@@ -695,15 +860,9 @@ async def merge_clusters_hierarchical(
             max_parents = int(n_target * 1.5)  # Increased from 1.3 to 1.5
             logger.debug(f"  Target parent range: {min_parents}-{max_parents} (aiming for {n_target}, prefer higher end)")
 
-            if limiter:
-                async with limiter:
-                    dedup_result = await deduplicate_cluster_names(
-                        client, all_candidates, n_target
-                    )
-            else:
-                dedup_result = await deduplicate_cluster_names(
-                    client, all_candidates, n_target
-                )
+            dedup_result = await deduplicate_cluster_names(
+                dedup_client, all_candidates, n_target
+            )
 
             parent_names = dedup_result.clusters
 
@@ -716,7 +875,7 @@ async def merge_clusters_hierarchical(
                     f"Recommendations:\n"
                     f"  1. Reduce merge_ratio (current: {merge_ratio}, try: {merge_ratio + 0.05:.2f})\n"
                     f"  2. Reduce neighborhood_size (current: {neighborhood_size}, try: {max(15, neighborhood_size - 10)})\n"
-                    f"  3. Use better LLM (current: {llm_model}, try: claude-sonnet-4-5-20250929)\n\n"
+                    f"  3. Use better LLM (current: {category_model}, try: claude-sonnet-4-5-20250929)\n\n"
                     f"Re-run with: --merge-ratio {merge_ratio + 0.05:.2f} --neighborhood-size {max(15, neighborhood_size - 10)}"
                 )
                 logger.error(error_msg)
@@ -745,12 +904,12 @@ async def merge_clusters_hierarchical(
                 async with semaphore:
                     try:
                         # Remove rate limiting for assignment step to maximize throughput
-                        assignment = await assign_to_parent_cluster(client, cluster, parent_names)
+                        assignment = await assign_to_parent_cluster(assignment_client, cluster, parent_names)
                         assignments.append((cluster, assignment))
                     except Exception as e:
                         logger.error(
-                            f"Failed to assign cluster {cluster['cluster_id']} "
-                            f"('{cluster['title'][:60]}...'): {e}"
+                            f"Failed to assign cluster {cluster.cluster_id} "
+                            f"('{cluster.title[:60]}...'): {e}"
                         )
                         raise
                     finally:
@@ -765,22 +924,22 @@ async def merge_clusters_hierarchical(
             for cluster, assignment in assignments:
                 if assignment.assigned_cluster not in parent_children:
                     error_msg = (
-                        f"Invalid assignment for cluster {cluster['cluster_id']} ('{cluster['title']}'): "
+                        f"Invalid assignment for cluster {cluster.cluster_id} ('{cluster.title}'): "
                         f"LLM returned '{assignment.assigned_cluster}' which is not in parent list. "
                         f"Valid parents: {parent_names}"
                     )
                     logger.error(error_msg)
                     assignment_errors.append({
-                        "cluster_id": cluster["cluster_id"],
-                        "cluster_title": cluster["title"],
+                        "cluster_id": cluster.cluster_id,
+                        "cluster_title": cluster.title,
                         "invalid_parent": assignment.assigned_cluster,
                         "valid_parents": parent_names
                     })
                     # Assign to first parent as fallback
-                    parent_children[parent_names[0]].append(cluster["cluster_id"])
-                    logger.warning(f"Falling back to parent '{parent_names[0]}' for cluster {cluster['cluster_id']}")
+                    parent_children[parent_names[0]].append(cluster.cluster_id)
+                    logger.warning(f"Falling back to parent '{parent_names[0]}' for cluster {cluster.cluster_id}")
                 else:
-                    parent_children[assignment.assigned_cluster].append(cluster["cluster_id"])
+                    parent_children[assignment.assigned_cluster].append(cluster.cluster_id)
 
             # Report assignment validation results
             valid_count = len(current_clusters) - len(assignment_errors)
@@ -868,23 +1027,23 @@ async def merge_clusters_hierarchical(
                     logger.warning(f"Skipping parent '{parent_name}' - has no children assigned")
                     return None
 
-                child_titles = [
-                    c["title"] for c in current_clusters if c["cluster_id"] in child_ids
+                child_clusters = [
+                    c for c in current_clusters if c.cluster_id in child_ids
                 ]
-                logger.debug(f"Refining '{parent_name[:50]}...' from {len(child_titles)} children")
+                logger.debug(f"Refining '{parent_name[:50]}...' from {len(child_clusters)} children")
 
                 try:
                     async with refine_semaphore:
                         # Remove rate limiting for refinement step to maximize throughput
-                        refined = await refine_parent_cluster(client, child_titles)
+                        refined = await refine_parent_cluster(refinement_client, child_clusters)
 
-                    logger.info(f"  Refined: {len(child_titles)} clusters → '{refined.title}'")
+                    logger.info(f"  Refined: {len(child_clusters)} clusters → '{refined.title}'")
                     # Show all child titles at debug level (can be verbose)
                     logger.debug(f"    Children of '{refined.title}':")
-                    for i, child_title in enumerate(child_titles, 1):
-                        logger.debug(f"      {i}. {child_title}")
+                    for i, child_cluster in enumerate(child_clusters, 1):
+                        logger.debug(f"      {i}. {child_cluster.title}")
 
-                    refinement_results.append((parent_name, child_ids, child_titles, refined))
+                    refinement_results.append((parent_name, child_ids, child_clusters, refined))
                 except Exception as e:
                     logger.error(f"Failed to refine parent '{parent_name[:50]}...': {e}")
                     raise
@@ -896,12 +1055,17 @@ async def merge_clusters_hierarchical(
                     tg.start_soon(refine_worker, parent_name, child_ids)
 
             # Process results and build hierarchy
-            for parent_name, child_ids, child_titles, refined in refinement_results:
+            for parent_name, child_ids, child_clusters, refined in refinement_results:
                 if refined is None:
                     continue
 
                 parent_cluster_id = next_cluster_id
                 next_cluster_id += 1
+
+                # Select representative queries from child clusters by querying database
+                representative_queries = select_representative_queries_from_db(
+                    db, run_id, child_ids, max_queries=10
+                )
 
                 # Add to hierarchy
                 hierarchy.append({
@@ -912,7 +1076,8 @@ async def merge_clusters_hierarchical(
                     "level": current_level + 1,
                     "children_ids": child_ids,
                     "title": refined.title,
-                    "description": refined.summary
+                    "description": refined.summary,
+                    "representative_queries": representative_queries
                 })
 
                 # Update children's parent_id with validation
@@ -939,7 +1104,8 @@ async def merge_clusters_hierarchical(
                 next_level_clusters.append({
                     "cluster_id": parent_cluster_id,
                     "title": refined.title,
-                    "description": refined.summary
+                    "description": refined.summary,
+                    "representative_queries": representative_queries
                 })
 
             # Level complete summary
@@ -948,8 +1114,16 @@ async def merge_clusters_hierarchical(
                 f"created {len(next_level_clusters)} parent clusters"
             )
 
-            # Move to next level
-            current_clusters = next_level_clusters
+            # Move to next level - convert dicts back to BaseCluster objects
+            current_clusters = [
+                BaseCluster(
+                    cluster_id=cluster_dict["cluster_id"],
+                    title=cluster_dict["title"],
+                    description=cluster_dict["description"],
+                    representative_queries=cluster_dict.get("representative_queries")
+                )
+                for cluster_dict in next_level_clusters
+            ]
             current_level += 1
             logger.debug(f"Advanced to level {current_level}, next cluster ID will be {next_cluster_id}")
 
