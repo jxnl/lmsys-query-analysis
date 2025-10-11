@@ -9,7 +9,7 @@ from typing import List
 import numpy as np
 import pytest
 
-from lmsys_query_analysis.clustering.summarizer import ClusterSummarizer
+from lmsys_query_analysis.clustering.summarizer import ClusterSummarizer, ClusterData
 
 
 class FakeAsyncChat:
@@ -116,9 +116,9 @@ def test_summarizer_prompt_includes_contrast_neighbors(fake_embeddings, monkeypa
     s = ClusterSummarizer(model="openai/gpt-5", concurrency=1)
 
     clusters_data = [
-        (0, ["python pandas dataframe indexing", "numpy vectorize loop"]),
-        (1, ["pandas loc keyerror fix", "python typeerror add int str"]),
-        (2, ["how to cook pasta", "boil water add salt"]),
+        ClusterData(cluster_id=0, queries=["python pandas dataframe indexing", "numpy vectorize loop"]),
+        ClusterData(cluster_id=1, queries=["pandas loc keyerror fix", "python typeerror add int str"]),
+        ClusterData(cluster_id=2, queries=["how to cook pasta", "boil water add salt"]),
     ]
 
     # Act
@@ -150,9 +150,9 @@ def test_summarizer_prompt_keywords_mode(fake_embeddings, monkeypatch):
     s = ClusterSummarizer(model="openai/gpt-5", concurrency=1)
 
     clusters_data = [
-        (10, ["nginx reverse proxy 502", "docker image too big"]),
-        (11, ["kubernetes secret mount", "crashloopbackoff logs"]),
-        (12, ["translate text to spanish", "preserve html tags"]),
+        ClusterData(cluster_id=10, queries=["nginx reverse proxy 502", "docker image too big"]),
+        ClusterData(cluster_id=11, queries=["kubernetes secret mount", "crashloopbackoff logs"]),
+        ClusterData(cluster_id=12, queries=["translate text to spanish", "preserve html tags"]),
     ]
 
     res = s.generate_batch_summaries(
@@ -176,8 +176,8 @@ def test_summarizer_prompt_no_contrast(fake_embeddings, monkeypatch):
     s = ClusterSummarizer(model="openai/gpt-5", concurrency=1)
 
     clusters_data = [
-        (100, ["hello", "hi there"]),
-        (101, ["ciao", "hola"]),
+        ClusterData(cluster_id=100, queries=["hello", "hi there"]),
+        ClusterData(cluster_id=101, queries=["ciao", "hola"]),
     ]
 
     res = s.generate_batch_summaries(

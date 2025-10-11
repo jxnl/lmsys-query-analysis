@@ -34,40 +34,46 @@ RETRY_MIN_WAIT = 1
 RETRY_MAX_WAIT = 8
 
 
-# Default cluster prompt with improved positive/contrastive structure
+class ClusterData(BaseModel):
+    """Simple data object for cluster information."""
+    cluster_id: int
+    queries: List[str]
+    
+    def __iter__(self):
+        """Allow tuple unpacking for backward compatibility."""
+        return iter((self.cluster_id, self.queries))
+    
+    @classmethod
+    def from_tuple(cls, data: Tuple[int, List[str]]) -> "ClusterData":
+        """Create from tuple for easy migration."""
+        return cls(cluster_id=data[0], queries=data[1])
+    
+    def to_tuple(self) -> Tuple[int, List[str]]:
+        """Convert to tuple for backward compatibility."""
+        return (self.cluster_id, self.queries)
+
+
+# Concise cluster prompt
 DEFAULT_CLUSTER_PROMPT = """
-You are tasked with summarizing a group of related statements into a short, precise, and accurate description and name. Your goal is to create a concise summary that captures the essence of these statements and distinguishes them from other similar groups of statements.
+Summarize these queries into a 2-sentence description and a short name (≤10 words, imperative sentence).
 
-Summarize all the statements into a clear, precise, two-sentence description in the past tense. Your summary should be specific to this group and distinguish it from the contrastive answers of the other groups.
+Format:
+<summary>Two sentences describing what users were trying to accomplish</summary>
+<name>Short imperative name like "Help with Python debugging" or "Write creative stories"</name>
 
-After creating the summary, generate a short name for the group of statements. This name should be at most ten words long (perhaps less) and be specific but also reflective of most of the statements (rather than reflecting only one or two).
+Be specific and descriptive. Include harmful/sensitive topics explicitly when relevant.
 
-The name should distinguish this group from the contrastive examples. For instance, "Write fantasy sexual roleplay with octopi and monsters", "Generate blog spam for gambling websites", or "Assist with high school math homework" would be better and more actionable than general terms like "Write erotic content" or "Help with homework". Be as descriptive as possible and assume neither good nor bad faith. Do not hesitate to identify and describe socially harmful or sensitive topics specifically; specificity is necessary for monitoring.
-
-Present your output in the following format:
-<summary> [Insert your two-sentence summary here] </summary>
-<name> [Insert your generated short name here] </name>
-
-The names you propose must follow these requirements:
-- The cluster name should be a sentence in the imperative that captures the user's request. For example, 'Brainstorm ideas for a birthday party' or 'Help me find a new job.'
-- Create names that are specific enough to be meaningful, but not so specific that they can't meaningfully represent many different statements.
-- Avoid overly general or vague terms, and do not hesitate to describe socially harmful or sensitive topics (in fact, clusters that clearly describe harmful behavior are slightly preferred); specificity is necessary for observability and enforcement.
-- Ensure that the cluster name is distinct from the contrastive examples.
-- Use clear, concise, and descriptive language for the cluster name.
-
-Below are the related statements:
+Positive examples:
 <positive_examples>
 {% for item in positive_examples %}{{ item }}
 {% endfor %}
 </positive_examples>
 
-For context, here are statements from nearby groups that are NOT part of the group you're summarizing:
+Contrastive examples:
 <contrastive_examples>
 {% for item in contrastive_examples %}{{ item }}
 {% endfor %}
 </contrastive_examples>
-
-Do not elaborate beyond what you say in the tags. Remember to analyze both the statements and the contrastive statements carefully to ensure your summary and name accurately represent the specific group while distinguishing it from others. The cluster name should be a sentence in the imperative that captures the user's request. For example, 'Brainstorm ideas for a birthday party' or 'Help me find a new job.'
 """
 
 
@@ -77,35 +83,11 @@ class ClusterSummaryResponse(BaseModel):
 
     title: str = Field(
         ...,
-        description="""Short name (≤10 words) that is a sentence in the imperative capturing the user's request.
-
-        RULES:
-        - Use specific technical terms, domains, or actions (e.g., "Brainstorm ideas for a birthday party", "Help me find a new job")
-        - Avoid generic prefixes like "User Queries About", "Diverse", "Various"
-        - Avoid vague words: "Diverse", "Various", "General", "Mixed", "Multiple"
-        - Use concrete nouns and verbs
-        - If multilingual, specify language(s)
-        - Be descriptive and specific, including harmful/sensitive topics when relevant
-
-        GOOD: "Write fantasy sexual roleplay with octopi and monsters", "Generate blog spam for gambling websites", "Assist with high school math homework"
-        BAD: "User Queries on Various Topics", "Diverse User Requests", "General Questions"
-        """
+        description="Short imperative name (≤10 words) like 'Help with Python debugging' or 'Write creative stories'. Be specific, avoid vague terms like 'Various' or 'General'."
     )
     description: str = Field(
         ...,
-        description="""Two-sentence summary in past tense that captures the essence of the cluster and distinguishes it from contrastive examples.
-
-        Structure:
-        1. What users were trying to accomplish (main goal/task) and their mental model
-        2. Key behavioral patterns, user segments, or product implications
-
-        Focus on the DOMINANT pattern (60%+ of queries). Think like an anthropologist + product manager:
-        - What do these queries reveal about how people use LLMs?
-        - What capabilities do users assume exist?
-        - Are there unmet needs or product opportunities?
-
-        Example: "Users sought complete coding solutions with minimal specification, treating the LLM as a 'magic wand' code generator. Novices pasted homework verbatim while experts provided constraints, revealing distinct mental models across expertise levels - opportunity for adaptive interfaces."
-        """
+        description="Two sentences in past tense describing what users were trying to accomplish and key patterns. Focus on dominant behavior (60%+ of queries)."
     )
 
 
@@ -149,7 +131,7 @@ class ClusterSummarizer:
 
     def generate_batch_summaries(
         self,
-        clusters_data: List[tuple[int, List[str]]],
+        clusters_data: List[ClusterData],
         max_queries: int = 100,
         concurrency: Optional[int] = None,
         rpm: Optional[int] = None,
@@ -160,7 +142,7 @@ class ClusterSummarizer:
         """Generate summaries for multiple clusters (concurrently).
 
         Args:
-            clusters_data: List of (cluster_id, queries) tuples
+            clusters_data: List of ClusterData objects
             max_queries: Max queries per cluster to send to LLM
             concurrency: Override default concurrency
             rpm: Override default requests-per-minute limit
@@ -188,7 +170,7 @@ class ClusterSummarizer:
 
     async def _async_generate_batch_summaries(
         self,
-        clusters_data: List[Tuple[int, List[str]]],
+        clusters_data: List[ClusterData],
         max_queries: int,
         concurrency: int,
         rpm: Optional[int],
@@ -214,8 +196,8 @@ class ClusterSummarizer:
 
         # Pre-select representative queries for each cluster
         sampled_map: Dict[int, List[str]] = {}
-        for cid, qtexts in clusters_data:
-            sampled_map[cid] = self._select_representative_queries(qtexts, max_queries)
+        for cluster_data in clusters_data:
+            sampled_map[cluster_data.cluster_id] = self._select_representative_queries(cluster_data.queries, max_queries)
 
         # Build neighbor context for contrastive learning
         neighbor_context = self._build_neighbor_context(
@@ -227,21 +209,21 @@ class ClusterSummarizer:
         )
 
         async def worker(
-            idx: int, cid: int, queries: List[str], progress_task, progress
+            idx: int, cluster_data: ClusterData, progress_task, progress
         ):
             # Build per-cluster summary (retries handled by tenacity decorator)
             self.logger.debug(
-                "Worker %d starting for cluster %d (%d queries)", idx, cid, len(queries)
+                "Worker %d starting for cluster %d (%d queries)", idx, cluster_data.cluster_id, len(cluster_data.queries)
             )
             async with semaphore:
                 summary = await self._async_generate_cluster_summary(
-                    cluster_queries=queries,
-                    cluster_id=cid,
+                    cluster_queries=cluster_data.queries,
+                    cluster_id=cluster_data.cluster_id,
                     max_queries=max_queries,
-                    contrast_neighbors=neighbor_context.get(cid, []),
+                    contrast_neighbors=neighbor_context.get(cluster_data.cluster_id, []),
                 )
-            results[cid] = summary
-            self.logger.info("Completed summary for cluster %d: %s", cid, summary["title"])
+            results[cluster_data.cluster_id] = summary
+            self.logger.info("Completed summary for cluster %d: %s", cluster_data.cluster_id, summary["title"])
 
             if progress_task is not None:
                 progress.update(progress_task, advance=1)
@@ -257,8 +239,8 @@ class ClusterSummarizer:
                 total=total,
             )
             async with anyio.create_task_group() as tg:
-                for j, (cid, qtexts) in enumerate(clusters_data):
-                    tg.start_soon(worker, j, cid, qtexts, task, progress)
+                for j, cluster_data in enumerate(clusters_data):
+                    tg.start_soon(worker, j, cluster_data, task, progress)
 
         return results
 
@@ -329,15 +311,15 @@ class ClusterSummarizer:
 
     def _build_neighbor_context(
         self,
-        clusters_data: List[Tuple[int, List[str]]],
+        clusters_data: List[ClusterData],
         sampled_map: Dict[int, List[str]],
         contrast_neighbors: int,
         contrast_examples: int,
         contrast_mode: str,
     ) -> Dict[int, List[Dict]]:
         """Build neighbor context for contrastive learning with improved selection."""
-        id_list = [cid for cid, _ in clusters_data]
-        sizes_map = {cid: len(qs) for cid, qs in clusters_data}
+        id_list = [cluster_data.cluster_id for cluster_data in clusters_data]
+        sizes_map = {cluster_data.cluster_id: len(cluster_data.queries) for cluster_data in clusters_data}
 
         # Skip if no neighbors requested or only one cluster
         if contrast_neighbors <= 0 or len(id_list) <= 1:

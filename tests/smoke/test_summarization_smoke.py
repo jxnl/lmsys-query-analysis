@@ -1,7 +1,7 @@
 """Smoke tests for LLM-powered cluster summarization."""
 
 import pytest
-from lmsys_query_analysis.clustering.summarizer import ClusterSummarizer
+from lmsys_query_analysis.clustering.summarizer import ClusterSummarizer, ClusterData
 
 
 @pytest.mark.smoke
@@ -19,7 +19,7 @@ def test_summarize_single_cluster():
         "What are neural networks?",
     ]
     
-    clusters_data = [(0, cluster_queries)]
+    clusters_data = [ClusterData(cluster_id=0, queries=cluster_queries)]
     
     results = summarizer.generate_batch_summaries(
         clusters_data=clusters_data,
@@ -46,11 +46,11 @@ def test_summarize_multiple_clusters():
     )
     
     clusters_data = [
-        (0, [
+        ClusterData(cluster_id=0, queries=[
             "What is machine learning?",
             "Explain neural networks",
         ]),
-        (1, [
+        ClusterData(cluster_id=1, queries=[
             "How do I write a Python function?",
             "Explain Python decorators",
         ]),
@@ -82,7 +82,7 @@ def test_summarize_with_contrast():
     )
     
     clusters_data = [
-        (0, [
+        ClusterData(cluster_id=0, queries=[
             "What is Python?",
             "How to write Python code?",
         ]),

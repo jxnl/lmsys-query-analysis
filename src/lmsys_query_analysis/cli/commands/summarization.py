@@ -8,7 +8,7 @@ from ..common import with_error_handling, db_path_option, chroma_path_option
 from ..helpers.client_factory import parse_embedding_model, create_chroma_client, create_embedding_generator
 from ...db.connection import get_db
 from ...services import cluster_service, run_service
-from ...clustering.summarizer import ClusterSummarizer
+from ...clustering.summarizer import ClusterSummarizer, ClusterData
 from ...db.models import ClusterSummary
 
 console = Console()
@@ -83,7 +83,7 @@ def summarize(
     clusters_data = []
     for cid in cluster_ids:
         _, query_texts = cluster_service.get_cluster_queries_with_texts(db, run_id, cid)
-        clusters_data.append((cid, query_texts))
+        clusters_data.append(ClusterData(cluster_id=cid, queries=query_texts))
     
     # Generate summaries with LLM
     results = summarizer.generate_batch_summaries(
