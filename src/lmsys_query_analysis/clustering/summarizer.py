@@ -58,8 +58,8 @@ DEFAULT_CLUSTER_PROMPT = """
 Summarize these queries into a 2-sentence description and a short name (≤10 words, imperative sentence).
 
 Format:
-<summary>Two sentences describing what users were trying to accomplish</summary>
-<name>Short imperative name like "Help with Python debugging" or "Write creative stories"</name>
+<title>Short imperative name like "Help with Python debugging" or "Write creative stories"</title>
+<description>Two sentences describing what users were trying to accomplish</description>
 
 Be specific and descriptive. Include harmful/sensitive topics explicitly when relevant.
 
