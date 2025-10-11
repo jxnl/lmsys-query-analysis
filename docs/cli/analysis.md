@@ -4,7 +4,7 @@ Commands for analyzing, summarizing, and exploring clustering results.
 
 ## Summarize
 
-Generate LLM-powered summaries for clusters.
+Generate LLM-powered summaries for clusters with metadata persistence.
 
 ```bash
 uv run lmsys summarize RUN_ID [OPTIONS]
@@ -21,6 +21,10 @@ uv run lmsys summarize RUN_ID [OPTIONS]
 | `--concurrency` | INTEGER | 4 | Concurrent requests |
 | `--rpm` | INTEGER | None | Rate limit (requests per minute) |
 | `--contrast-mode` | TEXT | none | Contrastive summary mode (none/neighbor/all) |
+| `--summary-run-id` | TEXT | None | Custom summary run ID (auto-generated if not provided) |
+| `--alias` | TEXT | None | Friendly alias for this summary run |
+| `--contrast-neighbors` | INTEGER | 2 | Number of neighbor clusters for contrast |
+| `--contrast-examples` | INTEGER | 2 | Examples per neighbor cluster |
 
 ### Examples
 
@@ -30,11 +34,11 @@ Basic summarization:
 uv run lmsys summarize kmeans-100-20251003-123456 --use-chroma
 ```
 
-Use GPT-4:
+Use GPT-4 with alias:
 
 ```bash
 uv run lmsys summarize kmeans-100-20251003-123456 \
-  --model "openai/gpt-4" --use-chroma
+  --model "openai/gpt-4o-mini" --alias "gpt4o-test" --use-chroma
 ```
 
 Single cluster:
@@ -54,8 +58,29 @@ Contrastive summaries (highlight unique aspects):
 
 ```bash
 uv run lmsys summarize kmeans-100-20251003-123456 \
-  --contrast-mode neighbor --use-chroma
+  --contrast-mode neighbors --contrast-neighbors 3 --contrast-examples 2 --use-chroma
 ```
+
+Custom summary run ID:
+
+```bash
+uv run lmsys summarize kmeans-100-20251003-123456 \
+  --summary-run-id "claude-v1" --alias "my-best-summaries" --use-chroma
+```
+
+### Metadata Persistence
+
+Each summarization run creates a `SummaryRun` record that tracks:
+- **LLM Configuration**: Provider and model used
+- **Parameters**: `max_queries`, `concurrency`, `rpm`, contrast settings
+- **Execution Metadata**: `total_clusters`, `execution_time_seconds`, `alias`
+- **Provenance**: Links to the clustering run and individual cluster summaries
+
+This enables:
+- **Reproducibility**: Recreate exact runs with same parameters
+- **Comparison**: Compare effectiveness of different LLM models
+- **Audit Trail**: Track which configurations produce best results
+- **Cost Analysis**: Analyze costs across different providers
 
 ### Supported LLM Providers
 

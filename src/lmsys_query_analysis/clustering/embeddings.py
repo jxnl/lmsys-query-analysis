@@ -13,7 +13,7 @@ import time
 import logging
 import numpy as np
 from sentence_transformers import SentenceTransformer
-import anyio
+import asyncio
 from rich.progress import (
     Progress,
     SpinnerColumn,
@@ -124,7 +124,7 @@ class EmbeddingGenerator:
         start = time.perf_counter()
 
         if self.provider == "openai":
-            valid_embeddings_list = anyio.run(self._async_openai_batches, filtered_texts, batch_size, None, None)
+            valid_embeddings_list = asyncio.run(self._async_openai_batches(filtered_texts, batch_size, None, None))
             valid_embeddings = np.array(valid_embeddings_list)
             elapsed = time.perf_counter() - start
             if len(filtered_texts) > 0:
@@ -134,7 +134,7 @@ class EmbeddingGenerator:
                     len(filtered_texts), elapsed, rate, self.model_name, self.concurrency
                 )
         elif self.provider == "cohere":
-            valid_embeddings_list = anyio.run(self._async_cohere_batches, filtered_texts, batch_size, None, None)
+            valid_embeddings_list = asyncio.run(self._async_cohere_batches(filtered_texts, batch_size, None, None))
             valid_embeddings = np.array(valid_embeddings_list)
             elapsed = time.perf_counter() - start
             if len(filtered_texts) > 0:
@@ -209,6 +209,78 @@ class EmbeddingGenerator:
             )
         return embeddings
 
+    async def generate_embeddings_async(
+        self,
+        texts: List[str],
+        batch_size: int = 32,
+        show_progress: bool = True,
+    ) -> np.ndarray:
+        """Generate embeddings for a list of texts asynchronously.
+
+        Args:
+            texts: List of text strings to embed
+            batch_size: Batch size for encoding
+            show_progress: Whether to show progress bar
+
+        Returns:
+            Numpy array of embeddings with shape (len(texts), embedding_dim)
+        """
+        if not texts:
+            return np.array([])
+
+        # Filter out empty texts and track indices
+        filtered_texts = []
+        valid_indices = []
+        for i, text in enumerate(texts):
+            if text and text.strip():
+                filtered_texts.append(text.strip())
+                valid_indices.append(i)
+
+        if not filtered_texts:
+            return np.zeros((len(texts), 384))  # Default dimension
+
+        # Generate embeddings for valid texts
+        logger = logging.getLogger("lmsys")
+        start = time.perf_counter()
+
+        if self.provider == "openai":
+            valid_embeddings_list = await self._async_openai_batches(filtered_texts, batch_size, None, None)
+            valid_embeddings = np.array(valid_embeddings_list)
+            elapsed = time.perf_counter() - start
+            if len(filtered_texts) > 0:
+                rate = len(filtered_texts) / elapsed if elapsed > 0 else float("inf")
+                logger.info(
+                    "Embeddings(OpenAI): %s texts in %.2fs (%.1f/s) using %s (concurrency=%s)",
+                    len(filtered_texts), elapsed, rate, self.model_name, self.concurrency
+                )
+        elif self.provider == "cohere":
+            valid_embeddings_list = await self._async_cohere_batches(filtered_texts, batch_size, None, None)
+            valid_embeddings = np.array(valid_embeddings_list)
+            elapsed = time.perf_counter() - start
+            if len(filtered_texts) > 0:
+                rate = len(filtered_texts) / elapsed if elapsed > 0 else float("inf")
+                logger.info(
+                    "Embeddings(Cohere): %s texts in %.2fs (%.1f/s) using %s (concurrency=%s)",
+                    len(filtered_texts), elapsed, rate, self.model_name, self.concurrency
+                )
+        else:
+            # Fallback to sentence-transformers (synchronous)
+            self.load_model()
+            valid_embeddings = self.model.encode(filtered_texts, batch_size=batch_size, show_progress_bar=show_progress)
+            elapsed = time.perf_counter() - start
+            if len(filtered_texts) > 0:
+                rate = len(filtered_texts) / elapsed if elapsed > 0 else float("inf")
+                logger.info(
+                    "Embeddings(sentence-transformers): %s texts in %.2fs (%.1f/s) using %s",
+                    len(filtered_texts), elapsed, rate, self.model_name
+                )
+
+        # Create full embeddings array with zeros for empty texts
+        embeddings = np.zeros((len(texts), valid_embeddings.shape[1]))
+        embeddings[valid_indices] = valid_embeddings
+
+        return embeddings
+
     async def _async_openai_batches(
         self, texts: List[str], batch_size: int, progress_task, progress
     ) -> List[List[float]]:
@@ -221,7 +293,7 @@ class EmbeddingGenerator:
             batches.append((i, texts[i : i + batch_size]))
 
         results: list[Optional[List[List[float]]]] = [None] * len(batches)
-        semaphore = anyio.Semaphore(self.concurrency)
+        semaphore = asyncio.Semaphore(self.concurrency)
 
         async def worker(idx: int, payload: List[str]):
             backoff = 1.0
@@ -241,7 +313,7 @@ class EmbeddingGenerator:
                 except Exception as e:
                     last_exception = e
                     # Simple exponential backoff
-                    await anyio.sleep(backoff)
+                    await asyncio.sleep(backoff)
                     backoff = min(backoff * 2, 8.0)
             # If all retries fail, raise the last exception
             if last_exception:
@@ -249,9 +321,11 @@ class EmbeddingGenerator:
             else:
                 raise RuntimeError("All retries failed but no exception captured")
 
-        async with anyio.create_task_group() as tg:
-            for j, (start, payload) in enumerate(batches):
-                tg.start_soon(worker, j, payload)
+        tasks = []
+        for j, (start, payload) in enumerate(batches):
+            tasks.append(asyncio.create_task(worker(j, payload)))
+        
+        await asyncio.gather(*tasks)
 
         # Flatten preserving original order
         flat: list[List[float]] = []
@@ -272,7 +346,7 @@ class EmbeddingGenerator:
             batches.append((i, texts[i : i + batch_size]))
 
         results: list[Optional[List[List[float]]]] = [None] * len(batches)
-        semaphore = anyio.Semaphore(self.concurrency)
+        semaphore = asyncio.Semaphore(self.concurrency)
 
         async def worker(idx: int, payload: List[str]):
             backoff = 1.0
@@ -295,7 +369,7 @@ class EmbeddingGenerator:
                 except Exception as e:
                     last_exception = e
                     # Simple exponential backoff
-                    await anyio.sleep(backoff)
+                    await asyncio.sleep(backoff)
                     backoff = min(backoff * 2, 8.0)
             # If all retries fail, raise the last exception
             if last_exception:
@@ -303,9 +377,11 @@ class EmbeddingGenerator:
             else:
                 raise RuntimeError("All retries failed but no exception captured")
 
-        async with anyio.create_task_group() as tg:
-            for j, (start, payload) in enumerate(batches):
-                tg.start_soon(worker, j, payload)
+        tasks = []
+        for j, (start, payload) in enumerate(batches):
+            tasks.append(asyncio.create_task(worker(j, payload)))
+        
+        await asyncio.gather(*tasks)
 
         # Flatten preserving original order
         flat: list[List[float]] = []

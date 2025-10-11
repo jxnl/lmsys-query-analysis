@@ -4,9 +4,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ..dependencies import get_db
-from ..schemas import SummaryRunListResponse, SummaryRunSummary, ClusterSummaryResponse
+from ..schemas import SummaryRunListResponse, SummaryRunSummary, SummaryRunDetail, ClusterSummaryResponse
 from ...db.connection import Database
-from ...db.models import ClusterSummary
+from ...db.models import ClusterSummary, SummaryRun
+from ...services import summary_service
 from sqlmodel import select, func
 
 router = APIRouter()
@@ -25,22 +26,13 @@ async def list_summaries(
 ):
     """List all summary runs with optional filtering by clustering run_id."""
     with db.get_session() as session:
-        # Get distinct summary runs
-        stmt = (
-            select(
-                ClusterSummary.summary_run_id,
-                ClusterSummary.run_id,
-                ClusterSummary.alias,
-                ClusterSummary.model,
-                ClusterSummary.generated_at,
-            )
-            .distinct()
-        )
+        # Get summary runs directly from SummaryRun table
+        stmt = select(SummaryRun)
 
         if run_id:
-            stmt = stmt.where(ClusterSummary.run_id == run_id)
+            stmt = stmt.where(SummaryRun.run_id == run_id)
 
-        stmt = stmt.order_by(ClusterSummary.generated_at.desc())
+        stmt = stmt.order_by(SummaryRun.created_at.desc())
 
         all_summaries = session.exec(stmt).all()
 
@@ -52,11 +44,11 @@ async def list_summaries(
 
         items = [
             SummaryRunSummary(
-                summary_run_id=s[0],
-                run_id=s[1],
-                alias=s[2],
-                model=s[3],
-                generated_at=s[4],
+                summary_run_id=s.summary_run_id,
+                run_id=s.run_id,
+                alias=s.alias,
+                model=s.llm_model,
+                generated_at=s.created_at,
                 status="completed",
             )
             for s in all_summaries[start:end]
@@ -112,6 +104,30 @@ async def get_cluster_summary(
         summary_run_id=summary.summary_run_id,
         alias=summary.alias,
     )
+
+
+@router.get(
+    "/{summary_run_id}/metadata",
+    response_model=SummaryRunDetail,
+    responses={404: {"model": dict}},
+    summary="Get summary run metadata",
+)
+async def get_summary_run_metadata(
+    summary_run_id: str,
+    db: Database = Depends(get_db),
+):
+    """Get detailed metadata for a summary run.
+
+    Returns configuration, parameters, and execution metadata for the summary run.
+    """
+    summary_run = summary_service.get_summary_run(db, summary_run_id)
+    if not summary_run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"type": "NotFound", "message": f"Summary run {summary_run_id} not found"}},
+        )
+
+    return SummaryRunDetail.model_validate(summary_run)
 
 
 @router.post(

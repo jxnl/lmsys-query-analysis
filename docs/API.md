@@ -56,8 +56,8 @@ npm run dev
 | **Clustering** | `/api/clustering` | Manage clustering runs and view cluster lists |
 | **Analysis** | `/api` | Query listings and cluster details |
 | **Search** | `/api/search` | Semantic and full-text search |
-| **Hierarchy** | `/api/hierarchy` | Cluster hierarchy trees |
-| **Summaries** | `/api/summaries` | LLM-generated summaries |
+| **Hierarchy** | `/api/hierarchy` | Cluster hierarchy trees and metadata |
+| **Summaries** | `/api/summaries` | LLM-generated summaries and metadata |
 | **Curation** | `/api/curation` | Metadata, history, orphaned queries |
 
 ---
@@ -303,3 +303,61 @@ POST endpoints are currently stubbed (return 501). Future work:
 - `POST /api/summaries` - Generate summaries
 - `POST /api/hierarchy` - Create hierarchy
 - `POST /api/curation/*` - Edit operations (rename, merge, move, etc.)
+
+## Metadata Schemas
+
+### SummaryRun Schema
+
+Tracks metadata for summarization runs:
+
+```json
+{
+  "summary_run_id": "summary-gpt-4o-mini-20251004-170442",
+  "run_id": "kmeans-200-20251004-170442",
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o-mini",
+  "max_queries": 100,
+  "concurrency": 8,
+  "rpm": 60,
+  "contrast_neighbors": 2,
+  "contrast_examples": 2,
+  "contrast_mode": "neighbors",
+  "total_clusters": 200,
+  "execution_time_seconds": 45.2,
+  "alias": "claude-v1",
+  "created_at": "2025-01-04T17:04:42Z"
+}
+```
+
+### HierarchyRun Schema
+
+Tracks metadata for hierarchical merging runs:
+
+```json
+{
+  "hierarchy_run_id": "hier-kmeans-200-20251004-170442-20251004-170500",
+  "run_id": "kmeans-200-20251004-170442",
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o-mini",
+  "embedding_provider": "cohere",
+  "embedding_model": "embed-v4.0",
+  "target_levels": 3,
+  "merge_ratio": 0.35,
+  "neighborhood_size": 20,
+  "concurrency": 8,
+  "rpm": 60,
+  "summary_run_id": "summary-gpt-4o-mini-20251004-170442",
+  "total_nodes": 150,
+  "execution_time_seconds": 120.5,
+  "created_at": "2025-01-04T17:05:00Z"
+}
+```
+
+### Benefits of Metadata Persistence
+
+- **Reproducibility**: Recreate exact runs with same parameters
+- **Comparison**: Compare effectiveness of different LLM models and settings
+- **Audit Trail**: Track which configurations produce best results
+- **Cost Analysis**: Analyze costs across different providers and models
+- **Debugging**: Investigate poor quality outputs by examining parameters
+- **Optimization**: Optimize default parameters based on historical performance

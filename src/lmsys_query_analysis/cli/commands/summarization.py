@@ -7,7 +7,7 @@ from rich.console import Console
 from ..common import with_error_handling, db_path_option, chroma_path_option
 from ..helpers.client_factory import parse_embedding_model, create_chroma_client, create_embedding_generator
 from ...db.connection import get_db
-from ...services import cluster_service, run_service
+from ...services import cluster_service, run_service, summary_service
 from ...clustering.summarizer import ClusterSummarizer
 from ...db.models import ClusterSummary
 
@@ -64,12 +64,8 @@ def summarize(
     if alias:
         console.print(f"[cyan]Alias: {alias}[/cyan]")
     
-    # Initialize summarizer
-    summarizer = ClusterSummarizer(
-        model=model,
-        concurrency=concurrency,
-        rpm=rpm,
-    )
+    # Parse LLM provider and model
+    llm_provider, llm_model = model.split("/", 1)
     
     # Get clusters to summarize
     if cluster_id is not None:
@@ -79,89 +75,37 @@ def summarize(
     
     console.print(f"[cyan]Summarizing {len(cluster_ids)} clusters for run {run_id}[/cyan]")
     
-    # Prepare clusters data
-    clusters_data = []
-    for cid in cluster_ids:
-        _, query_texts = cluster_service.get_cluster_queries_with_texts(db, run_id, cid)
-        clusters_data.append((cid, query_texts))
+    # Use summary service to create summaries with metadata persistence
+    async def run_create_summaries():
+        return await summary_service.create_summaries(
+            db=db,
+            run_id=run_id,
+            summary_run_id=summary_run_id,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            max_queries=max_queries,
+            concurrency=concurrency,
+            rpm=rpm,
+            contrast_neighbors=contrast_neighbors,
+            contrast_examples=contrast_examples,
+            contrast_mode=contrast_mode,
+            alias=alias,
+            cluster_ids=cluster_ids,
+        )
     
-    # Generate summaries with LLM
-    results = summarizer.generate_batch_summaries(
-        clusters_data=clusters_data,
-        max_queries=max_queries,
-        concurrency=concurrency,
-        rpm=rpm,
-        contrast_neighbors=contrast_neighbors,
-        contrast_examples=contrast_examples,
-        contrast_mode=contrast_mode,
-    )
+    import asyncio
+    summary_run_id, results = asyncio.run(run_create_summaries())
     
-    # Store in SQLite
-    console.print("[cyan]Storing summaries in SQLite...[/cyan]")
-    sizes_map = {cid: len(qs) for cid, qs in clusters_data}
-    
-    summary_params = {
-        "max_queries": max_queries,
-        "concurrency": concurrency,
-        "rpm": rpm,
-        "contrast_neighbors": contrast_neighbors,
-        "contrast_examples": contrast_examples,
-        "contrast_mode": contrast_mode,
-    }
-    
-    with db.get_session() as session:
-        for cid, summary_data in results.items():
-            # Check if summary already exists for this summary_run_id
-            from sqlmodel import select
-            statement = select(ClusterSummary).where(
-                ClusterSummary.run_id == run_id,
-                ClusterSummary.cluster_id == cid,
-                ClusterSummary.summary_run_id == summary_run_id,
-            )
-            existing = session.exec(statement).first()
-            
-            if existing:
-                # Update existing
-                existing.title = summary_data["title"]
-                existing.description = summary_data["description"]
-                existing.summary = (
-                    f"{summary_data['title']}\n\n{summary_data['description']}"
-                )
-                existing.representative_queries = [
-                    q[:200] for q in summary_data["sample_queries"]
-                ]
-                existing.model = model
-                existing.parameters = summary_params
-                existing.alias = alias
-            else:
-                # Create new
-                new_summary = ClusterSummary(
-                    run_id=run_id,
-                    cluster_id=cid,
-                    summary_run_id=summary_run_id,
-                    alias=alias,
-                    title=summary_data["title"],
-                    description=summary_data["description"],
-                    summary=f"{summary_data['title']}\n\n{summary_data['description']}",
-                    num_queries=sizes_map.get(cid, 0),
-                    representative_queries=[
-                        q for q in summary_data["sample_queries"]
-                    ],
-                    model=model,
-                    parameters=summary_params,
-                )
-                session.add(new_summary)
-        
-        session.commit()
+    # Summaries are now stored by the service
     
     # Display generated summaries
     console.print(f"\n[bold green]✓ Generated {len(results)} cluster summaries[/bold green]\n")
     
-    for cid in sorted(results.keys()):
-        summary_data = results[cid]
-        console.print(f"[bold cyan]Cluster {cid}[/bold cyan]: {summary_data['title']}")
+    # Results is now a list of summary data dictionaries
+    for i, summary_data in enumerate(results):
+        console.print(f"[bold cyan]Cluster {i}[/bold cyan]: {summary_data['title']}")
         console.print(f"  {summary_data['description']}")
-        console.print(f"  [dim]({sizes_map.get(cid, 0)} queries)[/dim]\n")
+        console.print(f"  [dim]({summary_data.get('num_queries', 'unknown')} queries)[/dim]\n")
     
     # Store in ChromaDB if requested
     if use_chroma:
@@ -181,14 +125,14 @@ def summarize(
         descriptions_list = []
         metadata_list = []
         
-        for cid, summary_data in results.items():
-            cluster_ids_list.append(cid)
+        for i, summary_data in enumerate(results):
+            cluster_ids_list.append(i)
             summary_text = f"{summary_data['title']}\n\n{summary_data['description']}"
             summaries_list.append(summary_text)
             titles_list.append(summary_data["title"])
             descriptions_list.append(summary_data["description"])
             metadata_list.append({
-                "num_queries": sizes_map.get(cid, 0),
+                "num_queries": summary_data.get('num_queries', 0),
                 "model": model,
                 "summary_run_id": summary_run_id,
                 "alias": alias,

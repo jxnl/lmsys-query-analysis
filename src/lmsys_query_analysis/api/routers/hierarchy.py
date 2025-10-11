@@ -4,9 +4,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ..dependencies import get_db
-from ..schemas import HierarchyListResponse, HierarchyTreeResponse, HierarchyNode, HierarchyRunInfo
+from ..schemas import HierarchyListResponse, HierarchyTreeResponse, HierarchyNode, HierarchyRunInfo, HierarchyRunDetail
 from ...db.connection import Database
 from ...db.models import ClusterHierarchy, QueryCluster
+from ...services import hierarchy_service
 from sqlmodel import select, func
 
 router = APIRouter()
@@ -24,38 +25,23 @@ async def list_hierarchies(
     db: Database = Depends(get_db),
 ):
     """List all hierarchy runs with optional filtering by clustering run_id."""
-    with db.get_session() as session:
-        # Get distinct hierarchy runs
-        stmt = (
-            select(
-                ClusterHierarchy.hierarchy_run_id,
-                ClusterHierarchy.run_id,
-                ClusterHierarchy.created_at,
-            )
-            .distinct()
+    # Use hierarchy service to get hierarchy runs
+    hierarchy_runs = hierarchy_service.list_hierarchy_runs(db, run_id)
+    
+    # Paginate
+    total = len(hierarchy_runs)
+    pages = (total + limit - 1) // limit
+    start = (page - 1) * limit
+    end = start + limit
+
+    items = [
+        HierarchyRunInfo(
+            hierarchy_run_id=hr.hierarchy_run_id,
+            run_id=hr.run_id,
+            created_at=hr.created_at,
         )
-
-        if run_id:
-            stmt = stmt.where(ClusterHierarchy.run_id == run_id)
-
-        stmt = stmt.order_by(ClusterHierarchy.created_at.desc())
-
-        all_hierarchies = session.exec(stmt).all()
-
-        # Paginate
-        total = len(all_hierarchies)
-        pages = (total + limit - 1) // limit
-        start = (page - 1) * limit
-        end = start + limit
-
-        items = [
-            HierarchyRunInfo(
-                hierarchy_run_id=h[0],
-                run_id=h[1],
-                created_at=h[2],
-            )
-            for h in all_hierarchies[start:end]
-        ]
+        for hr in hierarchy_runs[start:end]
+    ]
 
     return HierarchyListResponse(
         items=items,
@@ -64,6 +50,30 @@ async def list_hierarchies(
         pages=pages,
         limit=limit,
     )
+
+
+@router.get(
+    "/{hierarchy_run_id}/metadata",
+    response_model=HierarchyRunDetail,
+    responses={404: {"model": dict}},
+    summary="Get hierarchy run metadata",
+)
+async def get_hierarchy_run_metadata(
+    hierarchy_run_id: str,
+    db: Database = Depends(get_db),
+):
+    """Get detailed metadata for a hierarchy run.
+    
+    Returns configuration, parameters, and execution metadata for the hierarchy run.
+    """
+    hierarchy_run = hierarchy_service.get_hierarchy_run(db, hierarchy_run_id)
+    if not hierarchy_run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"type": "NotFound", "message": f"Hierarchy run {hierarchy_run_id} not found"}},
+        )
+    
+    return HierarchyRunDetail.model_validate(hierarchy_run)
 
 
 @router.get(
@@ -81,23 +91,18 @@ async def get_hierarchy_tree(
 
     Returns all nodes with parent-child relationships, query counts, and optional percentages.
     """
-    with db.get_session() as session:
-        # Get all nodes
-        stmt = (
-            select(ClusterHierarchy)
-            .where(ClusterHierarchy.hierarchy_run_id == hierarchy_run_id)
-            .order_by(ClusterHierarchy.level)
+    # Get hierarchy nodes using service
+    nodes = hierarchy_service.get_hierarchy_nodes(db, hierarchy_run_id)
+    
+    if not nodes:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"type": "NotFound", "message": f"Hierarchy {hierarchy_run_id} not found"}},
         )
-        nodes = session.exec(stmt).all()
 
-        if not nodes:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"error": {"type": "NotFound", "message": f"Hierarchy {hierarchy_run_id} not found"}},
-            )
+    run_id = nodes[0].run_id
 
-        run_id = nodes[0].run_id
-
+    with db.get_session() as session:
         # Get total queries for percentage calculation
         total_queries = None
         if include_percentages:

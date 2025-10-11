@@ -485,8 +485,9 @@ async def merge_clusters_hierarchical(
     merge_ratio: float = 0.35,  # Changed from 0.2 to 0.35 to reduce over-merging
     neighborhood_size: int = 20,  # Changed from 40 to 20 for more specific categories
     concurrency: int = 8,
-    rpm: Optional[int] = None
-) -> Tuple[str, List[Dict]]:
+    rpm: Optional[int] = None,
+    summary_run_id: Optional[str] = None
+) -> Tuple[str, List[Dict], Dict]:
     """Perform hierarchical merging of clusters using LLM-driven categorization.
 
     Implements Clio-style algorithm:
@@ -511,9 +512,12 @@ async def merge_clusters_hierarchical(
         rpm: Optional rate limit (requests per minute)
 
     Returns:
-        Tuple of (hierarchy_run_id, hierarchy_list)
+        Tuple of (hierarchy_run_id, hierarchy_list, metadata)
         where hierarchy_list contains dicts with hierarchy metadata
+        and metadata contains configuration and execution info for persistence
     """
+    start_time = time.time()
+    
     logger.info(
         f"Starting hierarchical merging: {len(base_clusters)} base clusters "
         f"→ {target_levels} levels with {merge_ratio:.1%} merge ratio per level"
@@ -609,7 +613,7 @@ async def merge_clusters_hierarchical(
             logger.info(f"Step 1/4: Embedding {n_current} cluster summaries...")
             texts = [f"{c['title']}: {c['description']}" for c in current_clusters]
             # Generate embeddings synchronously
-            embeddings = embedder.generate_embeddings(texts, batch_size=96, show_progress=False)
+            embeddings = await embedder.generate_embeddings_async(texts, batch_size=96, show_progress=False)
             logger.debug(f"  Embedded {n_current} summaries in {time.time() - step_start:.1f}s")
 
             # Step 2: Create neighborhoods
@@ -1024,6 +1028,24 @@ async def merge_clusters_hierarchical(
         count = sum(1 for h in hierarchy if h["level"] == level)
         logger.info(f"  Level {level}: {count} clusters")
     
+    # Prepare metadata for persistence
+    metadata = {
+        "run_id": run_id,
+        "hierarchy_run_id": hierarchy_run_id,
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+        "embedding_provider": embedding_provider,
+        "embedding_model": embedding_model,
+        "target_levels": target_levels,
+        "merge_ratio": merge_ratio,
+        "neighborhood_size": neighborhood_size,
+        "concurrency": concurrency,
+        "rpm": rpm,
+        "summary_run_id": summary_run_id,
+        "total_nodes": len(hierarchy),
+        "execution_time_seconds": time.time() - start_time,
+    }
+    
     logger.info(f"Hierarchy run ID: {hierarchy_run_id}")
     logger.info("=" * 60)
-    return hierarchy_run_id, hierarchy
+    return hierarchy_run_id, hierarchy, metadata

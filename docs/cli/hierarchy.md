@@ -37,9 +37,15 @@ Following Anthropic's **Clio methodology**:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--model` | TEXT | anthropic/claude-sonnet-4-5-20250929 | LLM model for hierarchy generation |
-| `--concurrency` | INTEGER | 4 | Concurrent LLM requests |
-| `--alias` | TEXT | None | Filter by summary alias |
+| `--model` | TEXT | openai/gpt-4o-mini | LLM model for hierarchy generation |
+| `--embedding-model` | TEXT | text-embedding-3-small | Embedding model for similarity search |
+| `--embedding-provider` | TEXT | openai | Embedding provider |
+| `--target-levels` | INTEGER | 3 | Number of hierarchy levels to create |
+| `--merge-ratio` | FLOAT | 0.35 | Merge aggressiveness (0.5 = 100→50→25) |
+| `--neighborhood-size` | INTEGER | 20 | Clusters per LLM context |
+| `--concurrency` | INTEGER | 8 | Concurrent LLM requests |
+| `--rpm` | INTEGER | None | Rate limit (requests per minute) |
+| `--summary-run-id` | TEXT | None | Specific summary run to use |
 | `--use-chroma` | FLAG | False | Use ChromaDB for similarity search |
 
 ### Examples

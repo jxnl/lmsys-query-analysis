@@ -74,6 +74,51 @@ class QueryCluster(SQLModel, table=True):
     query: Optional[Query] = Relationship(back_populates="cluster_assignments")
 
 
+class SummaryRun(SQLModel, table=True):
+    """Table storing metadata for summarization runs.
+
+    Tracks the configuration and parameters used to create cluster summaries,
+    enabling reproducibility, comparison, and audit trails for different summarization strategies.
+    """
+
+    __tablename__ = "summary_runs"
+    __table_args__ = (
+        Index("ix_summary_runs_run_id", "run_id"),
+        Index("ix_summary_runs_llm_provider", "llm_provider"),
+        Index("ix_summary_runs_created_at", "created_at"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    summary_run_id: str = Field(unique=True)  # Primary identifier (e.g., "summary-gpt-4o-mini-20251004-170442")
+    run_id: str = Field(
+        sa_column=Column(
+            "run_id",
+            ForeignKey("clustering_runs.run_id", ondelete="CASCADE"),
+        ),
+    )
+
+    # LLM Configuration
+    llm_provider: str  # e.g., "openai", "anthropic", "groq"
+    llm_model: str  # e.g., "gpt-4o-mini", "claude-sonnet-4-5"
+
+    # Summarization Parameters
+    max_queries: int  # Max queries per cluster sent to LLM
+    concurrency: int  # Max concurrent LLM requests
+    rpm: Optional[int] = None  # Rate limit (requests per minute)
+    contrast_neighbors: int  # Number of neighbor clusters for contrast
+    contrast_examples: int  # Examples per neighbor cluster
+    contrast_mode: str  # Contrast mode: "neighbors" or "keywords"
+
+    # Execution Metadata
+    total_clusters: Optional[int] = None  # Total clusters summarized
+    execution_time_seconds: Optional[float] = None  # Time taken to complete
+    alias: Optional[str] = None  # Friendly alias for this summary run
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationship
+    run: Optional[ClusteringRun] = Relationship()
+
+
 class ClusterSummary(SQLModel, table=True):
     """Table storing generated summaries/analysis for clusters.
 
@@ -97,9 +142,13 @@ class ClusterSummary(SQLModel, table=True):
         ),
     )
     cluster_id: int
-    # Unique ID for this summarization run; default to timestamp-based if not provided
-    summary_run_id: str = Field(default_factory=lambda: f"summary-{datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f')}")
-    alias: Optional[str] = None  # Friendly name for this summary run (e.g., "claude-v1", "gpt4-test")
+    # Foreign key to summary_runs table
+    summary_run_id: str = Field(
+        sa_column=Column(
+            "summary_run_id",
+            ForeignKey("summary_runs.summary_run_id", ondelete="CASCADE"),
+        ),
+    )
     title: Optional[str] = None  # LLM-generated short title
     description: Optional[str] = None  # LLM-generated description
     summary: Optional[str] = None  # Full summary text (backwards compat)
@@ -109,8 +158,60 @@ class ClusterSummary(SQLModel, table=True):
     parameters: Optional[dict] = Field(default=None, sa_column=Column(JSON))  # Summarization parameters
     generated_at: datetime = Field(default_factory=datetime.utcnow)
 
-    # Relationship
+    # Relationships
     run: Optional[ClusteringRun] = Relationship(back_populates="cluster_summaries")
+    summary_run: Optional[SummaryRun] = Relationship()
+
+
+class HierarchyRun(SQLModel, table=True):
+    """Table storing metadata for hierarchical merging runs.
+
+    Tracks the configuration and parameters used to create cluster hierarchies,
+    enabling reproducibility, comparison, and audit trails for different merge strategies.
+    """
+
+    __tablename__ = "hierarchy_runs"
+    __table_args__ = (
+        Index("ix_hierarchy_runs_run_id", "run_id"),
+        Index("ix_hierarchy_runs_llm_provider", "llm_provider"),
+        Index("ix_hierarchy_runs_embedding_provider", "embedding_provider"),
+        Index("ix_hierarchy_runs_created_at", "created_at"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    hierarchy_run_id: str = Field(unique=True)  # Primary identifier (e.g., "hier-kmeans-200-20251004-170442-20251004-123456")
+    run_id: str = Field(
+        sa_column=Column(
+            "run_id",
+            ForeignKey("clustering_runs.run_id", ondelete="CASCADE"),
+        ),
+    )
+    
+    # LLM Configuration
+    llm_provider: str  # e.g., "openai", "anthropic", "groq"
+    llm_model: str  # e.g., "gpt-4o-mini", "claude-sonnet-4-5"
+    
+    # Embedding Configuration
+    embedding_provider: str  # e.g., "openai", "cohere"
+    embedding_model: str  # e.g., "text-embedding-3-small", "embed-v4.0"
+    
+    # Merge Parameters
+    target_levels: int  # Number of hierarchy levels created
+    merge_ratio: float  # Target merge ratio per level
+    neighborhood_size: int  # Average clusters per neighborhood
+    concurrency: int  # Max concurrent LLM requests
+    rpm: Optional[int] = None  # Rate limit (requests per minute)
+    
+    # Summary Configuration
+    summary_run_id: Optional[str] = None  # Which summary run was used as input
+    
+    # Execution Metadata
+    total_nodes: Optional[int] = None  # Total hierarchy nodes created
+    execution_time_seconds: Optional[float] = None  # Time taken to complete
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationship
+    run: Optional[ClusteringRun] = Relationship()
 
 
 class ClusterHierarchy(SQLModel, table=True):
@@ -137,7 +238,12 @@ class ClusterHierarchy(SQLModel, table=True):
             ForeignKey("clustering_runs.run_id", ondelete="CASCADE"),
         ),
     )
-    hierarchy_run_id: str  # Unique ID for this hierarchy run (e.g., "hier-20251004-123456")
+    hierarchy_run_id: str = Field(
+        sa_column=Column(
+            "hierarchy_run_id",
+            ForeignKey("hierarchy_runs.hierarchy_run_id", ondelete="CASCADE"),
+        ),
+    )
     cluster_id: int  # The cluster being organized (can be virtual for merged clusters)
     parent_cluster_id: Optional[int] = None  # Parent cluster ID (null for top level)
     level: int  # 0=leaf (base clusters), 1=first merge, 2=second merge, etc.
@@ -146,8 +252,9 @@ class ClusterHierarchy(SQLModel, table=True):
     description: Optional[str] = None  # Description for merged/parent clusters
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-    # Relationship
+    # Relationships
     run: Optional[ClusteringRun] = Relationship()
+    hierarchy_run: Optional[HierarchyRun] = Relationship()
 
 
 class ClusterEdit(SQLModel, table=True):
