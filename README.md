@@ -419,6 +419,8 @@ See [docs/API.md](docs/API.md) for full API documentation.
 ### Web UI Features
 
 - **Jobs Dashboard**: View all clustering runs with metadata and stats
+- **Summary Runs**: View summarization runs with LLM configuration, parameters, and execution metadata
+- **Hierarchy Runs**: View hierarchical merging runs with LLM configuration, embedding configuration, and merge parameters
 - **Hierarchy Explorer**: Navigate multi-level cluster hierarchies with enhanced visual controls
   - Expand/collapse all controls
   - Visual progress bars and color coding by cluster size
@@ -451,16 +453,32 @@ The web interface can connect to either:
 **query_clusters** - Map queries to clusters per run
 - `run_id`, `query_id`, `cluster_id`, `confidence_score`
 
-**cluster_summaries** - LLM-generated summaries (supports multiple summary runs)
-- `run_id`, `cluster_id`, `summary_run_id` (unique per summarization)
-- `alias` (friendly name like "claude-v1", "gpt4-best")
+**summary_runs** - Metadata for summarization runs (tracks LLM config, parameters, execution)
+- `summary_run_id` (primary key), `run_id` (foreign key to clustering_runs)
+- `llm_provider`, `llm_model` (e.g., "openai", "gpt-4o-mini")
+- `max_queries`, `concurrency`, `rpm` (rate limiting)
+- `contrast_neighbors`, `contrast_examples`, `contrast_mode`
+- `total_clusters`, `execution_time_seconds`, `alias`
+- `created_at`
+
+**cluster_summaries** - LLM-generated summaries (linked to summary runs)
+- `run_id`, `cluster_id`, `summary_run_id` (foreign key to summary_runs)
 - `title`, `description`, `summary`, `num_queries`
 - `representative_queries` (JSON)
 - `model` (LLM used), `parameters` (JSON - summarization settings)
 - `generated_at`
 
-**cluster_hierarchies** - Multi-level cluster hierarchies (Clio-style organization)
-- `hierarchy_run_id` (unique per hierarchy), `run_id`, `cluster_id`
+**hierarchy_runs** - Metadata for hierarchical merging runs (tracks LLM config, parameters, execution)
+- `hierarchy_run_id` (primary key), `run_id` (foreign key to clustering_runs)
+- `llm_provider`, `llm_model` (e.g., "openai", "gpt-4o-mini")
+- `embedding_provider`, `embedding_model` (e.g., "cohere", "embed-v4.0")
+- `target_levels`, `merge_ratio`, `neighborhood_size`, `concurrency`, `rpm`
+- `summary_run_id` (foreign key to summary_runs, optional)
+- `total_nodes`, `execution_time_seconds`
+- `created_at`
+
+**cluster_hierarchies** - Multi-level cluster hierarchies (linked to hierarchy runs)
+- `hierarchy_run_id` (foreign key to hierarchy_runs), `run_id`, `cluster_id`
 - `parent_cluster_id` (null for top level), `level` (0=leaf, 1=first merge, etc.)
 - `children_ids` (JSON array), `title`, `description`
 - `created_at`
@@ -473,20 +491,24 @@ The web interface can connect to either:
   - Used for: Filtering query→cluster assignments, resolving the correct Chroma collections and embedding space, listing clusters, summarizing, and searching.
   - Where: Primary key in `clustering_runs`; included in Chroma summaries metadata (`run_id`, `cluster_id`).
 
-- `summary_run_id` (Summary Pass) and `alias`:
-  - What: Identifies one LLM summarization pass over a run’s clusters; multiple can exist per run (e.g., different models or prompts). Auto-generated as `summary-<model>-<timestamp>` if not provided; `alias` is an optional human-friendly name (e.g., `claude-v1`).
+- `summary_run_id` (Summary Run) and `alias`:
+  - What: Identifies one LLM summarization pass over a run's clusters; multiple can exist per run (e.g., different models or prompts). Auto-generated as `summary-<model>-<timestamp>` if not provided; `alias` is an optional human-friendly name (e.g., `claude-v1`).
+  - Stores: LLM configuration, summarization parameters, execution metadata in `summary_runs` table.
   - Used for: Selecting which titles/descriptions to view or search when multiple summary passes exist.
-  - Where: Columns on `cluster_summaries`; also stored in Chroma summaries metadata as `summary_run_id` and `alias` for filtering during semantic cluster search.
+  - Where: Primary key in `summary_runs`; foreign key in `cluster_summaries`; also stored in Chroma summaries metadata as `summary_run_id` and `alias` for filtering during semantic cluster search.
 
 - `hierarchy_run_id` (Hierarchy Run):
   - What: Unique ID for one hierarchical merging run that organizes clusters into parent/child categories (e.g., `hier-<run_id>-<timestamp>`).
+  - Stores: LLM configuration, embedding configuration, merge parameters, execution metadata in `hierarchy_runs` table.
   - Used for: Viewing and reusing a specific multi-level hierarchy separate from the base clustering.
-  - Where: Column on `cluster_hierarchies`; all nodes for a hierarchy share the same `hierarchy_run_id`.
+  - Where: Primary key in `hierarchy_runs`; foreign key in `cluster_hierarchies`; all nodes for a hierarchy share the same `hierarchy_run_id`.
 
 Provenance and safety:
 - A single `run_id` defines the vector space for semantic search; the CLI and SDK resolve provider/model/dimension from the run to avoid mixing spaces.
 - Queries in Chroma store stable metadata (query_id, model, language, conversation_id). Cluster membership is always joined from SQLite (`query_clusters`) to ensure correctness per-run.
 - Cluster summaries in Chroma store `run_id`, `cluster_id`, and summary provenance (`summary_run_id`, `alias`) so you can filter cluster search to a specific summary set.
+- Summary runs track LLM configuration, parameters, and execution metadata for reproducibility and comparison.
+- Hierarchy runs track LLM configuration, embedding configuration, merge parameters, and execution metadata for reproducibility and comparison.
 
 ### ChromaDB Collections
 
@@ -676,6 +698,7 @@ rm -rf ~/.lmsys-query-analysis/chroma
 sqlite3 ~/.lmsys-query-analysis/queries.db ".schema cluster_summaries"
 
 # Note: The cluster_summaries table now requires summary_run_id field.
+# The summary_runs and hierarchy_runs tables store metadata for reproducibility.
 # If upgrading from older version, recreate the database.
 ```
 

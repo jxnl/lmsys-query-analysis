@@ -54,15 +54,25 @@ class Database:
         with self.get_session() as session:
             # Migration 1: Add hierarchy_runs table (if not exists)
             try:
-                # Check if hierarchy_runs table exists
-                result = session.exec(text("SELECT name FROM sqlite_master WHERE type='table' AND name='hierarchy_runs'")).fetchall()
-                if not result:
-                    logger.info("Creating hierarchy_runs table...")
-                    # The table will be created by SQLModel.metadata.create_all() above
-                    # This is just a placeholder for future migrations
-                    pass
-                else:
-                    logger.debug("hierarchy_runs table already exists")
+                    # Check if hierarchy_runs table exists
+                    result = session.exec(text("SELECT name FROM sqlite_master WHERE type='table' AND name='hierarchy_runs'")).fetchall()
+                    if not result:
+                        logger.info("Creating hierarchy_runs table...")
+                        # The table will be created by SQLModel.metadata.create_all() above
+                        # This is just a placeholder for future migrations
+                        pass
+                    else:
+                        logger.debug("hierarchy_runs table already exists")
+                    
+                    # Check if summary_runs table exists
+                    result = session.exec(text("SELECT name FROM sqlite_master WHERE type='table' AND name='summary_runs'")).fetchall()
+                    if not result:
+                        logger.info("Creating summary_runs table...")
+                        # The table will be created by SQLModel.metadata.create_all() above
+                        # This is just a placeholder for future migrations
+                        pass
+                    else:
+                        logger.debug("summary_runs table already exists")
             except Exception as e:
                 logger.warning(f"Migration check failed: {e}")
                 # Continue anyway - SQLModel will handle table creation

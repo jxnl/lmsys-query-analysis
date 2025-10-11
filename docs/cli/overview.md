@@ -27,7 +27,7 @@ uv run lmsys [OPTIONS] COMMAND [ARGS]...
 
 ### 📊 Analysis & Exploration
 
-- **`summarize`** - Generate LLM-powered summaries for clusters
+- **`summarize`** - Generate LLM-powered summaries for clusters (with metadata persistence)
 - **`runs`** - List all clustering runs
 - **`list-clusters`** - List clusters from a specific run
 - **`inspect`** - View detailed cluster information
@@ -37,7 +37,7 @@ uv run lmsys [OPTIONS] COMMAND [ARGS]...
 
 ### 🌳 Hierarchical Organization
 
-- **`merge-clusters`** - Create multi-level cluster hierarchies using LLM-driven merging
+- **`merge-clusters`** - Create multi-level cluster hierarchies using LLM-driven merging (with metadata persistence)
 - **`show-hierarchy`** - Display hierarchical cluster structure as a tree
 
 [→ Hierarchy Guide](hierarchy.md)

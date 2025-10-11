@@ -7,7 +7,7 @@ optional rate limiting to speed up large runs safely.
 from typing import List, Optional, Dict, Tuple
 import logging
 
-import anyio
+import asyncio
 import instructor
 from pydantic import BaseModel, Field
 from rich.console import Console
@@ -157,7 +157,7 @@ class ClusterSummarizer:
         else:
             self.async_client = instructor.from_provider(model, async_client=True)
 
-    def generate_batch_summaries(
+    async def generate_batch_summaries(
         self,
         clusters_data: List[tuple[int, List[str]]],
         max_queries: int = 100,
@@ -183,8 +183,7 @@ class ClusterSummarizer:
         )
         use_rpm = self.rpm if rpm is None else (rpm if rpm and rpm > 0 else None)
 
-        return anyio.run(
-            self._async_generate_batch_summaries,
+        return await self._async_generate_batch_summaries(
             clusters_data,
             max_queries,
             use_concurrency,
@@ -209,7 +208,7 @@ class ClusterSummarizer:
         """Async concurrent generation using anyio with semaphore-based rate limiting."""
         total = len(clusters_data)
         results: Dict[int, dict] = {}
-        semaphore = anyio.Semaphore(concurrency)
+        semaphore = asyncio.Semaphore(concurrency)
 
         console.print(
             f"[cyan]Generating LLM summaries for {total} clusters using {self.model} (concurrency={concurrency}{', rpm=' + str(rpm) if rpm else ''})...[/cyan]"
@@ -266,9 +265,11 @@ class ClusterSummarizer:
                 f"[cyan]Summarizing clusters with {self.model}...",
                 total=total,
             )
-            async with anyio.create_task_group() as tg:
-                for j, (cid, qtexts) in enumerate(clusters_data):
-                    tg.start_soon(worker, j, cid, qtexts, task, progress)
+            tasks = []
+            for j, (cid, qtexts) in enumerate(clusters_data):
+                tasks.append(asyncio.create_task(worker(j, cid, qtexts, task, progress)))
+            
+            await asyncio.gather(*tasks)
 
         return results
 

@@ -1,6 +1,6 @@
 """Cluster hierarchy commands."""
 
-import anyio
+import asyncio
 import typer
 from collections import defaultdict
 from rich.console import Console
@@ -60,8 +60,8 @@ def merge_clusters_cmd(
     # Use hierarchy service to create hierarchy
     console.print(f"[cyan]Creating hierarchical organization with {target_levels} levels[/cyan]")
     
-    try:
-        hierarchy_run_id, hierarchy_data = hierarchy_service.create_hierarchy(
+    async def run_create_hierarchy():
+        return await hierarchy_service.create_hierarchy(
             db=db,
             run_id=run_id,
             summary_run_id=summary_run_id,
@@ -75,6 +75,9 @@ def merge_clusters_cmd(
             concurrency=concurrency,
             rpm=rpm
         )
+    
+    try:
+        hierarchy_run_id, hierarchy_data = asyncio.run(run_create_hierarchy())
     except ValueError as e:
         console.print(f"[red]{e}[/red]")
         console.print("[yellow]Run 'lmsys summarize <run_id>' first[/yellow]")

@@ -75,7 +75,7 @@ def get_hierarchy_nodes(
         return session.exec(statement).all()
 
 
-def create_hierarchy(
+async def create_hierarchy(
     db: Database,
     run_id: str,
     summary_run_id: Optional[str] = None,
@@ -146,7 +146,7 @@ def create_hierarchy(
         ]
         
         # Run hierarchical merging
-        hierarchy_run_id, hierarchy_data, metadata = merge_clusters_hierarchical(
+        hierarchy_run_id, hierarchy_data, metadata = await merge_clusters_hierarchical(
             base_clusters=base_clusters,
             run_id=run_id,
             embedding_model=embedding_model,

@@ -306,7 +306,7 @@ def extract_base_clusters(db: Database, run_id: str, min_clusters: int = 10) -> 
         raise
 
 
-def create_hierarchy(db: Database, run_id: str, config: RunnerConfig) -> str:
+async def create_hierarchy(db: Database, run_id: str, config: RunnerConfig) -> str:
     """Create cluster hierarchy with comprehensive logging."""
     logger.info(f"Starting hierarchy creation for run: {run_id}")
     logger.info(f"  Target levels: {config.hierarchy_levels}")
@@ -317,7 +317,7 @@ def create_hierarchy(db: Database, run_id: str, config: RunnerConfig) -> str:
     
     try:
         # Use hierarchy service to create hierarchy
-        hierarchy_run_id, hierarchy_data = hierarchy_service.create_hierarchy(
+        hierarchy_run_id, hierarchy_data = await hierarchy_service.create_hierarchy(
             db=db,
             run_id=run_id,
             summary_run_id=None,  # Use latest summary run
