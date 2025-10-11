@@ -177,6 +177,39 @@ class HierarchyRunInfo(BaseModel):
     created_at: datetime
 
 
+class HierarchyRunDetail(BaseModel):
+    """Detailed hierarchy run with metadata."""
+
+    hierarchy_run_id: str
+    run_id: str
+    
+    # LLM Configuration
+    llm_provider: str
+    llm_model: str
+    
+    # Embedding Configuration
+    embedding_provider: str
+    embedding_model: str
+    
+    # Merge Parameters
+    target_levels: int
+    merge_ratio: float
+    neighborhood_size: int
+    concurrency: int
+    rpm: Optional[int] = None
+    
+    # Summary Configuration
+    summary_run_id: Optional[str] = None
+    
+    # Execution Metadata
+    total_nodes: Optional[int] = None
+    execution_time_seconds: Optional[float] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class HierarchyTreeResponse(BaseModel):
     """Full hierarchy tree with all nodes."""
 

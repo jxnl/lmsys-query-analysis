@@ -27,8 +27,7 @@ from .db.connection import Database
 from .db.loader import load_lmsys_dataset
 from .db.chroma import ChromaManager
 from .clustering.kmeans import run_kmeans_clustering
-from .clustering.hierarchy import merge_clusters_hierarchical
-from .services import cluster_service
+from .services import cluster_service, hierarchy_service
 
 # Configuration
 from .config import RunnerConfig, load_config_from_yaml
@@ -307,7 +306,7 @@ def extract_base_clusters(db: Database, run_id: str, min_clusters: int = 10) -> 
         raise
 
 
-async def create_hierarchy(db: Database, run_id: str, config: RunnerConfig) -> str:
+def create_hierarchy(db: Database, run_id: str, config: RunnerConfig) -> str:
     """Create cluster hierarchy with comprehensive logging."""
     logger.info(f"Starting hierarchy creation for run: {run_id}")
     logger.info(f"  Target levels: {config.hierarchy_levels}")
@@ -317,20 +316,15 @@ async def create_hierarchy(db: Database, run_id: str, config: RunnerConfig) -> s
     start_time = time.time()
     
     try:
-        # Extract base clusters
-        base_clusters = extract_base_clusters(db, run_id, min_clusters=10)
-
-        # Convert BaseCluster models to dicts for merge_clusters_hierarchical
-        base_clusters_dicts = [cluster.model_dump() for cluster in base_clusters]
-
-        # Run hierarchical merging
-        hierarchy_run_id, hierarchy_data = await merge_clusters_hierarchical(
-            base_clusters=base_clusters_dicts,
+        # Use hierarchy service to create hierarchy
+        hierarchy_run_id, hierarchy_data = hierarchy_service.create_hierarchy(
+            db=db,
             run_id=run_id,
-            embedding_model=config.embedding_model,
-            embedding_provider=config.embedding_provider,
+            summary_run_id=None,  # Use latest summary run
             llm_provider=config.llm_provider,
             llm_model=config.llm_model,
+            embedding_provider=config.embedding_provider,
+            embedding_model=config.embedding_model,
             target_levels=config.hierarchy_levels,
             merge_ratio=config.merge_ratio,
             neighborhood_size=config.neighborhood_size,
