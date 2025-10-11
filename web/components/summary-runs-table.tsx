@@ -7,23 +7,27 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { components } from "@/lib/api/types";
 
-type HierarchyRun = components["schemas"]["HierarchyRunInfo"];
+type SummaryRun = components["schemas"]["SummaryRunSummary"];
 
-interface HierarchyRunsTableProps {
-  runs: HierarchyRun[];
+interface SummaryRunsTableProps {
+  runs: SummaryRun[];
 }
 
-export function HierarchyRunsTable({ runs }: HierarchyRunsTableProps) {
+export function SummaryRunsTable({ runs }: SummaryRunsTableProps) {
   return (
     <div className="rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Hierarchy Run ID</TableHead>
+            <TableHead>Summary Run ID</TableHead>
             <TableHead>Base Run ID</TableHead>
+            <TableHead>Model</TableHead>
+            <TableHead>Alias</TableHead>
+            <TableHead>Status</TableHead>
             <TableHead>Created</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
@@ -32,35 +36,45 @@ export function HierarchyRunsTable({ runs }: HierarchyRunsTableProps) {
           {runs.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={4}
+                colSpan={7}
                 className="text-center text-muted-foreground"
               >
-                No hierarchy runs found. Run `lmsys merge-clusters` to create one.
+                No summary runs found. Run `lmsys summarize` to create one.
               </TableCell>
             </TableRow>
           ) : (
             runs.map((run) => {
               return (
-                <TableRow key={run.hierarchy_run_id}>
+                <TableRow key={run.summary_run_id}>
                   <TableCell className="font-mono text-sm">
-                    {run.hierarchy_run_id}
+                    {run.summary_run_id}
                   </TableCell>
                   <TableCell className="font-mono text-sm">
                     {run.run_id}
                   </TableCell>
                   <TableCell className="text-sm">
-                    {new Date(run.created_at).toLocaleString()}
+                    {run.model}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {run.alias ? (
+                      <Badge variant="secondary">{run.alias}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={run.status === "completed" ? "default" : "secondary"}>
+                      {run.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {new Date(run.generated_at).toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button variant="outline" size="sm" asChild>
-                        <Link href={`/runs/${run.run_id}/hierarchies/${run.hierarchy_run_id}`}>
+                        <Link href={`/runs/${run.run_id}/summaries/${run.summary_run_id}`}>
                           View Details
-                        </Link>
-                      </Button>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/runs/${run.run_id}/hierarchy/${run.hierarchy_run_id}`}>
-                          View Tree
                         </Link>
                       </Button>
                       <Button variant="outline" size="sm" asChild>

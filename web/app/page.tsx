@@ -1,6 +1,7 @@
 import { apiFetch } from "@/lib/api";
 import { JobsTable } from "@/components/jobs-table";
 import { HierarchyRunsTable } from "@/components/hierarchy-runs-table";
+import { SummaryRunsTable } from "@/components/summary-runs-table";
 import {
   Card,
   CardContent,
@@ -8,14 +9,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Database, Search, FolderTree, GitBranch } from "lucide-react";
+import { Database, Search, FolderTree, GitBranch, FileText } from "lucide-react";
 import type { components } from "@/lib/api/types";
 
 type ClusteringRun = components["schemas"]["ClusteringRunSummary"];
 type HierarchyRun = components["schemas"]["HierarchyRunInfo"];
+type SummaryRun = components["schemas"]["SummaryRunSummary"];
 
 export default async function HomePage() {
-  const [clusteringResponse, hierarchyResponse] = await Promise.all([
+  const [clusteringResponse, hierarchyResponse, summaryResponse] = await Promise.all([
     apiFetch<{
       items: ClusteringRun[];
       total: number;
@@ -28,10 +30,17 @@ export default async function HomePage() {
       page: number;
       pages: number;
     }>("/api/hierarchy/?limit=100"),
+    apiFetch<{
+      items: SummaryRun[];
+      total: number;
+      page: number;
+      pages: number;
+    }>("/api/summaries/?limit=100"),
   ]);
   
   const clusteringRuns = clusteringResponse.items;
   const hierarchyRuns = hierarchyResponse.items;
+  const summaryRuns = summaryResponse.items;
 
   return (
     <div className="container mx-auto py-8 space-y-6">
@@ -42,7 +51,7 @@ export default async function HomePage() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -53,6 +62,19 @@ export default async function HomePage() {
           <CardContent>
             <div className="text-2xl font-bold">{clusteringRuns.length}</div>
             <p className="text-xs text-muted-foreground">Total analysis runs</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Summary Runs
+            </CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{summaryRuns.length}</div>
+            <p className="text-xs text-muted-foreground">LLM summaries</p>
           </CardContent>
         </Card>
 
@@ -105,6 +127,18 @@ export default async function HomePage() {
         </CardHeader>
         <CardContent>
           <JobsTable runs={clusteringRuns} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Summary Runs</CardTitle>
+          <CardDescription>
+            LLM-generated cluster summaries with metadata and configuration tracking
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SummaryRunsTable runs={summaryRuns} />
         </CardContent>
       </Card>
 
