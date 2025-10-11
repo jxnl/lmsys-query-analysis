@@ -26,22 +26,13 @@ async def list_summaries(
 ):
     """List all summary runs with optional filtering by clustering run_id."""
     with db.get_session() as session:
-        # Get distinct summary runs
-        stmt = (
-            select(
-                ClusterSummary.summary_run_id,
-                ClusterSummary.run_id,
-                ClusterSummary.alias,
-                ClusterSummary.model,
-                ClusterSummary.generated_at,
-            )
-            .distinct()
-        )
+        # Get summary runs directly from SummaryRun table
+        stmt = select(SummaryRun)
 
         if run_id:
-            stmt = stmt.where(ClusterSummary.run_id == run_id)
+            stmt = stmt.where(SummaryRun.run_id == run_id)
 
-        stmt = stmt.order_by(ClusterSummary.generated_at.desc())
+        stmt = stmt.order_by(SummaryRun.created_at.desc())
 
         all_summaries = session.exec(stmt).all()
 
@@ -53,11 +44,11 @@ async def list_summaries(
 
         items = [
             SummaryRunSummary(
-                summary_run_id=s[0],
-                run_id=s[1],
-                alias=s[2],
-                model=s[3],
-                generated_at=s[4],
+                summary_run_id=s.summary_run_id,
+                run_id=s.run_id,
+                alias=s.alias,
+                model=s.llm_model,
+                generated_at=s.created_at,
                 status="completed",
             )
             for s in all_summaries[start:end]
