@@ -22,6 +22,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",  # Next.js dev server
+        "http://localhost:3004",  # Next.js dev server (alternative port)
         "http://localhost:8000",  # FastAPI dev server (for testing)
         # Add production origins here when deployed
     ],
