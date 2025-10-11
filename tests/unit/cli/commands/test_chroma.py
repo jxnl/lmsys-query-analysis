@@ -21,7 +21,10 @@ def test_chroma_info_command(mock_get_chroma):
     
     # Execute command
     chroma_info(
-        chroma_path="/tmp/chroma"
+        chroma_path="/tmp/chroma",
+        json_out=False,
+        table=False,
+        xml=False
     )
     
     # Verify

@@ -608,8 +608,8 @@ async def merge_clusters_hierarchical(
             step_start = time.time()
             logger.info(f"Step 1/4: Embedding {n_current} cluster summaries...")
             texts = [f"{c['title']}: {c['description']}" for c in current_clusters]
-            # Await the async embedding generation
-            embeddings = await embedder.generate_embeddings(texts, batch_size=96, show_progress=False)
+            # Generate embeddings synchronously
+            embeddings = embedder.generate_embeddings(texts, batch_size=96, show_progress=False)
             logger.debug(f"  Embedded {n_current} summaries in {time.time() - step_start:.1f}s")
 
             # Step 2: Create neighborhoods

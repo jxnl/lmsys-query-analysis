@@ -37,6 +37,8 @@ def test_search_command(mock_get_db, mock_create_clusters, mock_create_queries):
         by=None,
         facets=None,
         json_out=False,
+        table=False,
+        xml=False,
         chroma_path="/tmp/chroma",
         embedding_model="openai/text-embedding-3-small"
     )
@@ -67,6 +69,8 @@ def test_search_cluster_command(mock_get_db, mock_create_clusters):
         run_id="test-run",
         top_k=5,
         json_out=False,
+        table=False,
+        xml=False,
         chroma_path="/tmp/chroma",
         embedding_model="openai/text-embedding-3-small"
     )

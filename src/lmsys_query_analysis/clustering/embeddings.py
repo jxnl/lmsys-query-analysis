@@ -89,13 +89,13 @@ class EmbeddingGenerator:
         if self.provider == "sentence-transformers" and self.model is None:
             self.model = SentenceTransformer(self.model_name)
 
-    async def generate_embeddings(
+    def generate_embeddings(
         self,
         texts: List[str],
         batch_size: int = 32,
         show_progress: bool = True,
     ) -> np.ndarray:
-        """Generate embeddings for a list of texts (async).
+        """Generate embeddings for a list of texts.
 
         Args:
             texts: List of text strings to embed
@@ -124,7 +124,7 @@ class EmbeddingGenerator:
         start = time.perf_counter()
 
         if self.provider == "openai":
-            valid_embeddings_list = await self._async_openai_batches(filtered_texts, batch_size, None, None)
+            valid_embeddings_list = anyio.run(self._async_openai_batches, filtered_texts, batch_size, None, None)
             valid_embeddings = np.array(valid_embeddings_list)
             elapsed = time.perf_counter() - start
             if len(filtered_texts) > 0:
@@ -134,7 +134,7 @@ class EmbeddingGenerator:
                     len(filtered_texts), elapsed, rate, self.model_name, self.concurrency
                 )
         elif self.provider == "cohere":
-            valid_embeddings_list = await self._async_cohere_batches(filtered_texts, batch_size, None, None)
+            valid_embeddings_list = anyio.run(self._async_cohere_batches, filtered_texts, batch_size, None, None)
             valid_embeddings = np.array(valid_embeddings_list)
             elapsed = time.perf_counter() - start
             if len(filtered_texts) > 0:
