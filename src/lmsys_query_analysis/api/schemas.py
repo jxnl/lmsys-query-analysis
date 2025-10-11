@@ -240,6 +240,34 @@ class SummaryRunSummary(BaseModel):
         from_attributes = True
 
 
+class SummaryRunDetail(BaseModel):
+    """Detailed summary run with metadata."""
+
+    summary_run_id: str
+    run_id: str
+
+    # LLM Configuration
+    llm_provider: str
+    llm_model: str
+
+    # Summarization Parameters
+    max_queries: int
+    concurrency: int
+    rpm: Optional[int] = None
+    contrast_neighbors: int
+    contrast_examples: int
+    contrast_mode: str
+
+    # Execution Metadata
+    total_clusters: Optional[int] = None
+    execution_time_seconds: Optional[float] = None
+    alias: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class SummaryRunListResponse(PaginatedResponse[SummaryRunSummary]):
     """Paginated list of summary runs."""
 
