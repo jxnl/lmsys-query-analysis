@@ -35,7 +35,9 @@ def test_runs_command(mock_get_db):
     # Execute command
     runs(
         db_path="/tmp/test.db",
-        latest=False
+        latest=False,
+        table=False,
+        xml=False
     )
     
     # Verify
@@ -79,7 +81,9 @@ def test_list_clusters_command(mock_get_db):
             run_id="test-run",
             db_path="/tmp/test.db",
             show_examples=0,
-            example_width=50
+            example_width=50,
+            table=False,
+            xml=False
         )
     
     # Verify
