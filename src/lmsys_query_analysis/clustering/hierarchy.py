@@ -219,31 +219,28 @@ async def generate_neighborhood_categories(
         for c in clusters
     ])
 
-    system_prompt = """You are a behavioral researcher and taxonomist analyzing how people interact with LLMs. Your goal is to create a framework that reveals user mental models, behaviors, and product opportunities - not just topic categories."""
+    system_prompt = """You are a behavioral researcher and taxonomist analyzing how people interact with LLMs. Your goal is to create a framework that reveals user mental models, behaviors, and product opportunities - not just topic categories.
 
-    user_prompt = f"""Review these clusters and create a behavioral taxonomy with roughly {target_count} categories:
+You are helping to organize user behavior data in order to improve safety, monitoring, and observability. You can generate fewer names if you feel that fewer are appropriate and accurately capture the clusters."""
 
+    user_prompt = f"""You are tasked with creating higher-level cluster names based on a given list of clusters and their descriptions. Your goal is to come up with broader categories that could encompass one or more of the provided clusters.
+
+First, review the list of clusters and their descriptions:
 <cluster_list>
 {cluster_str}
 </cluster_list>
 
-Your task is to identify USER BEHAVIORS and MENTAL MODELS, then create {target_count} higher-level category names.
+Your task is to create at most {target_count} higher-level cluster names that could potentially include one or more of the provided clusters. These higher-level clusters should represent broader categories or themes that emerge from the given clusters, while remaining as specific as possible. If there are many clusters with a specific theme, ensure that the higher-level cluster name remains the maximum level of specificity.
 
-Think like the Anthropic Education Report:
-1. Identify behavioral patterns (how do users phrase requests? What do they assume?)
-2. Find user segments (novices vs experts, different mental models)
-3. Map along taxonomic dimensions (expertise level, autonomy/agency, task type, output expectations)
-4. Look for product insights (expectation gaps, unmet needs, emerging use cases)
+Guidelines for creating higher-level cluster names:
+1. Analyze the themes, topics or characteristics common to multiple clusters.
+2. Create names that are specific enough to be meaningful but not so specific that they can't meaningfully represent many different clusters. Avoid overly general or vague terms, and do not hesitate to describe socially harmful or sensitive topics (in fact, clusters that clearly describe harmful behavior are slightly preferred); specificity is necessary for observability and enforcement.
+3. Ensure that the higher-level cluster names are distinct from one another.
+4. Use clear, concise, and descriptive language for the cluster names. Assume neither good nor bad faith for the content in the clusters.
 
-Guidelines:
-1. FOCUS ON BEHAVIORS, not just topics (e.g., "Novice Programmers Seeking Complete Solutions" not "Programming")
-2. Create names specific enough for product decisions, broad enough to encompass 2-5 clusters
-3. Avoid generic terms ("General Queries", "Various Topics", "Diverse Requests", "Technical Tasks", "Professional Use")
-4. Explicitly describe harmful/sensitive patterns for observability (e.g., "Jailbreak via Roleplay Prompts")
-5. Ensure categories represent distinct user segments or interaction patterns
-6. Think: what would a PM or UX researcher want to know?
-7. PREFER SPECIFICITY: Include concrete domains, technologies, or use cases in category names
-8. Each category should be DISTINCT and NON-OVERLAPPING with others
+Think about the relationships between the given clusters and potential overarching themes.
+
+Focus on creating meaningful, distinct and precise (but not overly specific) higher-level cluster names that could encompass multiple sub-clusters.
 
 CRITICAL: Prioritize SPECIFICITY over hitting target count exactly.
 - Minimum output: {target_count} categories
@@ -293,7 +290,7 @@ async def deduplicate_cluster_names(
     """
     names_str = "\n".join([f"- {name}" for name in candidate_names])
 
-    system_prompt = """You are a taxonomist creating a clear, distinct taxonomy from potentially overlapping category names."""
+    system_prompt = """You are a taxonomist creating a clear, distinct taxonomy from potentially overlapping category names. Your goal is to create meaningful categories for observability, monitoring, and content moderation."""
 
     user_prompt = f"""Deduplicate these cluster names to create ~{target_count} distinct categories:
 
@@ -301,22 +298,28 @@ async def deduplicate_cluster_names(
 {names_str}
 </candidate_names>
 
-Task:
-1. Identify ONLY near-duplicate names (>90% semantic overlap - essentially the same category)
-2. DEFAULT ACTION: KEEP categories separate unless they are obvious duplicates
-3. Merge ONLY when:
-   - Names are near-identical (e.g., "Python Coding" vs "Python Code Generation" → merge)
-   - One is a clear subset of another (e.g., "React Debugging" under "React Development" → keep separate if both have substance)
-4. DO NOT merge based on:
-   - Same domain but different use cases (e.g., "SQL Query Writing" vs "SQL Performance Optimization" → KEEP BOTH)
-   - Same technology but different user segments (e.g., "Novice Python Help" vs "Expert Python Architecture" → KEEP BOTH)
-   - Similar topics but different behaviors (e.g., "Homework Help" vs "Professional Code Review" → KEEP BOTH)
+Your task is to identify ONLY near-duplicate names (>90% semantic overlap - essentially the same category) and merge them while preserving meaningful distinctions.
+
+MERGE RULES (only merge when these conditions are met):
+1. Names are near-identical (e.g., "Python Coding" vs "Python Code Generation" → merge)
+2. One is a clear subset of another AND the broader category accurately represents both (e.g., "React Debugging" under "React Development" → keep separate if both have substance)
+3. Categories describe the exact same user behavior or mental model
+
+DO NOT MERGE when:
+- Same domain but different use cases (e.g., "SQL Query Writing" vs "SQL Performance Optimization" → KEEP BOTH)
+- Same technology but different user segments (e.g., "Novice Python Help" vs "Expert Python Architecture" → KEEP BOTH)
+- Similar topics but different behaviors (e.g., "Homework Help" vs "Professional Code Review" → KEEP BOTH)
+- Different expertise levels or mental models
+- Different harmful/sensitive patterns that need separate monitoring
 
 CRITICAL RULES:
 - Better to have {int(target_count * 1.4)} specific categories than {target_count} generic ones
-- When unsure, DO NOT MERGE
+- When unsure, DO NOT MERGE - preserve specificity
 - Preserve domain-specific and behavior-specific distinctions
 - Only merge if you can't distinguish the categories meaningfully
+- Explicitly describe harmful/sensitive topics for observability
+
+DEFAULT ACTION: KEEP categories separate unless they are obvious duplicates.
 
 Output {int(target_count * 0.9)} to {int(target_count * 1.5)} final cluster names.
 Acceptable range is wide - QUALITY (specificity) matters more than QUANTITY (hitting exact target)."""
@@ -353,24 +356,35 @@ async def assign_to_parent_cluster(
     """
     parents_str = "\n".join([f"<cluster>{name}</cluster>" for name in parent_candidates])
 
-    system_prompt = """You are categorizing clusters for observability, monitoring, and content moderation."""
+    system_prompt = """You are categorizing clusters for observability, monitoring, and content moderation. Your goal is to determine which higher-level cluster best fits the given specific cluster based on its name and description."""
 
-    user_prompt = f"""Categorize this specific cluster into one of the provided higher-level clusters:
+    user_prompt = f"""You are tasked with categorizing a specific cluster into one of the provided higher-level clusters for observability, monitoring, and content moderation. Your goal is to determine which higher-level cluster best fits the given specific cluster based on its name and description.
 
+First, here are the ONLY valid higher-level clusters you may select from:
+<higher_level_clusters>
+{parents_str}
+</higher_level_clusters>
+
+Here is the specific cluster to categorize:
 <specific_cluster>
 Title: {child_cluster['title']}
 Description: {child_cluster['description']}
 </specific_cluster>
 
-<higher_level_clusters>
-{parents_str}
-</higher_level_clusters>
+RULES:
+1. You MUST select EXACTLY ONE higher-level cluster from the provided list
+2. You MUST output the higher-level cluster name EXACTLY as written - no modifications allowed
+3. You MUST NOT create new cluster names or combinations
+4. You MUST NOT output any additional text or explanations
+5. You MUST NOT use partial matches or approximate names
 
-Steps:
-1. Analyze the key characteristics of the specific cluster
-2. Consider which higher-level clusters could potentially fit
-3. Determine the BEST match (you MUST choose one)
-4. Be sensible - don't force poor fits
+CLASSIFICATION PROCESS:
+1. First, record the exact list of valid higher-level clusters
+2. Read the specific cluster's name and description carefully
+3. Compare the specific cluster's key characteristics against each valid higher-level cluster
+4. Select the single most appropriate higher-level cluster that encompasses the specific cluster
+5. Verify your selected cluster exactly matches one from the valid list
+6. Output ONLY the selected higher-level cluster name, exactly as it appeared in the valid list
 
 Use <scratchpad> for reasoning (2-4 sentences), then provide the exact parent cluster name."""
 
@@ -405,13 +419,18 @@ async def refine_parent_cluster(
     """
     children_str = "\n".join([f"<cluster>{title}</cluster>" for title in child_clusters])
 
-    system_prompt = """You are a behavioral researcher creating insight-driven cluster summaries. Focus on what these patterns reveal about user behavior, mental models, and product opportunities."""
+    system_prompt = """You are tasked with summarizing a group of related cluster names into a short, precise, and accurate overall description and name. Your goal is to create a concise summary that captures the essence of these clusters.
 
-    user_prompt = f"""Analyze this group of related clusters and create a behavioral insight summary:
+The cluster name should be at most ten words long (perhaps less) and be specific but also reflective of most of the clusters that comprise them. The cluster name should be a sentence in the imperative that captures the user's request. For example, 'Brainstorm ideas for a birthday party' or 'Help me find a new job' are good examples.
 
-<child_clusters>
+Do not shy away from describing socially harmful or sensitive topics. For instance, "Write fantasy sexual roleplay with octopi and monsters", "Generate blog spam for gambling websites", or "Assist with high school math homework" would be better than "Write erotic content" or "Help with homework". Be as descriptive as possible and assume neither good nor bad faith. Do not hesitate to identify and describe socially harmful or sensitive topics specifically; specificity is necessary for monitoring.
+
+Ensure your summary and name accurately represent the clusters and are specific to the clusters."""
+
+    user_prompt = f"""Here are the related cluster names:
+<clusters>
 {children_str}
-</child_clusters>
+</clusters>
 
 Requirements:
 1. Create a two-sentence BEHAVIORAL INSIGHT summary in past tense:

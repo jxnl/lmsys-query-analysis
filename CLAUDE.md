@@ -184,16 +184,33 @@ SMOKE_LIMIT=500 bash smoketest.sh                  # Smoke test with custom limi
 uv run lmsys -v cluster --n-clusters 200  # Verbose logging (DEBUG level)
 ```
 
+**Running Development Servers:**
+```bash
+# Run both servers (in separate terminals or background processes)
+cd web && npm run dev                           # Frontend (Next.js) - http://localhost:3000
+uv run python -m lmsys_query_analysis.api.app   # Backend (FastAPI) - http://localhost:8000
+
+# API documentation available at:
+# - Swagger UI: http://localhost:8000/docs
+# - ReDoc: http://localhost:8000/redoc
+# - OpenAPI spec: http://localhost:8000/openapi.json
+
+# Health check endpoint:
+# http://localhost:8000/api/health
+```
+
 ## Architecture
 
 ### High-Level Structure
 
 The codebase follows a layered architecture:
 
-1. **CLI Layer** (`cli/main.py`): Typer-based command interface with Rich terminal UI
-2. **Business Logic** (`clustering/`, `db/loader.py`): Clustering algorithms, LLM summarization, hierarchical merging
-3. **Data Layer** (`db/models.py`, `db/connection.py`, `db/chroma.py`): SQLite persistence and ChromaDB vector storage
-4. **SDK Layer** (`semantic/`): Typed client interfaces for programmatic access (ClustersClient, QueriesClient)
+1. **Web Layer** (`web/`): Next.js frontend for visualizing clustering results
+2. **API Layer** (`api/`): FastAPI REST API with CORS-enabled endpoints for web interface
+3. **CLI Layer** (`cli/main.py`): Typer-based command interface with Rich terminal UI
+4. **Business Logic** (`clustering/`, `db/loader.py`): Clustering algorithms, LLM summarization, hierarchical merging
+5. **Data Layer** (`db/models.py`, `db/connection.py`, `db/chroma.py`): SQLite persistence and ChromaDB vector storage
+6. **SDK Layer** (`semantic/`): Typed client interfaces for programmatic access (ClustersClient, QueriesClient)
 
 ### Database Schema (SQLite + SQLModel)
 
@@ -305,6 +322,16 @@ Provider is stored in `clustering_runs.parameters` to ensure consistency across 
 
 ```
 src/lmsys_query_analysis/
+├── api/                     # FastAPI REST API
+│   ├── app.py              # FastAPI application with CORS and error handling
+│   ├── schemas.py          # Pydantic request/response models
+│   └── routers/            # API endpoints
+│       ├── clustering.py   # Clustering operations
+│       ├── analysis.py     # Analysis endpoints
+│       ├── hierarchy.py    # Hierarchy navigation
+│       ├── summaries.py    # Summary operations
+│       ├── search.py       # Search endpoints
+│       └── curation.py     # Curation operations
 ├── cli/
 │   ├── main.py              # Typer CLI: load, cluster, summarize, merge-clusters, search, edit
 │   └── commands/
@@ -330,6 +357,7 @@ src/lmsys_query_analysis/
 └── utils/
     └── logging.py           # Rich-backed logging setup
 
+web/                         # Next.js web viewer (frontend)
 tests/                       # Pytest suite (20+ tests)
 smoketest.sh                 # End-to-end smoke test script
 ```

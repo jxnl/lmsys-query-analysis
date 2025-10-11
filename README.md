@@ -68,6 +68,36 @@ All through a composable CLI workflow: `load → cluster → summarize → merge
 uv sync
 ```
 
+## Development Server Commands
+
+### FastAPI Backend Only
+```bash
+# Using convenience command from pyproject.toml
+uv run lmsys-api
+
+# Or using uvicorn directly
+uv run uvicorn lmsys_query_analysis.api.app:app --reload
+```
+
+### Next.js Frontend Only
+```bash
+cd web
+npm install
+npm run dev  # Opens http://localhost:3000
+```
+
+### Both Services Together
+```bash
+# Start both FastAPI backend and Next.js frontend together
+./scripts/start-dev.sh
+
+# View logs from both services
+./scripts/logs.sh
+
+# Stop both services
+./scripts/stop-dev.sh
+```
+
 ## Setup
 
 ### 1. HuggingFace Authentication
