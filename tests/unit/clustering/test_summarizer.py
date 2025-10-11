@@ -20,9 +20,10 @@ class FakeAsyncChat:
         def __init__(self, prompts_ref: List[str]):
             self._prompts = prompts_ref
 
-        async def create(self, response_model=None, messages=None):  # type: ignore[no-redef]
-            # Capture the user message content (index 1) for assertions
-            content = messages[1]["content"] if messages and len(messages) > 1 else ""
+        async def create(self, response_model=None, messages=None, context=None):  # type: ignore[no-redef]
+            # Capture the system message content (index 0) for assertions
+            # With Instructor's Jinja templating, the template is in the system message
+            content = messages[0]["content"] if messages and len(messages) > 0 else ""
             self._prompts.append(content)
             # Return a minimal object with required fields
             return SimpleNamespace(
@@ -136,12 +137,11 @@ def test_summarizer_prompt_includes_contrast_neighbors(fake_embeddings, monkeypa
     for v in res.values():
         assert "title" in v and "description" in v and "sample_queries" in v
 
-    # Assert prompts captured and include XML contrast section with neighbor entries
-    assert len(prompts) == 3
-    p0 = prompts[0]
-    assert "<contrastive_neighbors>" in p0
-    assert "<neighbor" in p0
-    assert "<target_queries>" in p0
+        # Assert prompts captured and include XML contrast section with neighbor entries                                                                        
+        assert len(prompts) == 3
+        p0 = prompts[0]
+        assert "<contrastive_examples>" in p0
+    assert "<positive_examples>" in p0
 
 
 def test_summarizer_prompt_keywords_mode(fake_embeddings, monkeypatch):
@@ -167,7 +167,7 @@ def test_summarizer_prompt_keywords_mode(fake_embeddings, monkeypatch):
 
     assert set(res.keys()) == {10, 11, 12}
     assert len(prompts) == 3
-    assert any("<keywords>" in p for p in prompts)
+    assert any("<contrastive_examples>" in p for p in prompts)
 
 
 def test_summarizer_prompt_no_contrast(fake_embeddings, monkeypatch):

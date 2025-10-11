@@ -18,8 +18,6 @@ from rich.progress import (
     BarColumn,
     TaskProgressColumn,
 )
-from jinja2 import Environment
-from aiolimiter import AsyncLimiter
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -30,45 +28,48 @@ from tenacity import (
 console = Console()
 
 # Constants
-RATE_LIMITER_WINDOW_SECONDS = 60.0
-STRATIFIED_SAMPLE_FIRST_RATIO = 1 / 3
-STRATIFIED_SAMPLE_MIDDLE_RATIO = 1 / 3
 MAX_NEIGHBOR_EXAMPLE_LENGTH = 180
 RETRY_MAX_ATTEMPTS = 5
 RETRY_MIN_WAIT = 1
 RETRY_MAX_WAIT = 8
 
 
-def _create_template():
-    """Create Jinja2 template."""
-    env = Environment()
-    return env.from_string("""
-<summary_task>
-  <cluster id="{{ cluster_id }}">
-    <stats total_queries="{{ total_queries }}" sample_count="{{ sample_count }}" />
-    <target_queries>
-{% for query in queries -%}
-      <query idx="{{ loop.index }}">{{ query }}</query>
-{% endfor -%}
-    </target_queries>
-  </cluster>
-{% if contrast_neighbors -%}
-  <contrastive_neighbors>
-{%- for neighbor in contrast_neighbors %}
-    <neighbor cluster_id="{{ neighbor.cluster_id }}" size="{{ neighbor.size }}">
-{%- if neighbor.mode == "neighbors" %}
-{%- for example in neighbor.examples %}
-      <example>{{ example }}</example>
-{%- endfor %}
-{%- elif neighbor.mode == "keywords" %}
-      <keywords>{{ neighbor.keywords }}</keywords>
-{%- endif %}
-    </neighbor>
-{%- endfor %}
-  </contrastive_neighbors>
-{% endif -%}
-</summary_task>
-""")
+# Default cluster prompt with improved positive/contrastive structure
+DEFAULT_CLUSTER_PROMPT = """
+You are tasked with summarizing a group of related statements into a short, precise, and accurate description and name. Your goal is to create a concise summary that captures the essence of these statements and distinguishes them from other similar groups of statements.
+
+Summarize all the statements into a clear, precise, two-sentence description in the past tense. Your summary should be specific to this group and distinguish it from the contrastive answers of the other groups.
+
+After creating the summary, generate a short name for the group of statements. This name should be at most ten words long (perhaps less) and be specific but also reflective of most of the statements (rather than reflecting only one or two).
+
+The name should distinguish this group from the contrastive examples. For instance, "Write fantasy sexual roleplay with octopi and monsters", "Generate blog spam for gambling websites", or "Assist with high school math homework" would be better and more actionable than general terms like "Write erotic content" or "Help with homework". Be as descriptive as possible and assume neither good nor bad faith. Do not hesitate to identify and describe socially harmful or sensitive topics specifically; specificity is necessary for monitoring.
+
+Present your output in the following format:
+<summary> [Insert your two-sentence summary here] </summary>
+<name> [Insert your generated short name here] </name>
+
+The names you propose must follow these requirements:
+- The cluster name should be a sentence in the imperative that captures the user's request. For example, 'Brainstorm ideas for a birthday party' or 'Help me find a new job.'
+- Create names that are specific enough to be meaningful, but not so specific that they can't meaningfully represent many different statements.
+- Avoid overly general or vague terms, and do not hesitate to describe socially harmful or sensitive topics (in fact, clusters that clearly describe harmful behavior are slightly preferred); specificity is necessary for observability and enforcement.
+- Ensure that the cluster name is distinct from the contrastive examples.
+- Use clear, concise, and descriptive language for the cluster name.
+
+Below are the related statements:
+<positive_examples>
+{% for item in positive_examples %}{{ item }}
+{% endfor %}
+</positive_examples>
+
+For context, here are statements from nearby groups that are NOT part of the group you're summarizing:
+<contrastive_examples>
+{% for item in contrastive_examples %}{{ item }}
+{% endfor %}
+</contrastive_examples>
+
+Do not elaborate beyond what you say in the tags. Remember to analyze both the statements and the contrastive statements carefully to ensure your summary and name accurately represent the specific group while distinguishing it from others. The cluster name should be a sentence in the imperative that captures the user's request. For example, 'Brainstorm ideas for a birthday party' or 'Help me find a new job.'
+"""
+
 
 
 class ClusterSummaryResponse(BaseModel):
@@ -76,38 +77,34 @@ class ClusterSummaryResponse(BaseModel):
 
     title: str = Field(
         ...,
-        description="""Concise, specific title (3-7 words) that captures the PRIMARY theme.
+        description="""Short name (≤10 words) that is a sentence in the imperative capturing the user's request.
 
         RULES:
-        - Use specific technical terms, domains, or actions (e.g., "Python Flask API Development", "German Language Capability Checks")
+        - Use specific technical terms, domains, or actions (e.g., "Brainstorm ideas for a birthday party", "Help me find a new job")
         - Avoid generic prefixes like "User Queries About", "Diverse", "Various"
         - Avoid vague words: "Diverse", "Various", "General", "Mixed", "Multiple"
         - Use concrete nouns and verbs
         - If multilingual, specify language(s)
+        - Be descriptive and specific, including harmful/sensitive topics when relevant
 
-        GOOD: "Stable Diffusion Image Prompts", "SQL Query Generation", "Spanish Greetings"
+        GOOD: "Write fantasy sexual roleplay with octopi and monsters", "Generate blog spam for gambling websites", "Assist with high school math homework"
         BAD: "User Queries on Various Topics", "Diverse User Requests", "General Questions"
         """
     )
     description: str = Field(
         ...,
-        description="""3-4 concise sentences explaining what the cluster reveals about user behavior and needs.
+        description="""Two-sentence summary in past tense that captures the essence of the cluster and distinguishes it from contrastive examples.
 
         Structure:
-        1. What users are trying to accomplish (main goal/task) and their mental model
-        2. How users phrase requests (communication style, expertise level, assumptions about AI)
-        3. Key patterns or product insights (unmet needs, expectation gaps, opportunities)
-        4. What distinguishes this from similar clusters (if contrastive neighbors provided)
+        1. What users were trying to accomplish (main goal/task) and their mental model
+        2. Key behavioral patterns, user segments, or product implications
 
         Focus on the DOMINANT pattern (60%+ of queries). Think like an anthropologist + product manager:
         - What do these queries reveal about how people use LLMs?
         - What capabilities do users assume exist?
         - Are there unmet needs or product opportunities?
 
-        Example: "Users treat the LLM as a code generator, expecting complete solutions from minimal specs.
-        They paste homework problems verbatim or provide only input/output examples, assuming the AI can
-        infer requirements. This reveals an expectation gap - they want 'magic wand' functionality rather
-        than collaborative problem-solving."
+        Example: "Users sought complete coding solutions with minimal specification, treating the LLM as a 'magic wand' code generator. Novices pasted homework verbatim while experts provided constraints, revealing distinct mental models across expertise levels - opportunity for adaptive interfaces."
         """
     )
 
@@ -141,13 +138,6 @@ class ClusterSummarizer:
         self.rpm = rpm if (rpm is None or rpm > 0) else None
         self.logger = logging.getLogger("lmsys")
 
-        # Initialize Jinja2 template
-        self.template = _create_template()
-
-        # Initialize rate limiter if rpm is specified
-        self.rate_limiter = (
-            AsyncLimiter(rpm, RATE_LIMITER_WINDOW_SECONDS) if rpm else None
-        )
 
         # Initialize async instructor client with full model string
         if api_key:
@@ -163,8 +153,8 @@ class ClusterSummarizer:
         max_queries: int = 100,
         concurrency: Optional[int] = None,
         rpm: Optional[int] = None,
-        contrast_neighbors: int = 2,
-        contrast_examples: int = 2,
+        contrast_neighbors: int = 5,
+        contrast_examples: int = 10,
         contrast_mode: str = "neighbors",
     ) -> dict[int, dict]:
         """Generate summaries for multiple clusters (concurrently).
@@ -305,77 +295,28 @@ class ClusterSummarizer:
             "Selected %d representative queries for cluster %d", len(sampled), cluster_id
         )
 
-        # Build prompt using Jinja template
-        prompt = self.template.render(
-            cluster_id=cluster_id,
-            total_queries=len(cluster_queries),
-            sample_count=len(sampled),
-            queries=sampled,
-            contrast_neighbors=contrast_neighbors or [],
-        )
+        # Build contrastive examples from neighbors
+        contrastive_examples = []
+        if contrast_neighbors:
+            for neighbor in contrast_neighbors:
+                if neighbor.get("examples"):
+                    contrastive_examples.extend(neighbor["examples"])
 
         messages = [
             {
                 "role": "system",
-                "content": """You are an expert in human-AI interaction analysis, acting as both a taxonomist and behavioral researcher. Your goal is to create PRECISE cluster labels that reveal what users really want from LLMs and how they think about AI capabilities.
-
-CRITICAL INSTRUCTIONS:
-
-1. IDENTIFY THE DOMINANT PATTERN (what 60-80% of queries share)
-   - Ignore outliers and edge cases
-   - Focus on the PRIMARY use case, user behavior, and mental model
-   - Look for patterns in HOW users phrase requests, not just WHAT they ask
-
-2. TITLE REQUIREMENTS:
-   - 3-7 words maximum
-   - Use SPECIFIC technical terms, domains, or action verbs
-   - NEVER use: "User Queries", "Diverse", "Various", "General", "Mixed", "Multiple", "Different"
-   - ALWAYS be concrete: use programming languages, specific topics, named tools/frameworks
-   - Examples of GOOD titles:
-     * "Python Web Scraping Code"
-     * "German Language Capability Tests"
-     * "SQL Database Query Generation"
-     * "Stable Diffusion Art Prompts"
-   - Examples of BAD titles (NEVER DO THIS):
-     * "User Queries About Programming" ❌
-     * "Diverse Technical Requests" ❌
-     * "Various Creative Writing Tasks" ❌
-
-3. DESCRIPTION REQUIREMENTS - THINK LIKE AN ANTHROPOLOGIST + PRODUCT MANAGER:
-   - Sentence 1: What users want to accomplish AND their mental model of the LLM
-   - Sentence 2: How they communicate (phrasing patterns, expertise level, assumptions about AI capabilities)
-   - Sentence 3: Key behavioral insight or product opportunity (expectation gaps, unmet needs, emerging patterns)
-   - Sentence 4: (Optional) What distinguishes from neighbors if provided
-
-   Ask yourself:
-   - What do these queries reveal about how people conceptualize AI?
-   - What capabilities do users assume exist?
-   - Are there expectation gaps or product opportunities?
-   - How do different user types (novices vs experts) approach the same problem?
-
-   Example GOOD description:
-   "Users treat the LLM as a code generator, expecting complete solutions from minimal specs. They paste
-   homework problems verbatim or provide only input/output examples, assuming the AI can infer all
-   requirements. This reveals a 'magic wand' mental model where users want instant results without
-   articulating their needs - an opportunity for guided prompting interfaces."
-
-   Example BAD description:
-   "Users ask programming questions and request code examples in various languages." ❌
-
-4. MULTILINGUAL CLUSTERS:
-   - Always specify the language(s) in the title
-   - Note any cultural differences in how users phrase requests
-   - Example: "Portuguese Business Writing", "Arabic General Knowledge"
-
-Follow the Pydantic schema rules exactly. Your descriptions should read like insights from a user research report, not generic summaries.""",
+                "content": DEFAULT_CLUSTER_PROMPT,
             },
-            {"role": "user", "content": prompt},
         ]
 
-        # Apply rate limiting if configured
-        response = await self._call_llm_with_rate_limit(
+        # Use Instructor's built-in Jinja templating with context
+        response = await self.async_client.chat.completions.create(
             response_model=ClusterSummaryResponse,
             messages=messages,
+            context={
+                "positive_examples": sampled,
+                "contrastive_examples": contrastive_examples,
+            },
         )
 
         return {
@@ -386,19 +327,6 @@ Follow the Pydantic schema rules exactly. Your descriptions should read like ins
 
     # -------- Helper methods --------
 
-    async def _call_llm_with_rate_limit(self, response_model, messages):
-        """Make LLM call with optional rate limiting."""
-        if self.rate_limiter:
-            async with self.rate_limiter:
-                return await self.async_client.chat.completions.create(
-                    response_model=response_model,
-                    messages=messages,
-                )
-        return await self.async_client.chat.completions.create(
-            response_model=response_model,
-            messages=messages,
-        )
-
     def _build_neighbor_context(
         self,
         clusters_data: List[Tuple[int, List[str]]],
@@ -407,14 +335,11 @@ Follow the Pydantic schema rules exactly. Your descriptions should read like ins
         contrast_examples: int,
         contrast_mode: str,
     ) -> Dict[int, List[Dict]]:
-        """Build neighbor context for contrastive learning."""
-        import random
-
+        """Build neighbor context for contrastive learning with improved selection."""
         id_list = [cid for cid, _ in clusters_data]
         sizes_map = {cid: len(qs) for cid, qs in clusters_data}
 
         # Skip if no neighbors requested or only one cluster
-        # Note: contrast_examples can be 0 for keywords mode
         if contrast_neighbors <= 0 or len(id_list) <= 1:
             return {cid: [] for cid in id_list}
 
@@ -425,8 +350,13 @@ Follow the Pydantic schema rules exactly. Your descriptions should read like ins
                 neighbor_context[cid] = []
                 continue
 
+            # Improved neighbor selection: prioritize clusters with different sizes
+            # to get better contrastive examples
+            other_clusters_with_size = [(oid, sizes_map.get(oid, 0)) for oid in other_ids]
+            other_clusters_with_size.sort(key=lambda x: abs(x[1] - sizes_map.get(cid, 0)), reverse=True)
+            
             n_neighbors = min(contrast_neighbors, len(other_ids))
-            neighbor_ids = random.sample(other_ids, n_neighbors)
+            neighbor_ids = [oid for oid, _ in other_clusters_with_size[:n_neighbors]]
 
             neighbors_data = []
             for nid in neighbor_ids:
@@ -453,41 +383,22 @@ Follow the Pydantic schema rules exactly. Your descriptions should read like ins
 
         return neighbor_context
 
-    def _stratified_sample(self, items: List[str], k: int) -> List[str]:
-        """Sample k items using stratified approach (beginning, middle, end)."""
+    def _random_sample(self, items: List[str], k: int) -> List[str]:
+        """Sample k items using random sampling."""
         import random
 
         if len(items) <= k:
             return items
 
-        # Calculate split points
-        n_first = int(k * STRATIFIED_SAMPLE_FIRST_RATIO)
-        n_middle = int(k * STRATIFIED_SAMPLE_MIDDLE_RATIO)
-        n_last = k - n_first - n_middle
-
-        # Split into thirds
-        third = len(items) // 3
-        first_third = items[:third]
-        middle_third = items[third : 2 * third]
-        last_third = items[2 * third :]
-
-        # Sample from each section
-        samples = []
-        samples.extend(first_third[:n_first])
-        if middle_third and n_middle > 0:
-            samples.extend(random.sample(middle_third, min(n_middle, len(middle_third))))
-        if last_third and n_last > 0:
-            samples.extend(random.sample(last_third, min(n_last, len(last_third))))
-
-        return samples[:k]
+        return random.sample(items, k)
 
     def _select_representative_queries(
         self, cluster_queries: List[str], max_queries: int
     ) -> List[str]:
-        """Select a diverse, representative subset of queries using stratified random sampling.
+        """Select a representative subset of queries using random sampling.
 
         - Deduplicate queries (case-insensitive, trimmed)
-        - Use stratified sampling (beginning, middle, end) for diversity
+        - Use random sampling for simplicity
 
         Args:
             cluster_queries: List of query texts
@@ -510,5 +421,5 @@ Follow the Pydantic schema rules exactly. Your descriptions should read like ins
         if k <= 0:
             return []
 
-        # Use stratified sampling to ensure diversity
-        return self._stratified_sample(originals, k)
+        # Use random sampling
+        return self._random_sample(originals, k)
