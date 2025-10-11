@@ -137,6 +137,7 @@ def run_hdbscan_clustering(
     cluster_selection_epsilon: float = 0.0,
     metric: str = "euclidean",
     chroma: Optional[ChromaManager] = None,
+    max_queries: Optional[int] = None,
 ) -> str:
     """Run HDBSCAN clustering on all queries in the database.
 
@@ -144,19 +145,23 @@ def run_hdbscan_clustering(
     """
     session = db.get_session()
     try:
-        total = session.exec(select(Query.id)).all()
-        if not total:
+        total_ids = session.exec(select(Query.id)).all()
+        if not total_ids:
             console.print(
                 "[red]No queries found in database. Run 'lmsys load' first.[/red]"
             )
             return None
+        total_queries = len(total_ids)
+        effective_total = total_queries if max_queries is None else min(total_queries, int(max_queries))
 
         # Load texts and ids in chunks and embed
         def iter_query_chunks() -> List[Query]:
             offset = 0
-            while True:
+            target = effective_total
+            while offset < target:
+                remaining = target - offset
                 rows = session.exec(
-                    select(Query).offset(offset).limit(chunk_size)
+                    select(Query).offset(offset).limit(min(chunk_size, remaining))
                 ).all()
                 if not rows:
                     break
@@ -202,6 +207,7 @@ def run_hdbscan_clustering(
                 "min_samples": min_samples or min_cluster_size,
                 "cluster_selection_epsilon": cluster_selection_epsilon,
                 "metric": metric,
+                **({"limit": int(max_queries)} if max_queries is not None else {}),
             },
             description=description,
             num_clusters=int(len(set(labels)) - (1 if -1 in labels else 0)),

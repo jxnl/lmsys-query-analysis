@@ -31,6 +31,7 @@ def run_kmeans_clustering(
     embedding_provider: str = "sentence-transformers",
     random_state: int = 42,
     chroma: Optional[ChromaManager] = None,
+    max_queries: Optional[int] = None,
 ) -> str:
     """Run MiniBatchKMeans clustering on all queries using streaming embeddings.
 
@@ -61,7 +62,10 @@ def run_kmeans_clustering(
             )
             return None
 
+        effective_total = total_queries if max_queries is None else min(total_queries, int(max_queries))
         console.print(f"[green]Found {total_queries} queries[/green]")
+        if max_queries is not None and effective_total < total_queries:
+            console.print(f"[yellow]Limiting to first {effective_total} queries[/yellow]")
 
         # Create clustering run record (saved early to link assignments)
         run_id = f"kmeans-{n_clusters}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
@@ -76,6 +80,7 @@ def run_kmeans_clustering(
                 "kmeans": "MiniBatchKMeans",
                 "encode_batch_size": embed_batch_size,
                 "mb_batch_size": mb_batch_size,
+                **({"limit": int(max_queries)} if max_queries is not None else {}),
             },
             description=description,
             num_clusters=n_clusters,
@@ -99,8 +104,10 @@ def run_kmeans_clustering(
         # Helper: iterate queries in chunks to limit memory
         def iter_query_chunks(chunk_size: int = chunk_size):
             offset = 0
-            while offset < total_queries:
-                stmt = select(Query).offset(offset).limit(chunk_size)
+            target = effective_total
+            while offset < target:
+                remaining = target - offset
+                stmt = select(Query).offset(offset).limit(min(chunk_size, remaining))
                 rows = session.exec(stmt).all()
                 if not rows:
                     break

@@ -25,6 +25,7 @@ def cluster_kmeans(
     mb_batch_size: int = typer.Option(4096, help="MiniBatchKMeans batch_size"),
     use_chroma: bool = typer.Option(False, help="Enable ChromaDB"),
     chroma_path: str = chroma_path_option,
+    limit: int = typer.Option(None, help="Limit number of queries to cluster"),
 ):
     """Run MiniBatchKMeans clustering."""
     model, provider = parse_embedding_model(embedding_model)
@@ -32,7 +33,7 @@ def cluster_kmeans(
     chroma = create_chroma_client(chroma_path, model, provider) if use_chroma else None
     
     console.print(
-        f"[cyan]Running clustering: algo=kmeans, n_clusters={n_clusters}, model={model}, provider={provider}, use_chroma={use_chroma}[/cyan]"
+        f"[cyan]Running clustering: algo=kmeans, n_clusters={n_clusters}, model={model}, provider={provider}, use_chroma={use_chroma}, limit={limit}[/cyan]"
     )
     
     run_id = run_kmeans_clustering(
@@ -45,6 +46,7 @@ def cluster_kmeans(
         mb_batch_size=mb_batch_size,
         embedding_provider=provider,
         chroma=chroma,
+        max_queries=limit,
     )
     
     if run_id:
@@ -76,6 +78,7 @@ def cluster_hdbscan(
     ),
     use_chroma: bool = typer.Option(False, help="Enable ChromaDB"),
     chroma_path: str = chroma_path_option,
+    limit: int = typer.Option(None, help="Limit number of queries to cluster"),
 ):
     """Run HDBSCAN clustering."""
     model, provider = parse_embedding_model(embedding_model)
@@ -83,7 +86,7 @@ def cluster_hdbscan(
     chroma = create_chroma_client(chroma_path, model, provider) if use_chroma else None
     
     console.print(
-        f"[cyan]Running clustering: algo=hdbscan, model={model}, provider={provider}, use_chroma={use_chroma}[/cyan]"
+        f"[cyan]Running clustering: algo=hdbscan, model={model}, provider={provider}, use_chroma={use_chroma}, limit={limit}[/cyan]"
     )
     
     run_id = run_hdbscan_clustering(
@@ -98,6 +101,7 @@ def cluster_hdbscan(
         cluster_selection_epsilon=epsilon,
         metric=metric,
         chroma=chroma,
+        max_queries=limit,
     )
     
     if run_id:
