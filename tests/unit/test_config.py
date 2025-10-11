@@ -267,13 +267,13 @@ def test_runner_config_batch_size_settings():
     """Test various batch size configurations."""
     config = RunnerConfig(
         embedding_batch_size=200,
-        embed_batch_size=64,
+        embed_batch_size=50,
         mb_batch_size=2048,
         chunk_size=10000,
     )
     
     assert config.embedding_batch_size == 200
-    assert config.embed_batch_size == 64
+    assert config.embed_batch_size == 50
     assert config.mb_batch_size == 2048
     assert config.chunk_size == 10000
 

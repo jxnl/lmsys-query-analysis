@@ -135,7 +135,7 @@ def test_backfill_chroma_command(mock_parse, mock_get_db, mock_chroma_client, mo
         chroma_path="/tmp/chroma",
         embedding_model="test-model",
         chunk_size=5000,
-        embed_batch_size=64
+        embed_batch_size=50
     )
     
     # Verify

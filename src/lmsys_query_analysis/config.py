@@ -26,7 +26,7 @@ class RunnerConfig(BaseModel):
         description="Embedding provider"
     )
     embedding_batch_size: int = Field(default=100, gt=0, description="Batch size for embedding generation")
-    embed_batch_size: int = Field(default=32, gt=0, description="Batch size for clustering embeddings")
+    embed_batch_size: int = Field(default=50, gt=0, description="Batch size for clustering embeddings")
 
     # Clustering configuration
     n_clusters: int = Field(default=50, gt=0, description="Number of clusters for KMeans")
@@ -39,8 +39,8 @@ class RunnerConfig(BaseModel):
     hierarchy_levels: int = Field(default=3, gt=0, description="Number of hierarchy levels")
     merge_ratio: float = Field(default=0.3, gt=0, lt=1, description="Merge ratio for hierarchy")
     neighborhood_size: int = Field(default=40, gt=0, description="Neighborhood size for hierarchy")
-    concurrency: int = Field(default=8, gt=0, description="Concurrent LLM calls for hierarchy")
-    rpm: int = Field(default=300, gt=0, description="Rate limit (requests per minute)")
+    concurrency: int = Field(default=50, gt=0, description="Concurrent LLM calls for hierarchy")
+    rpm: int = Field(default=500, gt=0, description="Rate limit (requests per minute)")
 
     # LLM configuration
     llm_provider: Literal["anthropic", "openai", "groq"] = Field(

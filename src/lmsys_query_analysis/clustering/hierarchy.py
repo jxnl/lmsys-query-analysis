@@ -482,7 +482,7 @@ async def merge_clusters_hierarchical(
     target_levels: int = 3,
     merge_ratio: float = 0.35,  # Changed from 0.2 to 0.35 to reduce over-merging
     neighborhood_size: int = 20,  # Changed from 40 to 20 for more specific categories
-    concurrency: int = 8,
+    concurrency: int = 50,
     rpm: Optional[int] = None
 ) -> Tuple[str, List[Dict]]:
     """Perform hierarchical merging of clusters using LLM-driven categorization.

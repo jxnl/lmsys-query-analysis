@@ -124,7 +124,7 @@ uv run lmsys runs --latest
 
 # Generate summaries (requires OPENAI_API_KEY or other LLM provider)
 uv run lmsys summarize <RUN_ID> --alias v1 \
-  --use-chroma --max-queries 80 --concurrency 6
+  --use-chroma --max-queries 80 --concurrency 50
 
 # Merge clusters into hierarchy (uses openai/gpt-4o-mini by default)
 uv run lmsys merge-clusters <RUN_ID> \
@@ -167,7 +167,7 @@ uv run lmsys load --limit 10000 --use-chroma
 # Run KMeans with 200 clusters (recommended for fine-grained analysis)
 uv run lmsys cluster kmeans --n-clusters 200 --use-chroma \
   --embedding-model cohere/embed-v4.0 \
-  --embed-batch-size 64 --mb-batch-size 8192 --chunk-size 10000 \
+  --embed-batch-size 50 --mb-batch-size 8192 --chunk-size 10000 \
   --description "Fine-grained clustering"
 
 # Faster with fewer clusters (uses default cohere/embed-v4.0)
@@ -176,11 +176,11 @@ uv run lmsys cluster kmeans --n-clusters 50 --use-chroma
 # HDBSCAN (finds natural clusters; excludes noise)
 uv run lmsys cluster hdbscan --use-chroma \
   --embedding-model cohere/embed-v4.0 \
-  --embed-batch-size 64 --chunk-size 10000
+  --embed-batch-size 50 --chunk-size 10000
 
 # Notes
 # - With --use-chroma, clustering reuses existing query embeddings from Chroma and backfills missing ones.
-# - Tune throughput with --embed-batch-size, --mb-batch-size, and --chunk-size.
+# - Tune throughput with --embed-batch-size (default: 50), --mb-batch-size, and --chunk-size.
 
 # Use Cohere embed-v4.0 for embeddings (Matryoshka 256 by default)
 uv run lmsys load --limit 10000 --use-chroma \
@@ -216,7 +216,7 @@ uv run lmsys summarize <RUN_ID> --cluster-id 5
 uv run lmsys summarize <RUN_ID> --max-queries 100
 
 # Speed up with concurrency and optional rate limiting
-uv run lmsys summarize <RUN_ID> --concurrency 8 --rpm 60
+uv run lmsys summarize <RUN_ID> --concurrency 50 --rpm 500
 
 # Notes:
 # - With --use-chroma, summaries are also embedded and written to Chroma using the
@@ -245,7 +245,7 @@ uv run lmsys merge-clusters <RUN_ID> \
   --merge-ratio 0.5 \                           # Merge aggressiveness (0.5 = 100->50->25)
   --model openai/gpt-4o-mini \                  # LLM for merging (default: openai/gpt-4o-mini)
   --embedding-model cohere/embed-v4.0 \         # Embedding model (default: cohere/embed-v4.0)
-  --concurrency 8 \                             # Parallel LLM requests
+  --concurrency 50 \                            # Parallel LLM requests
   --neighborhood-size 40                        # Clusters per LLM context (Clio default)
 
 # Use Claude for higher quality merging, this gets summaries from the summary-run-id which is used in merging

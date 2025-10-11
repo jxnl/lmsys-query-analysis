@@ -22,7 +22,7 @@ def summarize(
         "openai/gpt-4o-mini", help="LLM model (provider/model)"
     ),
     max_queries: int = typer.Option(100, help="Max queries to send to LLM per cluster"),
-    concurrency: int = typer.Option(30, help="Parallel LLM calls for summarization"),
+    concurrency: int = typer.Option(50, help="Parallel LLM calls for summarization"),
     rpm: int = typer.Option(None, help="Optional requests-per-minute rate limit"),
     use_chroma: bool = typer.Option(False, help="Update ChromaDB with new summaries"),
     contrast_neighbors: int = typer.Option(

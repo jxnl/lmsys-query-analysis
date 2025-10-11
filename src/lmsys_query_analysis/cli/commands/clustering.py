@@ -20,7 +20,7 @@ def cluster_kmeans(
     description: str = typer.Option("", help="Description of this clustering run"),
     db_path: str = db_path_option,
     embedding_model: str = embedding_model_option,
-    embed_batch_size: int = typer.Option(32, help="Embedding encode batch size"),
+    embed_batch_size: int = typer.Option(50, help="Embedding encode batch size"),
     chunk_size: int = typer.Option(5000, help="DB iteration chunk size"),
     mb_batch_size: int = typer.Option(4096, help="MiniBatchKMeans batch_size"),
     use_chroma: bool = typer.Option(False, help="Enable ChromaDB"),
@@ -66,7 +66,7 @@ def cluster_hdbscan(
     description: str = typer.Option("", help="Description of this clustering run"),
     db_path: str = db_path_option,
     embedding_model: str = embedding_model_option,
-    embed_batch_size: int = typer.Option(32, help="Embedding encode batch size"),
+    embed_batch_size: int = typer.Option(50, help="Embedding encode batch size"),
     chunk_size: int = typer.Option(5000, help="DB iteration chunk size"),
     min_cluster_size: int = typer.Option(25, help="HDBSCAN minimum cluster size"),
     min_samples: int = typer.Option(

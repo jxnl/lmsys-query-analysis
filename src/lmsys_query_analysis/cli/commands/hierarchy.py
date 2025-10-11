@@ -36,7 +36,7 @@ def merge_clusters_cmd(
         20, help="Average clusters per neighborhood for LLM context (smaller=more specific, 15-25 recommended)"
     ),
     concurrency: int = typer.Option(
-        8, help="Max concurrent LLM requests"
+        50, help="Max concurrent LLM requests"
     ),
     rpm: int = typer.Option(
         None, help="Optional rate limit (requests per minute)"
