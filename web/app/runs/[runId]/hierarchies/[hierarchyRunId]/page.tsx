@@ -23,15 +23,16 @@ interface HierarchyRunDetailPageProps {
 export default async function HierarchyRunDetailPage({
   params,
 }: HierarchyRunDetailPageProps) {
+  const { runId, hierarchyRunId } = await params;
   const hierarchyRun = await apiFetch<HierarchyRunDetail>(
-    `/api/hierarchy/${params.hierarchyRunId}/metadata`
+    `/api/hierarchy/${hierarchyRunId}/metadata`
   );
 
   return (
     <div className="container mx-auto py-8 space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="outline" size="sm" asChild>
-          <Link href={`/runs/${params.runId}`}>
+          <Link href={`/runs/${runId}`}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Run
           </Link>
@@ -207,18 +208,18 @@ export default async function HierarchyRunDetailPage({
         <CardContent>
           <div className="flex gap-2">
             <Button variant="outline" asChild>
-              <Link href={`/runs/${params.runId}`}>
+              <Link href={`/runs/${runId}`}>
                 View Base Clustering Run
               </Link>
             </Button>
             <Button variant="outline" asChild>
-              <Link href={`/runs/${params.runId}/hierarchy/${params.hierarchyRunId}`}>
+              <Link href={`/runs/${runId}/hierarchy/${hierarchyRunId}`}>
                 View Hierarchy Tree
               </Link>
             </Button>
             {hierarchyRun.summary_run_id && (
               <Button variant="outline" asChild>
-                <Link href={`/runs/${params.runId}/summaries/${hierarchyRun.summary_run_id}`}>
+                <Link href={`/runs/${runId}/summaries/${hierarchyRun.summary_run_id}`}>
                   View Summary Run
                 </Link>
               </Button>

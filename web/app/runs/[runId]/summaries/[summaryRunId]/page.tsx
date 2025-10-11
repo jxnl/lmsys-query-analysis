@@ -24,15 +24,16 @@ interface SummaryRunDetailPageProps {
 export default async function SummaryRunDetailPage({
   params,
 }: SummaryRunDetailPageProps) {
+  const { runId, summaryRunId } = await params;
   const summaryRun = await apiFetch<SummaryRunDetail>(
-    `/api/summaries/${params.summaryRunId}/metadata`
+    `/api/summaries/${summaryRunId}/metadata`
   );
 
   return (
     <div className="container mx-auto py-8 space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="outline" size="sm" asChild>
-          <Link href={`/runs/${params.runId}`}>
+          <Link href={`/runs/${runId}`}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Run
           </Link>
@@ -196,12 +197,12 @@ export default async function SummaryRunDetailPage({
         <CardContent>
           <div className="flex gap-2">
             <Button variant="outline" asChild>
-              <Link href={`/runs/${params.runId}`}>
+              <Link href={`/runs/${runId}`}>
                 View Base Clustering Run
               </Link>
             </Button>
             <Button variant="outline" asChild>
-              <Link href={`/runs/${params.runId}/clusters`}>
+              <Link href={`/runs/${runId}/clusters`}>
                 View Cluster Summaries
               </Link>
             </Button>
