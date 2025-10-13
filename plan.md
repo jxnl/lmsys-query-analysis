@@ -34,18 +34,18 @@ Two-phase implementation with **tests written alongside code** at each step:
 
 #### Implementation Checklist
 
-- [ ] Create `BaseSource` abstract class:
-  - [ ] `validate_source()` - verify source accessible
-  - [ ] `iter_records()` - yield normalized dicts
-  - [ ] `get_source_label()` - return string like "hf:dataset"
-- [ ] Implement `HuggingFaceSource`:
-  - [ ] Accept `dataset_id` (e.g., "lmsys/lmsys-chat-1m")
-  - [ ] Accept `limit`, `streaming` parameters
-  - [ ] Import `extract_first_query()` from loader.py
-  - [ ] Wrap `datasets.load_dataset()` call
-  - [ ] Parse conversation field using `extract_first_query()`
-  - [ ] Return label like `"hf:lmsys/lmsys-chat-1m"`
-- [ ] Define normalized record format:
+- [x] Create `BaseSource` abstract class:
+  - [x] `validate_source()` - verify source accessible
+  - [x] `iter_records()` - yield normalized dicts
+  - [x] `get_source_label()` - return string like "hf:dataset"
+- [x] Implement `HuggingFaceSource`:
+  - [x] Accept `dataset_id` (e.g., "lmsys/lmsys-chat-1m")
+  - [x] Accept `limit`, `streaming` parameters
+  - [x] Import `extract_first_query()` from loader.py
+  - [x] Wrap `datasets.load_dataset()` call
+  - [x] Parse conversation field using `extract_first_query()`
+  - [x] Return label like `"hf:lmsys/lmsys-chat-1m"`
+- [x] Define normalized record format:
   ```python
   {
       "conversation_id": str,
