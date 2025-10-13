@@ -77,13 +77,13 @@ Two-phase implementation with **tests written alongside code** at each step:
 
 #### Testing Checklist
 
-- [ ] Test `HuggingFaceSource`:
-  - [ ] Mock `load_dataset()`, verify params passed correctly
-  - [ ] Test streaming mode → `streaming=True` passed
-  - [ ] Test non-streaming mode → limit applied via `.select()`
-  - [ ] Test `extract_first_query()` called on conversation field
-  - [ ] Test `get_source_label()` returns `"hf:dataset_id"`
-  - [ ] Test record format matches normalized schema
+- [x] Test `HuggingFaceSource`:
+  - [x] Mock `load_dataset()`, verify params passed correctly
+  - [x] Test streaming mode → `streaming=True` passed
+  - [x] Test non-streaming mode → limit applied via `.select()`
+  - [x] Test `extract_first_query()` called on conversation field
+  - [x] Test `get_source_label()` returns `"hf:dataset_id"`
+  - [x] Test record format matches normalized schema
 
 ---
 
