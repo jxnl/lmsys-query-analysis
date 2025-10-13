@@ -354,3 +354,163 @@ web/                         # Next.js web viewer (zero external dependencies)
 - API keys: set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `COHERE_API_KEY`, or `GROQ_API_KEY` in your shell, not in code
 - Defaults: SQLite at `~/.lmsys-query-analysis/queries.db`; Chroma at `~/.lmsys-query-analysis/chroma`
 - Override with `--db-path` and `--chroma-path` flags
+
+## CSV Data Loading
+
+The CLI supports loading query data from **CSV files** in addition to HuggingFace datasets, enabling analysis of custom query datasets from any source.
+
+### CSV File Format
+
+**Required Columns** (exact, case-sensitive):
+- `conversation_id`: Unique identifier for each conversation/query
+- `query_text`: The actual query text to analyze
+
+**Optional Columns**:
+- `model`: Model name (defaults to "unknown" if not provided)
+- `language`: Language of the query (e.g., "English", "Spanish")
+- `timestamp`: ISO-8601 formatted timestamp (e.g., "2024-10-13T12:34:56Z")
+
+**File Requirements**:
+- UTF-8 encoded CSV file
+- Column headers must match exactly (case-sensitive)
+- Rows with empty `conversation_id` or `query_text` are skipped with warnings
+- Invalid timestamps are set to `None` and continue processing
+
+### CSV Example
+
+```csv
+conversation_id,query_text,model,language,timestamp
+conv_1,What is machine learning?,gpt-4,English,2024-01-01T10:00:00Z
+conv_2,How do I learn Python?,claude-3,English,2024-01-01T11:00:00Z
+conv_3,Explain quantum computing,gpt-3.5,English,2024-01-01T12:00:00Z
+```
+
+### Usage Examples
+
+**Load single CSV file:**
+```bash
+uv run lmsys load --csv data/queries.csv
+```
+
+**Load multiple CSV files** (automatically deduplicates across all files):
+```bash
+uv run lmsys load --csv data/dataset1.csv --csv data/dataset2.csv
+```
+
+**Load HuggingFace dataset** (explicit):
+```bash
+uv run lmsys load --hf-dataset lmsys/lmsys-chat-1m --limit 10000
+```
+
+**Default behavior** (loads LMSYS dataset if no source specified):
+```bash
+uv run lmsys load --limit 1000  # Defaults to lmsys/lmsys-chat-1m
+```
+
+**CSV with ChromaDB embeddings:**
+```bash
+uv run lmsys load --csv data/queries.csv --use-chroma
+```
+
+**CSV with custom embedding provider:**
+```bash
+uv run lmsys load --csv data/queries.csv --use-chroma \
+  --embedding-provider cohere --embedding-model embed-v4.0
+```
+
+### Validation & Error Handling
+
+**Missing required columns:**
+```bash
+$ uv run lmsys load --csv invalid.csv
+Error: CSV file missing required column: query_text
+```
+
+**Empty required fields:**
+- Rows with empty `conversation_id` or `query_text` are **skipped automatically**
+- Warning logged for each skipped row
+- Loading continues with valid rows
+
+**Invalid timestamps:**
+- Non-ISO-8601 timestamps set to `None`
+- Warning logged, processing continues
+- Example: `"2024/01/01"` → sets `timestamp=None`
+
+**Nonexistent file:**
+```bash
+$ uv run lmsys load --csv missing.csv
+Error: CSV file does not exist: missing.csv
+```
+
+**Mutual exclusivity:**
+```bash
+$ uv run lmsys load --csv data.csv --hf-dataset org/dataset
+Error: Cannot specify both --csv and --hf-dataset. Choose one data source.
+```
+
+### Deduplication Behavior
+
+- **Single source**: Deduplicates based on `conversation_id` within the file
+- **Multiple sources**: Deduplicates across **all sources** in a single load command
+- **Re-loading**: If you load the same CSV again, existing `conversation_id`s are **skipped** (logged in stats as "Skipped")
+
+### Statistics Output
+
+**Single CSV file:**
+```
+Loading Statistics
+┌─────────────────┬───────┐
+│ Metric          │ Count │
+├─────────────────┼───────┤
+│ Total Processed │ 100   │
+│ Loaded          │ 95    │
+│ Skipped         │ 5     │
+│ Errors          │ 0     │
+└─────────────────┴───────┘
+```
+
+**Multiple CSV files:**
+```
+Multi-Source Loading Statistics
+┌─────────────────────┬───────────┬────────┬─────────┬────────┐
+│ Source              │ Processed │ Loaded │ Skipped │ Errors │
+├─────────────────────┼───────────┼────────┼─────────┼────────┤
+│ csv:dataset1.csv    │ 1000      │ 1000   │ 0       │ 0      │
+│ csv:dataset2.csv    │ 1000      │ 800    │ 200     │ 0      │
+├─────────────────────┼───────────┼────────┼─────────┼────────┤
+│ Total               │ 2000      │ 1800   │ 200     │ 0      │
+└─────────────────────┴───────────┴────────┴─────────┴────────┘
+```
+
+### Phase 1 Limitations
+
+These limitations are part of Phase 1 implementation and may be addressed in future versions:
+
+1. **No dataset_id in schema**: All queries share the same database schema without explicit dataset tracking
+2. **Unique conversation_id**: The `conversation_id` must be globally unique across all sources (collisions cause skipping)
+3. **No column mapping**: CSV columns must use exact names (`conversation_id`, `query_text`); no custom mapping support
+4. **Simple text format**: CSV source does not parse conversation arrays; `query_text` is used directly
+5. **No streaming for CSV**: CSV files are loaded entirely into memory (HuggingFace supports streaming)
+
+### Complete Workflow Example
+
+```bash
+# 1. Load custom CSV data with embeddings
+uv run lmsys load --csv my_queries.csv --use-chroma
+
+# 2. Cluster the data
+uv run lmsys cluster kmeans --n-clusters 50 --use-chroma
+
+# 3. Get the latest run ID
+uv run lmsys runs --latest
+
+# 4. Generate summaries
+uv run lmsys summarize <RUN_ID> --alias "my-analysis"
+
+# 5. Build hierarchy
+uv run lmsys merge-clusters <RUN_ID>
+
+# 6. Explore results
+uv run lmsys list-clusters <RUN_ID>
+uv run lmsys search "specific topic" --run-id <RUN_ID>
+```

@@ -391,27 +391,27 @@ From `load_lmsys_dataset()` (lines 58-351):
 
 #### Implementation Checklist
 
-- [ ] Update `load()` function signature:
-  - [ ] Add `csv: List[str] = typer.Option(None, "--csv", help="CSV file path(s)")`
-  - [ ] Add `hf_dataset: str = typer.Option(None, "--hf-dataset", help="HuggingFace dataset ID")`
-  - [ ] Keep existing options unchanged
-- [ ] Add validation logic:
-  - [ ] If both `--csv` and `--hf-dataset` → error: "Cannot specify both"
-  - [ ] If neither → default HuggingFaceSource("lmsys/lmsys-chat-1m")
-- [ ] Build source list:
-  - [ ] If `csv`: create CSVSource for each path
-  - [ ] If `hf_dataset`: create single HuggingFaceSource
-  - [ ] Pass limit/streaming to HuggingFaceSource only
-- [ ] Call appropriate loader:
-  - [ ] Single source → call `load_queries()` directly
-  - [ ] Multiple CSVs → call `load_queries_from_multiple()`
-- [ ] Display stats:
-  - [ ] Single source → use existing `format_loading_stats_table()`
-  - [ ] Multiple sources → use new `format_multi_source_stats_table()`
-- [ ] In `tables.py`, add `format_multi_source_stats_table(stats_list)`:
-  - [ ] Per-source rows: Source | Processed | Loaded | Skipped | Errors
-  - [ ] Separator line
-  - [ ] Total summary row
+- [x] Update `load()` function signature:
+  - [x] Add `csv: List[str] = typer.Option(None, "--csv", help="CSV file path(s)")`
+  - [x] Add `hf_dataset: str = typer.Option(None, "--hf-dataset", help="HuggingFace dataset ID")`
+  - [x] Keep existing options unchanged
+- [x] Add validation logic:
+  - [x] If both `--csv` and `--hf-dataset` → error: "Cannot specify both"
+  - [x] If neither → default HuggingFaceSource("lmsys/lmsys-chat-1m")
+- [x] Build source list:
+  - [x] If `csv`: create CSVSource for each path
+  - [x] If `hf_dataset`: create single HuggingFaceSource
+  - [x] Pass limit/streaming to HuggingFaceSource only
+- [x] Call appropriate loader:
+  - [x] Single source → call `load_queries()` directly
+  - [x] Multiple CSVs → call `load_queries_from_multiple()`
+- [x] Display stats:
+  - [x] Single source → use existing `format_loading_stats_table()`
+  - [x] Multiple sources → use new `format_multi_source_stats_table()`
+- [x] In `tables.py`, add `format_multi_source_stats_table(stats_list)`:
+  - [x] Per-source rows: Source | Processed | Loaded | Skipped | Errors
+  - [x] Separator line
+  - [x] Total summary row
 
 ---
 
@@ -431,27 +431,27 @@ From `load_lmsys_dataset()` (lines 58-351):
 
 #### Testing Checklist
 
-- [ ] Test CLI with single CSV:
-  - [ ] `lmsys load --csv valid_queries.csv`
-  - [ ] Verify rows in DB
-  - [ ] Verify stats table output
-- [ ] Test CLI with multiple CSVs:
-  - [ ] `lmsys load --csv dataset1.csv --csv dataset2.csv`
-  - [ ] Verify multi-source stats table
-  - [ ] Verify correct row counts
-- [ ] Test mutual exclusivity:
-  - [ ] `lmsys load --csv file.csv --hf-dataset org/data` → error
-  - [ ] Verify clear error message
-- [ ] Test backward compatibility:
-  - [ ] `lmsys load --limit 100` (no source args)
-  - [ ] Verify loads LMSYS as before
-- [ ] Test CSV with ChromaDB:
-  - [ ] `lmsys load --csv dataset1.csv --use-chroma`
-  - [ ] Verify embeddings created
-  - [ ] Verify count matches loaded rows
-- [ ] Test validation errors:
-  - [ ] Load CSV with missing columns → clear error
-  - [ ] Verify error message helpful
+- [x] Test CLI with single CSV:
+  - [x] `lmsys load --csv valid_queries.csv`
+  - [x] Verify rows in DB
+  - [x] Verify stats table output
+- [x] Test CLI with multiple CSVs:
+  - [x] `lmsys load --csv dataset1.csv --csv dataset2.csv`
+  - [x] Verify multi-source stats table
+  - [x] Verify correct row counts
+- [x] Test mutual exclusivity:
+  - [x] `lmsys load --csv file.csv --hf-dataset org/data` → error
+  - [x] Verify clear error message
+- [x] Test backward compatibility:
+  - [x] `lmsys load --limit 100` (no source args)
+  - [x] Verify loads LMSYS as before
+- [x] Test CSV with ChromaDB:
+  - [x] `lmsys load --csv dataset1.csv --use-chroma`
+  - [x] Verify embeddings created
+  - [x] Verify count matches loaded rows
+- [x] Test validation errors:
+  - [x] Load CSV with missing columns → clear error
+  - [x] Verify error message helpful
 
 ---
 
@@ -466,27 +466,27 @@ From `load_lmsys_dataset()` (lines 58-351):
 
 #### Implementation Checklist
 
-- [ ] Add "CSV Data Loading" section:
-  - [ ] Required columns: `conversation_id`, `query_text`
-  - [ ] Optional columns: `model`, `language`, `timestamp`
-  - [ ] Timestamp format: ISO-8601 (e.g., "2024-10-13T12:34:56Z")
-  - [ ] File format: UTF-8 encoded CSV
-  - [ ] Example CSV snippet
-- [ ] Add "Usage Examples":
-  - [ ] Load single CSV: `lmsys load --csv data.csv`
-  - [ ] Load multiple CSVs: `lmsys load --csv data1.csv --csv data2.csv`
-  - [ ] Load HF dataset: `lmsys load --hf-dataset org/dataset`
-  - [ ] Default (LMSYS): `lmsys load --limit 1000`
-  - [ ] With ChromaDB: `lmsys load --csv data.csv --use-chroma`
-- [ ] Add "Validation & Errors":
-  - [ ] Missing required columns → clear error
-  - [ ] Empty fields → row skipped with warning
-  - [ ] Invalid timestamp → warning, continues
-  - [ ] Cannot mix CSV and HF in one command
-- [ ] Add "Phase 1 Limitations":
-  - [ ] No dataset_id in schema yet
-  - [ ] conversation_id must be unique across all sources
-  - [ ] CSV must use exact column names (no mapping)
+- [x] Add "CSV Data Loading" section:
+  - [x] Required columns: `conversation_id`, `query_text`
+  - [x] Optional columns: `model`, `language`, `timestamp`
+  - [x] Timestamp format: ISO-8601 (e.g., "2024-10-13T12:34:56Z")
+  - [x] File format: UTF-8 encoded CSV
+  - [x] Example CSV snippet
+- [x] Add "Usage Examples":
+  - [x] Load single CSV: `lmsys load --csv data.csv`
+  - [x] Load multiple CSVs: `lmsys load --csv data1.csv --csv data2.csv`
+  - [x] Load HF dataset: `lmsys load --hf-dataset org/dataset`
+  - [x] Default (LMSYS): `lmsys load --limit 1000`
+  - [x] With ChromaDB: `lmsys load --csv data.csv --use-chroma`
+- [x] Add "Validation & Errors":
+  - [x] Missing required columns → clear error
+  - [x] Empty fields → row skipped with warning
+  - [x] Invalid timestamp → warning, continues
+  - [x] Cannot mix CSV and HF in one command
+- [x] Add "Phase 1 Limitations":
+  - [x] No dataset_id in schema yet
+  - [x] conversation_id must be unique across all sources
+  - [x] CSV must use exact column names (no mapping)
 
 ---
 
