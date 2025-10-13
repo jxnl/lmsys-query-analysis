@@ -157,7 +157,7 @@ From `load_lmsys_dataset()` (lines 58-351):
   - [x] `test_load_queries_with_mock_base_source` - use pure mock BaseSource
   - [x] `test_load_queries_stats_include_source_label` - verify source label in stats
 - [x] Run `uv run pytest tests/unit/db/test_loader.py -v` → all pass (19 tests)
-- [ ] Run full test suite → verify no regressions in other modules
+- [x] Run full test suite → verify no regressions in other modules
 
 ### Section 1a.5: Update Runner
 
@@ -200,14 +200,14 @@ From `load_lmsys_dataset()` (lines 58-351):
 
 #### Implementation Checklist
 
-- [ ] Update imports (around line 17):
-  - [ ] Add `from ...db.sources import HuggingFaceSource`
-  - [ ] Change `from ...db.loader import load_lmsys_dataset` → `from ...db.loader import load_queries`
-- [ ] Refactor `load()` function (lines 23-68):
-  - [ ] Create `HuggingFaceSource` instance with dataset_id="lmsys/lmsys-chat-1m"
-  - [ ] Pass `limit=limit` and `streaming=streaming` to source
-  - [ ] Call `load_queries(db, source, chroma, ...)` instead of `load_lmsys_dataset()`
-  - [ ] Keep all existing parameters and output formatting
+- [x] Update imports (around line 17):
+  - [x] Add `from ...db.sources import HuggingFaceSource`
+  - [x] Change `from ...db.loader import load_lmsys_dataset` → `from ...db.loader import load_queries`
+- [x] Refactor `load()` function (lines 23-68):
+  - [x] Create `HuggingFaceSource` instance with dataset_id="lmsys/lmsys-chat-1m"
+  - [x] Pass `limit=limit` and `streaming=streaming` to source
+  - [x] Call `load_queries(db, source, chroma, ...)` instead of `load_lmsys_dataset()`
+  - [x] Keep all existing parameters and output formatting
 
 ---
 
@@ -225,9 +225,9 @@ From `load_lmsys_dataset()` (lines 58-351):
 
 #### Implementation Checklist
 
-- [ ] Update mock patches to use `load_queries` instead of `load_lmsys_dataset`
-- [ ] Add mocks for `HuggingFaceSource` if needed
-- [ ] Verify all CLI tests still pass
+- [x] Update mock patches to use `load_queries` instead of `load_lmsys_dataset`
+- [x] Add mocks for `HuggingFaceSource` if needed
+- [x] Verify all CLI tests still pass
 
 ---
 
@@ -237,15 +237,15 @@ From `load_lmsys_dataset()` (lines 58-351):
 
 #### Testing Checklist
 
-- [ ] Run unit tests: `uv run pytest tests/unit/ -v`
-- [ ] Run integration tests: `uv run pytest tests/integration/ -v`
-- [ ] Run smoke tests: `uv run pytest tests/smoke/ -v`
-- [ ] Manual smoke test: `uv run lmsys load --limit 100`
-  - [ ] Verify data loads successfully
-  - [ ] Verify stats table displays correctly
-  - [ ] Verify queries in database
-- [ ] Check for any deprecation warnings or errors
-- [ ] Verify backward compatibility: existing workflows should work identically
+- [x] Run unit tests: `uv run pytest tests/unit/ -v` (299 passed)
+- [x] Run integration tests: `uv run pytest tests/integration/ -v` (66 passed)
+- [x] Run smoke tests: `uv run pytest tests/smoke/ -v` (13 passed, 1 skipped)
+- [x] Manual smoke test: `uv run lmsys load --limit 100`
+  - [x] Verify data loads successfully
+  - [x] Verify stats table displays correctly
+  - [x] Verify queries in database
+- [x] Check for any deprecation warnings or errors
+- [x] Verify backward compatibility: existing workflows should work identically
 
 ---
 

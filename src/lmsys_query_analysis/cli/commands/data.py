@@ -14,7 +14,8 @@ from ..formatters import tables
 from ..helpers.client_factory import parse_embedding_model, create_chroma_client, create_embedding_generator
 from ...db.connection import get_db
 from ...db.chroma import get_chroma
-from ...db.loader import load_lmsys_dataset
+from ...db.loader import load_queries
+from ...db.sources import HuggingFaceSource
 from ...db.models import Query
 
 console = Console()
@@ -46,15 +47,21 @@ def load(
     db = get_db(db_path)
     chroma = create_chroma_client(chroma_path, model, provider) if use_chroma else None
     
-    stats = load_lmsys_dataset(
-        db,
+    # Create HuggingFace source
+    source = HuggingFaceSource(
+        dataset_id="lmsys/lmsys-chat-1m",
         limit=limit,
+        streaming=streaming,
+    )
+    
+    stats = load_queries(
+        db,
+        source=source,
         skip_existing=not force_reload,
         chroma=chroma,
         embedding_model=model,
         embedding_provider=provider,
         batch_size=db_batch_size,
-        use_streaming=streaming,
         apply_pragmas=not no_pragmas,
     )
     

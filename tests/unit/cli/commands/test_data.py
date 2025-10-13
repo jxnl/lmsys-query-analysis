@@ -5,11 +5,12 @@ from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 
 
-@patch('lmsys_query_analysis.cli.commands.data.load_lmsys_dataset')
+@patch('lmsys_query_analysis.cli.commands.data.HuggingFaceSource')
+@patch('lmsys_query_analysis.cli.commands.data.load_queries')
 @patch('lmsys_query_analysis.cli.commands.data.get_db')
 @patch('lmsys_query_analysis.cli.commands.data.create_chroma_client')
 @patch('lmsys_query_analysis.cli.commands.data.parse_embedding_model')
-def test_load_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_load_dataset):
+def test_load_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_load_queries, mock_hf_source):
     """Test basic load command without Chroma."""
     from lmsys_query_analysis.cli.commands.data import load
     
@@ -18,7 +19,12 @@ def test_load_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_lo
     mock_db = Mock()
     mock_db.db_path = Path("/tmp/test.db")
     mock_get_db.return_value = mock_db
-    mock_load_dataset.return_value = {
+    
+    mock_source = Mock()
+    mock_hf_source.return_value = mock_source
+    
+    mock_load_queries.return_value = {
+        "source": "hf:lmsys/lmsys-chat-1m",
         "total_processed": 100,
         "loaded": 90,
         "skipped": 10,
@@ -40,7 +46,12 @@ def test_load_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_lo
     
     # Verify
     mock_get_db.assert_called_once_with("/tmp/test.db")
-    mock_load_dataset.assert_called_once()
+    mock_hf_source.assert_called_once_with(
+        dataset_id="lmsys/lmsys-chat-1m",
+        limit=100,
+        streaming=False
+    )
+    mock_load_queries.assert_called_once()
 
 
 @patch('lmsys_query_analysis.cli.commands.data.Path')
