@@ -1,11 +1,34 @@
 """Tests for data loader."""
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from lmsys_query_analysis.db.loader import extract_first_query, load_lmsys_dataset
+from unittest.mock import Mock, patch
+from lmsys_query_analysis.db.loader import load_queries
+from lmsys_query_analysis.db.sources import BaseSource, extract_first_query
 from lmsys_query_analysis.db.connection import Database
 from lmsys_query_analysis.db.models import Query
 from sqlmodel import select
+from typing import Iterator, Any
+
+
+class MockSource(BaseSource):
+    """Mock data source for testing."""
+    
+    def __init__(self, records: list[dict], label: str = "mock:test"):
+        self.records = records
+        self.label = label
+    
+    def validate_source(self) -> None:
+        """Mock validation (always passes)."""
+        pass
+    
+    def iter_records(self) -> Iterator[dict[str, Any]]:
+        """Yield mock records."""
+        for record in self.records:
+            yield record
+    
+    def get_source_label(self) -> str:
+        """Return mock label."""
+        return self.label
 
 
 def test_extract_first_query_basic():
@@ -132,36 +155,32 @@ def test_skip_duplicate_conversation_id(temp_db):
     session.close()
 
 
-def test_load_lmsys_dataset_basic(temp_db):
-    """Test basic dataset loading with mocked data."""
-    # Create mock dataset
-    mock_data = [
+def test_load_queries_basic(temp_db):
+    """Test basic query loading with mock source."""
+    # Create mock records (already normalized)
+    mock_records = [
         {
             "conversation_id": "conv1",
+            "query_text": "What is AI?",
             "model": "gpt-4",
             "language": "English",
-            "conversation": [
-                {"role": "user", "content": "What is AI?"},
-                {"role": "assistant", "content": "AI is..."},
-            ],
+            "timestamp": None,
+            "extra_metadata": {"turn_count": 2},
         },
         {
             "conversation_id": "conv2",
+            "query_text": "Hola mundo",
             "model": "claude-3",
             "language": "Spanish",
-            "conversation": [
-                {"role": "user", "content": "Hola mundo"},
-            ],
+            "timestamp": None,
+            "extra_metadata": {"turn_count": 1},
         },
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
+    source = MockSource(mock_records)
+    stats = load_queries(db=temp_db, source=source, skip_existing=True, apply_pragmas=False)
     
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, skip_existing=True, apply_pragmas=False)
-    
+    assert stats["source"] == "mock:test"
     assert stats["total_processed"] == 2
     assert stats["loaded"] == 2
     assert stats["skipped"] == 0
@@ -174,7 +193,7 @@ def test_load_lmsys_dataset_basic(temp_db):
         assert queries[0].query_text in ["What is AI?", "Hola mundo"]
 
 
-def test_load_lmsys_dataset_skip_existing(temp_db):
+def test_load_queries_skip_existing(temp_db):
     """Test that existing conversations are skipped."""
     # Add existing query
     with temp_db.get_session() as session:
@@ -186,26 +205,28 @@ def test_load_lmsys_dataset_skip_existing(temp_db):
         session.add(existing)
         session.commit()
     
-    # Mock dataset with one existing, one new
-    mock_data = [
+    # Mock records with one existing, one new
+    mock_records = [
         {
             "conversation_id": "conv1",  # Existing
+            "query_text": "What is AI?",
             "model": "gpt-4",
-            "conversation": [{"role": "user", "content": "What is AI?"}],
+            "language": None,
+            "timestamp": None,
+            "extra_metadata": None,
         },
         {
             "conversation_id": "conv2",  # New
+            "query_text": "Hello",
             "model": "claude-3",
-            "conversation": [{"role": "user", "content": "Hello"}],
+            "language": None,
+            "timestamp": None,
+            "extra_metadata": None,
         },
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, skip_existing=True, apply_pragmas=False)
+    source = MockSource(mock_records)
+    stats = load_queries(db=temp_db, source=source, skip_existing=True, apply_pragmas=False)
     
     assert stats["total_processed"] == 2
     assert stats["loaded"] == 1  # Only conv2 loaded
@@ -217,160 +238,109 @@ def test_load_lmsys_dataset_skip_existing(temp_db):
         assert count == 2
 
 
-def test_load_lmsys_dataset_handles_errors(temp_db):
+def test_load_queries_handles_errors(temp_db):
     """Test that loader handles various error conditions."""
-    mock_data = [
+    mock_records = [
         # Missing conversation_id
         {
+            "query_text": "Test",
             "model": "gpt-4",
-            "conversation": [{"role": "user", "content": "Test"}],
+            "language": None,
+            "timestamp": None,
+            "extra_metadata": None,
         },
-        # Invalid JSON in conversation
+        # Missing query_text
         {
             "conversation_id": "conv2",
             "model": "gpt-4",
-            "conversation": "invalid json string {",
+            "language": None,
+            "timestamp": None,
+            "extra_metadata": None,
         },
-        # No user messages
+        # Empty query_text
         {
             "conversation_id": "conv3",
+            "query_text": "",
             "model": "gpt-4",
-            "conversation": [{"role": "system", "content": "System msg"}],
+            "language": None,
+            "timestamp": None,
+            "extra_metadata": None,
         },
         # Valid one
         {
             "conversation_id": "conv4",
+            "query_text": "Valid query",
             "model": "gpt-4",
-            "conversation": [{"role": "user", "content": "Valid query"}],
+            "language": None,
+            "timestamp": None,
+            "extra_metadata": None,
         },
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
+    source = MockSource(mock_records)
+    stats = load_queries(db=temp_db, source=source, apply_pragmas=False)
     
     assert stats["total_processed"] == 4
     assert stats["loaded"] == 1  # Only conv4 loaded
     assert stats["errors"] == 3  # Three errors
 
 
-def test_load_lmsys_dataset_with_limit(temp_db):
-    """Test loading with a limit."""
-    mock_data = [
-        {
-            "conversation_id": f"conv{i}",
-            "model": "gpt-4",
-            "conversation": [{"role": "user", "content": f"Query {i}"}],
-        }
-        for i in range(10)
-    ]
-    
-    # Create limited dataset
-    limited_data = mock_data[:5]
-    mock_dataset_limited = Mock()
-    mock_dataset_limited.__iter__ = Mock(return_value=iter(limited_data))
-    mock_dataset_limited.__len__ = Mock(return_value=len(limited_data))
-    
-    mock_dataset = Mock()
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    mock_dataset.select = Mock(return_value=mock_dataset_limited)
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=5, apply_pragmas=False)
-    
-    # Should process exactly 5
-    assert stats["total_processed"] == 5
-    assert stats["loaded"] == 5
-
-
-def test_load_lmsys_dataset_deduplicates_within_batch(temp_db):
+def test_load_queries_deduplicates_within_batch(temp_db):
     """Test that duplicate conversation IDs within a batch are handled."""
-    mock_data = [
+    mock_records = [
         {
             "conversation_id": "dup",
+            "query_text": "First",
             "model": "gpt-4",
-            "conversation": [{"role": "user", "content": "First"}],
+            "language": None,
+            "timestamp": None,
+            "extra_metadata": None,
         },
         {
             "conversation_id": "dup",  # Duplicate in same batch
+            "query_text": "Second",
             "model": "gpt-4",
-            "conversation": [{"role": "user", "content": "Second"}],
+            "language": None,
+            "timestamp": None,
+            "extra_metadata": None,
         },
         {
             "conversation_id": "unique",
+            "query_text": "Unique",
             "model": "gpt-4",
-            "conversation": [{"role": "user", "content": "Unique"}],
+            "language": None,
+            "timestamp": None,
+            "extra_metadata": None,
         },
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
+    source = MockSource(mock_records)
+    stats = load_queries(db=temp_db, source=source, apply_pragmas=False)
     
     assert stats["total_processed"] == 3
     assert stats["loaded"] == 2  # Only first "dup" and "unique"
     assert stats["skipped"] == 1  # Second "dup" skipped
 
 
-def test_load_lmsys_dataset_handles_json_conversation(temp_db):
-    """Test that JSON string conversations are parsed correctly."""
-    import json
-    
-    mock_data = [
-        {
-            "conversation_id": "conv1",
-            "model": "gpt-4",
-            # Conversation as JSON string (as it might come from dataset)
-            "conversation": json.dumps([
-                {"role": "user", "content": "Parsed from JSON"},
-                {"role": "assistant", "content": "Response"},
-            ]),
-        },
-    ]
-    
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
-    
-    assert stats["loaded"] == 1
-    
-    # Verify the query text was extracted correctly
-    with temp_db.get_session() as session:
-        query = session.exec(select(Query)).first()
-        assert query.query_text == "Parsed from JSON"
-
-
-def test_load_lmsys_dataset_stores_metadata(temp_db):
+def test_load_queries_stores_metadata(temp_db):
     """Test that extra metadata is stored correctly."""
-    mock_data = [
+    mock_records = [
         {
             "conversation_id": "conv1",
+            "query_text": "Test query",
             "model": "gpt-4",
             "language": "English",
-            "redacted": True,
-            "openai_moderation": {"flagged": False},
-            "conversation": [
-                {"role": "user", "content": "Test query"},
-                {"role": "assistant", "content": "Response"},
-            ],
+            "timestamp": None,
+            "extra_metadata": {
+                "turn_count": 2,
+                "redacted": True,
+                "openai_moderation": {"flagged": False},
+            },
         },
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
+    source = MockSource(mock_records)
+    stats = load_queries(db=temp_db, source=source, apply_pragmas=False)
     
     assert stats["loaded"] == 1
     
@@ -384,38 +354,36 @@ def test_load_lmsys_dataset_stores_metadata(temp_db):
         assert query.extra_metadata["openai_moderation"]["flagged"] is False
 
 
-def test_load_lmsys_dataset_with_chroma(temp_db):
+def test_load_queries_with_chroma(temp_db):
     """Test loading with ChromaDB integration."""
     from lmsys_query_analysis.db.chroma import ChromaManager
     
-    mock_data = [
+    mock_records = [
         {
             "conversation_id": "conv1",
+            "query_text": "Test with chroma",
             "model": "gpt-4",
-            "conversation": [{"role": "user", "content": "Test with chroma"}],
+            "language": None,
+            "timestamp": None,
+            "extra_metadata": None,
         },
     ]
-    
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
     
     # Mock ChromaDB
     mock_chroma = Mock(spec=ChromaManager)
     mock_chroma.add_queries_batch = Mock()
     
     # Mock EmbeddingGenerator - it's imported inside the function
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset), \
-         patch('lmsys_query_analysis.clustering.embeddings.EmbeddingGenerator') as mock_emb_gen:
-        
+    with patch('lmsys_query_analysis.clustering.embeddings.EmbeddingGenerator') as mock_emb_gen:
         # Mock embeddings
         mock_embedder = Mock()
         mock_embedder.generate_embeddings = Mock(return_value=[[0.1] * 10])
         mock_emb_gen.return_value = mock_embedder
         
-        stats = load_lmsys_dataset(
+        source = MockSource(mock_records)
+        stats = load_queries(
             db=temp_db,
-            limit=None,
+            source=source,
             chroma=mock_chroma,
             embedding_model="test-model",
             embedding_provider="test-provider",
@@ -430,24 +398,23 @@ def test_load_lmsys_dataset_with_chroma(temp_db):
     mock_chroma.add_queries_batch.assert_called_once()
 
 
-def test_load_lmsys_dataset_large_batch(temp_db):
+def test_load_queries_large_batch(temp_db):
     """Test loading a large batch of queries."""
     # Create 100 mock queries
-    mock_data = [
+    mock_records = [
         {
             "conversation_id": f"conv{i}",
+            "query_text": f"Query {i}",
             "model": "gpt-4",
-            "conversation": [{"role": "user", "content": f"Query {i}"}],
+            "language": None,
+            "timestamp": None,
+            "extra_metadata": None,
         }
         for i in range(100)
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, batch_size=20, apply_pragmas=False)
+    source = MockSource(mock_records)
+    stats = load_queries(db=temp_db, source=source, batch_size=20, apply_pragmas=False)
     
     assert stats["total_processed"] == 100
     assert stats["loaded"] == 100
@@ -458,23 +425,21 @@ def test_load_lmsys_dataset_large_batch(temp_db):
         assert count == 100
 
 
-def test_load_lmsys_dataset_missing_language(temp_db):
+def test_load_queries_missing_language(temp_db):
     """Test that missing language field is handled correctly."""
-    mock_data = [
+    mock_records = [
         {
             "conversation_id": "conv1",
+            "query_text": "Test",
             "model": "gpt-4",
-            # No language field
-            "conversation": [{"role": "user", "content": "Test"}],
+            "language": None,  # No language
+            "timestamp": None,
+            "extra_metadata": None,
         },
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
+    source = MockSource(mock_records)
+    stats = load_queries(db=temp_db, source=source, apply_pragmas=False)
     
     assert stats["loaded"] == 1
     
@@ -482,3 +447,53 @@ def test_load_lmsys_dataset_missing_language(temp_db):
     with temp_db.get_session() as session:
         query = session.exec(select(Query)).first()
         assert query.language is None
+
+
+def test_load_queries_stats_include_source_label(temp_db):
+    """Test that stats include source label."""
+    mock_records = [
+        {
+            "conversation_id": "conv1",
+            "query_text": "Test",
+            "model": "gpt-4",
+            "language": None,
+            "timestamp": None,
+            "extra_metadata": None,
+        },
+    ]
+    
+    source = MockSource(mock_records, label="test:custom-label")
+    stats = load_queries(db=temp_db, source=source, apply_pragmas=False)
+    
+    assert stats["source"] == "test:custom-label"
+    assert stats["loaded"] == 1
+
+
+def test_load_queries_with_mock_base_source(temp_db):
+    """Test load_queries with a pure mock BaseSource."""
+    # Test that load_queries works with any BaseSource implementation
+    mock_records = [
+        {
+            "conversation_id": "mock1",
+            "query_text": "From mock source",
+            "model": "test-model",
+            "language": "en",
+            "timestamp": None,
+            "extra_metadata": {"custom": "data"},
+        },
+    ]
+    
+    source = MockSource(mock_records, label="mock:base-source")
+    stats = load_queries(db=temp_db, source=source, apply_pragmas=False)
+    
+    assert stats["source"] == "mock:base-source"
+    assert stats["total_processed"] == 1
+    assert stats["loaded"] == 1
+    
+    # Verify record in database
+    with temp_db.get_session() as session:
+        query = session.exec(select(Query)).first()
+        assert query.conversation_id == "mock1"
+        assert query.query_text == "From mock source"
+        assert query.model == "test-model"
+        assert query.extra_metadata["custom"] == "data"

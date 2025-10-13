@@ -24,7 +24,8 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 # LMSYS SDK imports
 from .db.connection import Database
-from .db.loader import load_lmsys_dataset
+from .db.loader import load_queries
+from .db.sources import HuggingFaceSource
 from .db.chroma import ChromaManager
 from .clustering.kmeans import run_kmeans_clustering
 from .clustering.hierarchy import merge_clusters_hierarchical
@@ -175,20 +176,27 @@ def load_data(db: Database, chroma: ChromaManager, config: RunnerConfig) -> Dict
     start_time = time.time()
 
     try:
-        stats = load_lmsys_dataset(
-            db=db,
+        # Create HuggingFace source for LMSYS dataset
+        source = HuggingFaceSource(
+            dataset_id="lmsys/lmsys-chat-1m",
             limit=config.query_limit,
+            streaming=config.use_streaming
+        )
+        
+        stats = load_queries(
+            db=db,
+            source=source,
             skip_existing=config.skip_existing,
             chroma=chroma,
             embedding_model=config.embedding_model,
             embedding_provider=config.embedding_provider,
             batch_size=config.embedding_batch_size,
-            use_streaming=config.use_streaming
         )
         
         elapsed = time.time() - start_time
         
         logger.info(f"✓ Data loading complete in {elapsed:.2f}s")
+        logger.info(f"  Source: {stats['source']}")
         logger.info(f"  Total processed: {stats['total_processed']}")
         logger.info(f"  Successfully loaded: {stats['loaded']}")
         logger.info(f"  Skipped (existing): {stats['skipped']}")

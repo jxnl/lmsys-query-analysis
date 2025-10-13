@@ -3,6 +3,7 @@
 This module provides:
 - BaseSource: Abstract base class for all data sources
 - HuggingFaceSource: Load queries from HuggingFace datasets
+- extract_first_query: Helper to extract first user query from conversation
 """
 
 import json
@@ -18,7 +19,24 @@ from rich.progress import (
     TextColumn,
 )
 
-from .loader import extract_first_query
+
+def extract_first_query(conversation: list[dict] | None) -> str | None:
+    """Extract the first user query from a conversation.
+
+    Args:
+        conversation: List of conversation turns in OpenAI format
+
+    Returns:
+        The first user message content, or None if not found
+    """
+    if not conversation:
+        return None
+
+    for turn in conversation:
+        if turn.get("role") == "user":
+            return turn.get("content", "").strip()
+
+    return None
 
 
 class BaseSource(ABC):

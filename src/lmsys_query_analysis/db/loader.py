@@ -7,7 +7,6 @@ Performance optimizations:
 - Only embed newly-inserted queries into ChromaDB
 """
 
-import json
 from typing import Optional, Iterable
 from sqlmodel import select
 from sqlalchemy import func, text
@@ -22,38 +21,6 @@ from .models import Query
 from .connection import Database
 from .chroma import ChromaManager
 from .sources import BaseSource
-
-# Optional fast JSON
-try:  # pragma: no cover - speed optimization only
-    import orjson as _fastjson  # type: ignore
-
-    def _json_loads(s: str):
-        return _fastjson.loads(s)
-
-except Exception:  # pragma: no cover
-
-    def _json_loads(s: str):
-        return json.loads(s)
-
-
-def extract_first_query(conversation: list[dict] | None) -> str | None:
-    """Extract the first user query from a conversation.
-
-    Args:
-        conversation: List of conversation turns in OpenAI format
-
-    Returns:
-        The first user message content, or None if not found
-    """
-    if not conversation:
-        return None
-
-    for turn in conversation:
-        if turn.get("role") == "user":
-            return turn.get("content", "").strip()
-
-    return None
-
 
 def load_queries(
     db: Database,

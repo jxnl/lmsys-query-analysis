@@ -142,22 +142,21 @@ From `load_lmsys_dataset()` (lines 58-351):
 
 #### Testing Checklist
 
-- [ ] **Rewrite existing tests** to use `load_queries()` + mock sources:
-  - [ ] `test_load_lmsys_dataset_basic` → `test_load_queries_basic`
-  - [ ] `test_load_lmsys_dataset_skip_existing` → `test_load_queries_skip_existing`
-  - [ ] `test_load_lmsys_dataset_handles_errors` → `test_load_queries_handles_errors`
-  - [ ] `test_load_lmsys_dataset_with_limit` → `test_load_queries_with_limit`
-  - [ ] `test_load_lmsys_dataset_deduplicates_within_batch` → `test_load_queries_deduplicates_within_batch`
-  - [ ] `test_load_lmsys_dataset_handles_json_conversation` → (delete, now in source tests)
-  - [ ] `test_load_lmsys_dataset_stores_metadata` → `test_load_queries_stores_metadata`
-  - [ ] `test_load_lmsys_dataset_with_chroma` → `test_load_queries_with_chroma`
-  - [ ] `test_load_lmsys_dataset_large_batch` → `test_load_queries_large_batch`
-  - [ ] `test_load_lmsys_dataset_missing_language` → `test_load_queries_missing_language`
-- [ ] **Add new tests**:
-  - [ ] `test_load_queries_with_mock_base_source` - use pure mock BaseSource
-  - [ ] `test_load_queries_stats_include_source_label` - verify source label in stats
-  - [ ] `test_load_queries_pragmas_applied` - verify PRAGMA statements executed
-- [ ] Run `uv run pytest tests/unit/db/test_loader.py -v` → all pass
+- [x] **Rewrite existing tests** to use `load_queries()` + mock sources:
+  - [x] `test_load_lmsys_dataset_basic` → `test_load_queries_basic`
+  - [x] `test_load_lmsys_dataset_skip_existing` → `test_load_queries_skip_existing`
+  - [x] `test_load_lmsys_dataset_handles_errors` → `test_load_queries_handles_errors`
+  - [x] `test_load_lmsys_dataset_with_limit` → (deleted, limits handled by source)
+  - [x] `test_load_lmsys_dataset_deduplicates_within_batch` → `test_load_queries_deduplicates_within_batch`
+  - [x] `test_load_lmsys_dataset_handles_json_conversation` → (deleted, now in source tests)
+  - [x] `test_load_lmsys_dataset_stores_metadata` → `test_load_queries_stores_metadata`
+  - [x] `test_load_lmsys_dataset_with_chroma` → `test_load_queries_with_chroma`
+  - [x] `test_load_lmsys_dataset_large_batch` → `test_load_queries_large_batch`
+  - [x] `test_load_lmsys_dataset_missing_language` → `test_load_queries_missing_language`
+- [x] **Add new tests**:
+  - [x] `test_load_queries_with_mock_base_source` - use pure mock BaseSource
+  - [x] `test_load_queries_stats_include_source_label` - verify source label in stats
+- [x] Run `uv run pytest tests/unit/db/test_loader.py -v` → all pass (19 tests)
 - [ ] Run full test suite → verify no regressions in other modules
 
 ### Section 1a.5: Update Runner
@@ -175,14 +174,14 @@ From `load_lmsys_dataset()` (lines 58-351):
 
 #### Implementation Checklist
 
-- [ ] Update imports:
-  - [ ] Add `from .db.sources import HuggingFaceSource`
-  - [ ] Change `from .db.loader import load_lmsys_dataset` → `from .db.loader import load_queries`
-- [ ] Refactor `load_data()` function (lines 171-205):
-  - [ ] Create `HuggingFaceSource` instance with dataset_id="lmsys/lmsys-chat-1m"
-  - [ ] Pass `limit=config.query_limit` and `streaming=config.use_streaming` to source
-  - [ ] Call `load_queries(db, source, chroma, ...)` instead of `load_lmsys_dataset()`
-  - [ ] Keep all existing parameters and logging
+- [x] Update imports:
+  - [x] Add `from .db.sources import HuggingFaceSource`
+  - [x] Change `from .db.loader import load_lmsys_dataset` → `from .db.loader import load_queries`
+- [x] Refactor `load_data()` function (lines 171-205):
+  - [x] Create `HuggingFaceSource` instance with dataset_id="lmsys/lmsys-chat-1m"
+  - [x] Pass `limit=config.query_limit` and `streaming=config.use_streaming` to source
+  - [x] Call `load_queries(db, source, chroma, ...)` instead of `load_lmsys_dataset()`
+  - [x] Keep all existing parameters and logging (added source label)
 
 ---
 
