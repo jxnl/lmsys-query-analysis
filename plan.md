@@ -110,18 +110,18 @@ From `load_lmsys_dataset()` (lines 58-351):
 
 #### Implementation Checklist
 
-- [ ] Create `load_queries(db, source, chroma, embedding_model, embedding_provider, batch_size, skip_existing, apply_pragmas)`:
-  - [ ] Accept any BaseSource instance
-  - [ ] Get source label via `source.get_source_label()` for stats
-  - [ ] Apply PRAGMA optimizations if `apply_pragmas=True`
-  - [ ] Iterate records from `source.iter_records()` (yields normalized dicts)
-  - [ ] Batch processing with chunking (reuse existing logic)
-  - [ ] Dedupe on conversation_id (existing logic)
-  - [ ] ChromaDB embedding sync (existing logic)
-  - [ ] Return stats: `{"source": str, "total_processed": int, "loaded": int, "skipped": int, "errors": int}`
-- [ ] **DELETE `load_lmsys_dataset()` function entirely** (lines 58-351)
-- [ ] Keep `extract_first_query()` helper (used by HuggingFaceSource)
-- [ ] Update module imports if needed
+- [x] Create `load_queries(db, source, chroma, embedding_model, embedding_provider, batch_size, skip_existing, apply_pragmas)`:
+  - [x] Accept any BaseSource instance
+  - [x] Get source label via `source.get_source_label()` for stats
+  - [x] Apply PRAGMA optimizations if `apply_pragmas=True`
+  - [x] Iterate records from `source.iter_records()` (yields normalized dicts)
+  - [x] Batch processing with chunking (reuse existing logic)
+  - [x] Dedupe on conversation_id (existing logic)
+  - [x] ChromaDB embedding sync (existing logic)
+  - [x] Return stats: `{"source": str, "total_processed": int, "loaded": int, "skipped": int, "errors": int}`
+- [x] **DELETE `load_lmsys_dataset()` function entirely** (lines 58-351)
+- [x] Keep `extract_first_query()` helper (used by HuggingFaceSource)
+- [x] Update module imports if needed
 
 ---
 

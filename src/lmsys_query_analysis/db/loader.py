@@ -1,4 +1,4 @@
-"""Data loader for LMSYS-1M dataset.
+"""Data loader for query datasets.
 
 Performance optimizations:
 - Batch inserts with pre-check for existing conversation_ids per batch
@@ -9,8 +9,7 @@ Performance optimizations:
 
 import json
 from typing import Optional, Iterable
-from datasets import load_dataset
-from sqlmodel import Session, select
+from sqlmodel import select
 from sqlalchemy import func, text
 from rich.progress import (
     Progress,
@@ -22,6 +21,7 @@ from rich.progress import (
 from .models import Query
 from .connection import Database
 from .chroma import ChromaManager
+from .sources import BaseSource
 
 # Optional fast JSON
 try:  # pragma: no cover - speed optimization only
@@ -55,30 +55,38 @@ def extract_first_query(conversation: list[dict] | None) -> str | None:
     return None
 
 
-def load_lmsys_dataset(
+def load_queries(
     db: Database,
-    limit: int | None = None,
-    skip_existing: bool = True,
+    source: BaseSource,
     chroma: Optional[ChromaManager] = None,
     embedding_model: str = "embed-v4.0",
     embedding_provider: str = "cohere",
     batch_size: int = 5000,
-    use_streaming: bool = False,
+    skip_existing: bool = True,
     apply_pragmas: bool = True,
 ) -> dict:
-    """Load LMSYS-1M dataset into the database.
+    """Load queries from any data source into the database.
 
     Args:
         db: Database instance
-        limit: Maximum number of records to load (None for all)
-        skip_existing: Skip conversations that already exist in DB
+        source: Data source implementing BaseSource interface
         chroma: Optional ChromaDB manager for vector storage
         embedding_model: Model for generating embeddings (if chroma is provided)
+        embedding_provider: Provider for generating embeddings (if chroma is provided)
+        batch_size: Number of records to process in each batch
+        skip_existing: Skip conversations that already exist in DB
+        apply_pragmas: Apply SQLite performance optimizations
 
     Returns:
-        Dictionary with loading statistics
+        Dictionary with loading statistics including:
+        - source: Source label
+        - total_processed: Total records processed
+        - loaded: Records successfully inserted
+        - skipped: Records skipped (duplicates)
+        - errors: Records with errors
     """
     stats = {
+        "source": source.get_source_label(),
         "total_processed": 0,
         "loaded": 0,
         "skipped": 0,
@@ -88,30 +96,14 @@ def load_lmsys_dataset(
     # Create tables if they don't exist
     db.create_tables()
 
-    # Load dataset from HuggingFace
+    # Iterate records from source with progress tracking
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
         TaskProgressColumn(),
     ) as progress:
-        task = progress.add_task("[cyan]Downloading LMSYS-1M dataset...", total=None)
-        if use_streaming:
-            dataset = load_dataset("lmsys/lmsys-chat-1m", split="train", streaming=True)
-        else:
-            dataset = load_dataset("lmsys/lmsys-chat-1m", split="train")
-        progress.update(task, completed=True, description="[green]Dataset downloaded")
-
-        # Apply limit if specified
-        if limit and not use_streaming:
-            dataset = dataset.select(range(min(limit, len(dataset))))
-
-        if use_streaming:
-            load_task = progress.add_task("[cyan]Loading queries...", total=None)
-        else:
-            load_task = progress.add_task(
-                "[cyan]Loading queries...", total=len(dataset)
-            )
+        load_task = progress.add_task("[cyan]Loading queries...", total=None)
 
         session = db.get_session()
 
@@ -147,32 +139,18 @@ def load_lmsys_dataset(
 
             seen_conv_ids: set[str] = set()
 
-            # Iterate dataset and build rows in batches
-            # Create an iterator that respects limit when streaming
-            def _limited_iter(it: Iterable, n: Optional[int]):
-                if n is None:
-                    for x in it:
-                        yield x
-                else:
-                    count = 0
-                    for x in it:
-                        if count >= n:
-                            break
-                        yield x
-                        count += 1
-
-            source_iter = dataset if not use_streaming else dataset
-            for batch in chunk_iter(
-                _limited_iter(source_iter, limit if use_streaming else None), BATCH_SIZE
-            ):
+            # Iterate records from source in batches
+            for batch in chunk_iter(source.iter_records(), BATCH_SIZE):
                 to_insert_rows: list[dict] = []
                 batch_conv_ids: list[str] = []
                 raw_texts_by_cid: dict[str, tuple[str, str, str]] = {}
                 # tuple: (query_text, model, language)
 
-                for row in batch:
+                for record in batch:
                     stats["total_processed"] += 1
-                    conversation_id = row.get("conversation_id")
+                    
+                    # Records from source are already normalized
+                    conversation_id = record.get("conversation_id")
                     if not conversation_id:
                         stats["errors"] += 1
                         continue
@@ -181,21 +159,13 @@ def load_lmsys_dataset(
                         stats["skipped"] += 1
                         continue
 
-                    conversation = row.get("conversation")
-                    if isinstance(conversation, str):
-                        try:
-                            conversation = _json_loads(conversation)
-                        except json.JSONDecodeError:
-                            stats["errors"] += 1
-                            continue
-
-                    query_text = extract_first_query(conversation)
-                    if query_text is None:
+                    query_text = record.get("query_text")
+                    if not query_text:
                         stats["errors"] += 1
                         continue
 
-                    model = row.get("model", "unknown")
-                    language = row.get("language") or None
+                    model = record.get("model", "unknown")
+                    language = record.get("language") or None
 
                     # Track for stats and future Chroma
                     batch_conv_ids.append(conversation_id)
@@ -213,12 +183,8 @@ def load_lmsys_dataset(
                             "model": model,
                             "query_text": query_text,
                             "language": language,
-                            "timestamp": row.get("timestamp"),
-                            "extra_metadata": {
-                                "turn_count": len(conversation) if conversation else 0,
-                                "redacted": row.get("redacted", False),
-                                "openai_moderation": row.get("openai_moderation"),
-                            },
+                            "timestamp": record.get("timestamp"),
+                            "extra_metadata": record.get("extra_metadata"),
                         }
                     )
 
@@ -252,7 +218,7 @@ def load_lmsys_dataset(
                 # Bulk insert remaining rows using executemany
                 if to_insert_rows:
                     table = Query.__table__
-                    result = session.execute(table.insert(), to_insert_rows)
+                    session.execute(table.insert(), to_insert_rows)
                     session.commit()
 
                     # Retrieve IDs for inserted conv_ids
