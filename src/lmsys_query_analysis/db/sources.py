@@ -3,11 +3,16 @@
 This module provides:
 - BaseSource: Abstract base class for all data sources
 - HuggingFaceSource: Load queries from HuggingFace datasets
+- CSVSource: Load queries from CSV files
 - extract_first_query: Helper to extract first user query from conversation
 """
 
+import csv
 import json
+import logging
 from abc import ABC, abstractmethod
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Iterator, Optional
 
 from datasets import load_dataset
@@ -18,6 +23,8 @@ from rich.progress import (
     TaskProgressColumn,
     TextColumn,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def extract_first_query(conversation: list[dict] | None) -> str | None:
@@ -222,4 +229,125 @@ class HuggingFaceSource(BaseSource):
             Label in format "hf:dataset_id"
         """
         return f"hf:{self.dataset_id}"
+
+
+class CSVSource(BaseSource):
+    """Load queries from CSV files.
+    
+    Expects CSV to have columns:
+    - conversation_id (required): Unique identifier
+    - query_text (required): The user's query text
+    - model (optional): Model identifier (defaults to "unknown")
+    - language (optional): Language code
+    - timestamp (optional): ISO-8601 timestamp
+    
+    CSV must be UTF-8 encoded with headers in the first row.
+    Rows with empty conversation_id or query_text are skipped.
+    """
+
+    def __init__(self, file_path: str):
+        """Initialize CSV data source.
+        
+        Args:
+            file_path: Path to CSV file
+        """
+        self.file_path = Path(file_path)
+        self._skipped_rows = 0
+
+    def validate_source(self) -> None:
+        """Validate that the CSV file exists and has required columns.
+        
+        Raises:
+            FileNotFoundError: If CSV file doesn't exist
+            ValueError: If required columns are missing
+        """
+        if not self.file_path.exists():
+            raise FileNotFoundError(f"CSV file not found: {self.file_path}")
+        
+        # Check headers
+        with open(self.file_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames
+            
+            if headers is None:
+                raise ValueError(f"CSV file is empty or has no headers: {self.file_path}")
+            
+            required_columns = {'conversation_id', 'query_text'}
+            missing_columns = required_columns - set(headers)
+            
+            if missing_columns:
+                raise ValueError(
+                    f"CSV file missing required columns: {missing_columns}. "
+                    f"Required: {required_columns}. Found: {set(headers)}"
+                )
+
+    def iter_records(self) -> Iterator[dict[str, Any]]:
+        """Iterate over records from CSV file.
+        
+        Parses CSV and yields normalized records.
+        Skips rows with empty conversation_id or query_text.
+        
+        Yields:
+            Normalized record dictionaries
+        """
+        self._skipped_rows = 0
+        
+        with open(self.file_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            
+            for row_num, row in enumerate(reader, start=2):  # Start at 2 (header is row 1)
+                # Check required fields
+                conversation_id = row.get('conversation_id', '').strip()
+                query_text = row.get('query_text', '').strip()
+                
+                if not conversation_id or not query_text:
+                    self._skipped_rows += 1
+                    if not conversation_id:
+                        logger.warning(
+                            f"Row {row_num} in {self.file_path.name}: "
+                            "Empty conversation_id, skipping"
+                        )
+                    if not query_text:
+                        logger.warning(
+                            f"Row {row_num} in {self.file_path.name}: "
+                            "Empty query_text, skipping"
+                        )
+                    continue
+                
+                # Get optional fields
+                model = row.get('model', '').strip() or 'unknown'
+                language = row.get('language', '').strip() or None
+                
+                # Parse timestamp
+                timestamp = None
+                timestamp_str = row.get('timestamp', '').strip()
+                if timestamp_str:
+                    try:
+                        # Replace 'Z' with '+00:00' for Python 3.10 compatibility
+                        if timestamp_str.endswith('Z'):
+                            timestamp_str = timestamp_str[:-1] + '+00:00'
+                        timestamp = datetime.fromisoformat(timestamp_str)
+                    except (ValueError, TypeError) as e:
+                        logger.warning(
+                            f"Row {row_num} in {self.file_path.name}: "
+                            f"Invalid timestamp '{timestamp_str}': {e}"
+                        )
+                
+                # Build normalized record
+                yield {
+                    'conversation_id': conversation_id,
+                    'query_text': query_text,
+                    'model': model,
+                    'language': language,
+                    'timestamp': timestamp,
+                    'extra_metadata': None,
+                }
+
+    def get_source_label(self) -> str:
+        """Get label for this CSV source.
+        
+        Returns:
+            Label in format "csv:filename"
+        """
+        return f"csv:{self.file_path}"
 

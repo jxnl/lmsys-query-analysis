@@ -1,0 +1,7 @@
+conversation_id,query_text,model,language,timestamp
+conv_1,What is machine learning?,gpt-4,English,2024-01-01T10:00:00Z
+conv_2,How do I learn Python?,claude-3,English,2024-01-01T11:00:00Z
+conv_3,Explain quantum computing,gpt-3.5,English,2024-01-01T12:00:00Z
+conv_4,What is the capital of France?,palm-2,English,2024-01-01T13:00:00Z
+conv_5,Tell me a joke,llama-2,English,2024-01-01T14:00:00Z
+

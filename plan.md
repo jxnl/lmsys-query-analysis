@@ -266,20 +266,20 @@ From `load_lmsys_dataset()` (lines 58-351):
 
 #### Implementation Checklist
 
-- [ ] Implement `CSVSource` class:
-  - [ ] Accept `file_path` in constructor
-  - [ ] Validate file exists in `validate_source()`
-  - [ ] Required columns: `conversation_id`, `query_text` (exact, case-sensitive)
-  - [ ] Optional columns: `model`, `language`, `timestamp`
-  - [ ] Use `csv.DictReader` for parsing
-  - [ ] In `validate_source()`: open file, check headers, raise ValueError if missing required
-  - [ ] In `iter_records()`:
-    - [ ] Yield records with `query_text` directly (no conversation parsing)
-    - [ ] Skip rows with empty `conversation_id` or `query_text`
-    - [ ] Default `model` to "unknown" if not provided
-    - [ ] Parse timestamp with `datetime.fromisoformat()`, set None on error
-    - [ ] Log warnings for skipped/invalid rows
-  - [ ] Return label like `"csv:path/to/file.csv"`
+- [x] Implement `CSVSource` class:
+  - [x] Accept `file_path` in constructor
+  - [x] Validate file exists in `validate_source()`
+  - [x] Required columns: `conversation_id`, `query_text` (exact, case-sensitive)
+  - [x] Optional columns: `model`, `language`, `timestamp`
+  - [x] Use `csv.DictReader` for parsing
+  - [x] In `validate_source()`: open file, check headers, raise ValueError if missing required
+  - [x] In `iter_records()`:
+    - [x] Yield records with `query_text` directly (no conversation parsing)
+    - [x] Skip rows with empty `conversation_id` or `query_text`
+    - [x] Default `model` to "unknown" if not provided
+    - [x] Parse timestamp with `datetime.fromisoformat()`, set None on error
+    - [x] Log warnings for skipped/invalid rows
+  - [x] Return label like `"csv:path/to/file.csv"`
 
 ---
 
@@ -301,20 +301,20 @@ From `load_lmsys_dataset()` (lines 58-351):
 
 #### Testing Checklist
 
-- [ ] Create test fixtures:
-  - [ ] `valid_queries.csv`: all columns, 5 valid rows
-  - [ ] `invalid_headers.csv`: missing `query_text` column
-  - [ ] `empty_fields.csv`: some rows with empty required fields
-- [ ] Test `CSVSource`:
-  - [ ] Valid CSV → yields correct records
-  - [ ] Missing `conversation_id` column → ValueError with message
-  - [ ] Missing `query_text` column → ValueError with message
-  - [ ] Empty `conversation_id` → skip row, count in stats
-  - [ ] Empty `query_text` → skip row, count in stats
-  - [ ] Invalid timestamp → set None, continue
-  - [ ] Missing optional columns → use defaults
-  - [ ] Extra columns → ignored
-  - [ ] `get_source_label()` returns correct path
+- [x] Create test fixtures:
+  - [x] `valid_queries.csv`: all columns, 5 valid rows
+  - [x] `invalid_headers.csv`: missing `query_text` column
+  - [x] `empty_fields.csv`: some rows with empty required fields
+- [x] Test `CSVSource`:
+  - [x] Valid CSV → yields correct records
+  - [x] Missing `conversation_id` column → ValueError with message
+  - [x] Missing `query_text` column → ValueError with message
+  - [x] Empty `conversation_id` → skip row, count in stats
+  - [x] Empty `query_text` → skip row, count in stats
+  - [x] Invalid timestamp → set None, continue
+  - [x] Missing optional columns → use defaults
+  - [x] Extra columns → ignored
+  - [x] `get_source_label()` returns correct path
 
 ---
 

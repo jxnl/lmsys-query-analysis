@@ -1,0 +1,4 @@
+conversation_id,model,language,timestamp
+conv_1,gpt-4,English,2024-01-01T10:00:00Z
+conv_2,claude-3,English,2024-01-01T11:00:00Z
+

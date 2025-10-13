@@ -1,0 +1,6 @@
+conversation_id,query_text,model,language,timestamp
+conv_1,What is AI?,gpt-4,English,2024-01-01T10:00:00Z
+,Empty conversation_id row,gpt-4,English,2024-01-01T11:00:00Z
+conv_3,,gpt-4,English,2024-01-01T12:00:00Z
+conv_4,Valid row,gpt-4,English,2024-01-01T13:00:00Z
+

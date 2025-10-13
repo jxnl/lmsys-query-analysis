@@ -282,3 +282,55 @@ def load_queries(
             )
 
     return stats
+
+
+def load_queries_from_multiple(
+    db: Database,
+    sources: list[BaseSource],
+    chroma: Optional[ChromaManager] = None,
+    embedding_model: str = "embed-v4.0",
+    embedding_provider: str = "cohere",
+    batch_size: int = 5000,
+    skip_existing: bool = True,
+    apply_pragmas: bool = True,
+) -> list[dict]:
+    """Load queries from multiple data sources into the database.
+    
+    This function loads data from multiple sources sequentially. Natural deduplication
+    occurs via the database - later sources will skip conversation_ids already present
+    from earlier sources.
+    
+    Args:
+        db: Database instance
+        sources: List of data sources implementing BaseSource interface
+        chroma: Optional ChromaDB manager for vector storage
+        embedding_model: Model for generating embeddings (if chroma is provided)
+        embedding_provider: Provider for generating embeddings (if chroma is provided)
+        batch_size: Number of records to process in each batch
+        skip_existing: Skip conversations that already exist in DB
+        apply_pragmas: Apply SQLite performance optimizations
+    
+    Returns:
+        List of dictionaries with loading statistics (one per source)
+    """
+    if not sources:
+        raise ValueError("sources list cannot be empty")
+    
+    results = []
+    
+    for source in sources:
+        # Load from each source sequentially
+        # Deduplication happens naturally via database checks
+        stats = load_queries(
+            db=db,
+            source=source,
+            chroma=chroma,
+            embedding_model=embedding_model,
+            embedding_provider=embedding_provider,
+            batch_size=batch_size,
+            skip_existing=skip_existing,
+            apply_pragmas=apply_pragmas,
+        )
+        results.append(stats)
+    
+    return results
