@@ -332,15 +332,15 @@ From `load_lmsys_dataset()` (lines 58-351):
 
 #### Implementation Checklist
 
-- [ ] Create `load_queries_from_multiple(db, sources, chroma, ...)`:
-  - [ ] Accept list of BaseSource instances
-  - [ ] Validate sources is non-empty list
-  - [ ] Maintain single session with PRAGMAs applied once
-  - [ ] Maintain global `seen_conv_ids` set across sources (dedupes across all sources)
-  - [ ] Loop through sources, call `load_queries()` for each
-  - [ ] Pass shared `seen_conv_ids` to each call
-  - [ ] Track per-source stats in a list
-  - [ ] Return list of stats dicts (one per source)
+- [x] Create `load_queries_from_multiple(db, sources, chroma, ...)`:
+  - [x] Accept list of BaseSource instances
+  - [x] Validate sources is non-empty list
+  - [x] Maintain single session with PRAGMAs applied once
+  - [x] Maintain global `seen_conv_ids` set across sources (dedupes across all sources)
+  - [x] Loop through sources, call `load_queries()` for each
+  - [x] Pass shared `seen_conv_ids` to each call
+  - [x] Track per-source stats in a list
+  - [x] Return list of stats dicts (one per source)
 
 ---
 
@@ -361,15 +361,15 @@ From `load_lmsys_dataset()` (lines 58-351):
 
 #### Testing Checklist
 
-- [ ] Create fixtures:
-  - [ ] `dataset1.csv`: conv_ids "a", "b", "c"
-  - [ ] `dataset2.csv`: conv_ids "c", "d", "e" (c is duplicate)
-- [ ] Test multi-source loading:
-  - [ ] Load dataset1.csv → 3 loaded
-  - [ ] Load dataset1.csv again → 0 loaded, 3 skipped
-  - [ ] Load both dataset1 + dataset2 → 5 loaded (c skipped in dataset2)
-  - [ ] Verify per-source stats correct
-  - [ ] Verify all expected rows in DB
+- [x] Create fixtures:
+  - [x] `dataset1.csv`: conv_ids "a", "b", "c"
+  - [x] `dataset2.csv`: conv_ids "c", "d", "e" (c is duplicate)
+- [x] Test multi-source loading:
+  - [x] Load dataset1.csv → 3 loaded
+  - [x] Load dataset1.csv again → 0 loaded, 3 skipped
+  - [x] Load both dataset1 + dataset2 → 5 loaded (c skipped in dataset2)
+  - [x] Verify per-source stats correct
+  - [x] Verify all expected rows in DB
 
 ---
 
