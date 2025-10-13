@@ -137,6 +137,60 @@ def format_loading_stats_table(stats: dict) -> Table:
     return table
 
 
+def format_multi_source_stats_table(stats_list: List[dict]) -> Table:
+    """Format multi-source loading statistics as a rich table.
+    
+    Args:
+        stats_list: List of stat dictionaries (one per source)
+    
+    Returns:
+        Formatted Rich table with per-source rows and totals
+    """
+    table = Table(title="Multi-Source Loading Statistics")
+    table.add_column("Source", style="cyan", width=40, no_wrap=False)
+    table.add_column("Processed", justify="right", style="white")
+    table.add_column("Loaded", justify="right", style="green")
+    table.add_column("Skipped", justify="right", style="yellow")
+    table.add_column("Errors", justify="right", style="red")
+    
+    # Per-source rows
+    for stats in stats_list:
+        # Truncate source label if too long
+        source_label = stats["source"]
+        if len(source_label) > 40:
+            source_label = "..." + source_label[-37:]
+        
+        table.add_row(
+            source_label,
+            str(stats["total_processed"]),
+            str(stats["loaded"]),
+            str(stats["skipped"]),
+            str(stats["errors"]),
+        )
+    
+    # Separator and totals
+    if len(stats_list) > 1:
+        # Separator row
+        separator = "─" * 40
+        table.add_row(separator, "─" * 9, "─" * 6, "─" * 7, "─" * 6)
+        
+        # Total summary row
+        total_processed = sum(s["total_processed"] for s in stats_list)
+        total_loaded = sum(s["loaded"] for s in stats_list)
+        total_skipped = sum(s["skipped"] for s in stats_list)
+        total_errors = sum(s["errors"] for s in stats_list)
+        
+        table.add_row(
+            "[bold]Total[/bold]",
+            f"[bold]{total_processed}[/bold]",
+            f"[bold]{total_loaded}[/bold]",
+            f"[bold]{total_skipped}[/bold]",
+            f"[bold]{total_errors}[/bold]",
+        )
+    
+    return table
+
+
 def format_backfill_summary_table(
     scanned: int, backfilled: int, already_present: int, elapsed: float, rate: float
 ) -> Table:

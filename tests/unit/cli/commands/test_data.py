@@ -33,6 +33,8 @@ def test_load_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_lo
     
     # Execute command
     load(
+        csv=None,
+        hf_dataset=None,
         limit=100,
         db_path="/tmp/test.db",
         use_chroma=False,
