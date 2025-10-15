@@ -172,12 +172,12 @@ class HuggingFaceAdapter:
 
 #### Success Criteria (Phase 1b)
 
-- [ ] `HuggingFaceAdapter` class extracts all HF-specific logic
-- [ ] Adapter conforms to `DataSourceAdapter` protocol
-- [ ] All HF adapter tests pass
-- [ ] Unit tests pass: `uv run pytest tests/unit/db/test_adapters.py -v`
-- [ ] Adapter can be instantiated and iterated independently
-- [ ] Mock HF dataset used in tests (no real HF downloads)
+- [x] `HuggingFaceAdapter` class extracts all HF-specific logic
+- [x] Adapter conforms to `DataSourceAdapter` protocol
+- [x] All HF adapter tests pass
+- [x] Unit tests pass: `uv run pytest tests/unit/db/test_adapters.py -v`
+- [x] Adapter can be instantiated and iterated independently
+- [x] Mock HF dataset used in tests (no real HF downloads)
 
 ---
 

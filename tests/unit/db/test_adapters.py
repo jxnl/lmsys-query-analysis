@@ -2,8 +2,10 @@
 
 from typing import Iterator
 from datetime import datetime
+from unittest.mock import Mock, patch
 from lmsys_query_analysis.db.adapters import (
     DataSourceAdapter,
+    HuggingFaceAdapter,
     extract_first_query,
 )
 
@@ -292,4 +294,323 @@ def test_adapter_multiple_iterations():
     
     # Both should yield same data
     assert records1[0]["conversation_id"] == records2[0]["conversation_id"]
+
+
+# ============================================================================
+# Tests for HuggingFaceAdapter
+# ============================================================================
+
+
+def test_hf_adapter_initialization():
+    """Test that HuggingFaceAdapter initializes with correct parameters."""
+    mock_dataset = Mock()
+    mock_dataset.__len__ = Mock(return_value=1000)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(
+            dataset_name="test/dataset",
+            split="train",
+            limit=100,
+            use_streaming=False,
+        )
+        
+        assert adapter.dataset_name == "test/dataset"
+        assert adapter.split == "train"
+        assert adapter.limit == 100
+        assert adapter.use_streaming is False
+
+
+def test_hf_adapter_iteration_basic():
+    """Test basic iteration over HuggingFace adapter."""
+    mock_data = [
+        {
+            "conversation_id": "conv1",
+            "conversation": [
+                {"role": "user", "content": "What is Python?"},
+                {"role": "assistant", "content": "Python is a programming language."},
+            ],
+            "model": "gpt-4",
+            "language": "en",
+            "timestamp": "2024-01-01T00:00:00",
+        },
+        {
+            "conversation_id": "conv2",
+            "conversation": [
+                {"role": "user", "content": "Hello world"},
+            ],
+            "model": "claude-3",
+            "language": "en",
+            "timestamp": None,
+        },
+    ]
+    
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    mock_dataset.__len__ = Mock(return_value=2)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(dataset_name="test/dataset", limit=None)
+        
+        records = list(adapter)
+        
+        assert len(records) == 2
+        assert records[0]["conversation_id"] == "conv1"
+        assert records[0]["query_text"] == "What is Python?"
+        assert records[0]["model"] == "gpt-4"
+        assert records[0]["language"] == "en"
+        assert records[1]["conversation_id"] == "conv2"
+        assert records[1]["query_text"] == "Hello world"
+
+
+def test_hf_adapter_with_limit():
+    """Test HuggingFaceAdapter respects limit parameter."""
+    mock_data = [
+        {
+            "conversation_id": f"conv{i}",
+            "conversation": [{"role": "user", "content": f"Query {i}"}],
+            "model": "gpt-4",
+            "language": "en",
+        }
+        for i in range(10)
+    ]
+    
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data[:3]))  # Simulate select
+    mock_dataset.__len__ = Mock(return_value=3)
+    mock_dataset.select = Mock(side_effect=lambda indices: mock_dataset)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(dataset_name="test/dataset", limit=3)
+        
+        records = list(adapter)
+        
+        # Verify select was called with correct range
+        mock_dataset.select.assert_called_once()
+        assert len(records) == 3
+
+
+def test_hf_adapter_normalized_output_schema():
+    """Test that HuggingFaceAdapter outputs conform to expected schema."""
+    mock_data = [
+        {
+            "conversation_id": "test123",
+            "conversation": [
+                {"role": "user", "content": "What is machine learning?"},
+            ],
+            "model": "gpt-4",
+            "language": "en",
+            "timestamp": "2024-01-01T00:00:00",
+            "redacted": False,
+            "openai_moderation": {"flagged": False},
+        },
+    ]
+    
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    mock_dataset.__len__ = Mock(return_value=1)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(dataset_name="test/dataset")
+        
+        record = next(iter(adapter))
+        
+        # Verify all required fields are present
+        assert "conversation_id" in record
+        assert "query_text" in record
+        assert "model" in record
+        assert "language" in record
+        assert "timestamp" in record
+        assert "extra_metadata" in record
+        
+        # Verify values
+        assert record["conversation_id"] == "test123"
+        assert record["query_text"] == "What is machine learning?"
+        assert record["model"] == "gpt-4"
+        assert record["language"] == "en"
+        assert record["timestamp"] == "2024-01-01T00:00:00"
+        
+        # Verify extra_metadata structure
+        assert isinstance(record["extra_metadata"], dict)
+        assert "turn_count" in record["extra_metadata"]
+        assert "redacted" in record["extra_metadata"]
+        assert "openai_moderation" in record["extra_metadata"]
+        assert record["extra_metadata"]["turn_count"] == 1
+        assert record["extra_metadata"]["redacted"] is False
+
+
+def test_hf_adapter_handles_json_conversations():
+    """Test that HuggingFaceAdapter handles JSON string conversations."""
+    import json
+    
+    conversation = [
+        {"role": "user", "content": "What is AI?"},
+        {"role": "assistant", "content": "AI is..."},
+    ]
+    
+    mock_data = [
+        {
+            "conversation_id": "conv1",
+            "conversation": json.dumps(conversation),  # JSON string
+            "model": "gpt-4",
+            "language": "en",
+        },
+    ]
+    
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    mock_dataset.__len__ = Mock(return_value=1)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(dataset_name="test/dataset")
+        
+        records = list(adapter)
+        
+        assert len(records) == 1
+        assert records[0]["query_text"] == "What is AI?"
+        assert records[0]["extra_metadata"]["turn_count"] == 2
+
+
+def test_hf_adapter_handles_missing_fields():
+    """Test that HuggingFaceAdapter handles missing optional fields."""
+    mock_data = [
+        {
+            "conversation_id": "conv1",
+            "conversation": [{"role": "user", "content": "Test query"}],
+            # Missing: model, language, timestamp, redacted
+        },
+    ]
+    
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    mock_dataset.__len__ = Mock(return_value=1)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(dataset_name="test/dataset")
+        
+        records = list(adapter)
+        
+        assert len(records) == 1
+        assert records[0]["conversation_id"] == "conv1"
+        assert records[0]["query_text"] == "Test query"
+        assert records[0]["model"] == "unknown"  # Default value
+        assert records[0]["language"] is None
+        assert records[0]["timestamp"] is None
+        assert records[0]["extra_metadata"]["redacted"] is False
+
+
+def test_hf_adapter_skips_invalid_records():
+    """Test that HuggingFaceAdapter skips records with missing conversation_id or query."""
+    mock_data = [
+        {
+            # Missing conversation_id
+            "conversation": [{"role": "user", "content": "Test"}],
+            "model": "gpt-4",
+        },
+        {
+            "conversation_id": "conv2",
+            # No user message in conversation
+            "conversation": [{"role": "system", "content": "System message"}],
+            "model": "gpt-4",
+        },
+        {
+            "conversation_id": "conv3",
+            "conversation": [{"role": "user", "content": "Valid query"}],
+            "model": "gpt-4",
+        },
+    ]
+    
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    mock_dataset.__len__ = Mock(return_value=3)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(dataset_name="test/dataset")
+        
+        records = list(adapter)
+        
+        # Only the valid record should be returned
+        assert len(records) == 1
+        assert records[0]["conversation_id"] == "conv3"
+
+
+def test_hf_adapter_handles_invalid_json():
+    """Test that HuggingFaceAdapter skips records with invalid JSON conversations."""
+    mock_data = [
+        {
+            "conversation_id": "conv1",
+            "conversation": "invalid json {{{",
+            "model": "gpt-4",
+        },
+        {
+            "conversation_id": "conv2",
+            "conversation": [{"role": "user", "content": "Valid query"}],
+            "model": "gpt-4",
+        },
+    ]
+    
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    mock_dataset.__len__ = Mock(return_value=2)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(dataset_name="test/dataset")
+        
+        records = list(adapter)
+        
+        # Only the valid record should be returned
+        assert len(records) == 1
+        assert records[0]["conversation_id"] == "conv2"
+
+
+def test_hf_adapter_streaming_mode():
+    """Test HuggingFaceAdapter in streaming mode."""
+    mock_data = [
+        {
+            "conversation_id": f"conv{i}",
+            "conversation": [{"role": "user", "content": f"Query {i}"}],
+            "model": "gpt-4",
+        }
+        for i in range(5)
+    ]
+    
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(
+            dataset_name="test/dataset",
+            use_streaming=True,
+            limit=3,
+        )
+        
+        records = list(adapter)
+        
+        # Should respect limit in streaming mode
+        assert len(records) == 3
+        assert records[0]["conversation_id"] == "conv0"
+        assert records[2]["conversation_id"] == "conv2"
+        
+        # Streaming adapter should return None for __len__
+        assert adapter.__len__() is None
+
+
+def test_hf_adapter_conforms_to_protocol():
+    """Test that HuggingFaceAdapter conforms to DataSourceAdapter protocol."""
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter([]))
+    mock_dataset.__len__ = Mock(return_value=0)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(dataset_name="test/dataset")
+        
+        # Check that it's recognized as implementing the protocol
+        assert isinstance(adapter, DataSourceAdapter)
 
