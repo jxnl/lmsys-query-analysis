@@ -102,11 +102,11 @@ def extract_first_query(conversation: list[dict] | None) -> str | None:
 
 #### Success Criteria (Phase 1a)
 
-- [ ] `adapters.py` created with `DataSourceAdapter` protocol
-- [ ] `extract_first_query` moved from `loader.py` to `adapters.py`
-- [ ] `test_adapters.py` created with mock adapter
-- [ ] Protocol tests pass with mock implementation
-- [ ] Unit tests pass: `uv run pytest tests/unit/db/test_adapters.py -v`
+- [x] `adapters.py` created with `DataSourceAdapter` protocol
+- [x] `extract_first_query` moved from `loader.py` to `adapters.py`
+- [x] `test_adapters.py` created with mock adapter
+- [x] Protocol tests pass with mock implementation
+- [x] Unit tests pass: `uv run pytest tests/unit/db/test_adapters.py -v`
 
 ---
 
