@@ -247,11 +247,11 @@ for batch in chunk_iter(adapter, batch_size):
 
 ### Success Criteria
 
-- [ ] `load_lmsys_dataset()` uses `HuggingFaceAdapter` internally
-- [ ] Function signature unchanged (fully backward compatible)
-- [ ] All batching, dedup, Chroma logic unchanged
-- [ ] All existing tests pass: `uv run pytest tests/unit/db/test_loader.py -v`
-- [ ] No functional changes observable from outside
+- [x] `load_lmsys_dataset()` uses `HuggingFaceAdapter` internally
+- [x] Function signature unchanged (fully backward compatible)
+- [x] All batching, dedup, Chroma logic unchanged
+- [x] All existing tests pass: `uv run pytest tests/unit/db/test_loader.py -v`
+- [x] No functional changes observable from outside
 
 ---
 
