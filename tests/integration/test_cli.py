@@ -20,7 +20,7 @@ def test_load_help():
     """Test load command help."""
     result = runner.invoke(app, ["load", "--help"])
     assert result.exit_code == 0
-    assert "Download and load LMSYS-1M dataset" in result.stdout
+    assert "Download and load dataset from Hugging Face" in result.stdout
 
 
 def test_list_help():

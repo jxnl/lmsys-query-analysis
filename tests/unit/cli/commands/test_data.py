@@ -1,15 +1,15 @@
 """Unit tests for data CLI commands."""
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 
-@patch('lmsys_query_analysis.cli.commands.data.load_lmsys_dataset')
+@patch('lmsys_query_analysis.cli.commands.data.HuggingFaceAdapter')
+@patch('lmsys_query_analysis.cli.commands.data.load_dataset')
 @patch('lmsys_query_analysis.cli.commands.data.get_db')
 @patch('lmsys_query_analysis.cli.commands.data.create_chroma_client')
 @patch('lmsys_query_analysis.cli.commands.data.parse_embedding_model')
-def test_load_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_load_dataset):
+def test_load_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_load_dataset, mock_adapter):
     """Test basic load command without Chroma."""
     from lmsys_query_analysis.cli.commands.data import load
     
@@ -18,6 +18,8 @@ def test_load_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_lo
     mock_db = Mock()
     mock_db.db_path = Path("/tmp/test.db")
     mock_get_db.return_value = mock_db
+    mock_adapter_instance = Mock()
+    mock_adapter.return_value = mock_adapter_instance
     mock_load_dataset.return_value = {
         "total_processed": 100,
         "loaded": 90,
@@ -27,6 +29,7 @@ def test_load_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_lo
     
     # Execute command
     load(
+        hf="lmsys/lmsys-chat-1m",
         limit=100,
         db_path="/tmp/test.db",
         use_chroma=False,
@@ -40,6 +43,7 @@ def test_load_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_lo
     
     # Verify
     mock_get_db.assert_called_once_with("/tmp/test.db")
+    mock_adapter.assert_called_once_with(dataset_name="lmsys/lmsys-chat-1m", use_streaming=False)
     mock_load_dataset.assert_called_once()
 
 
@@ -83,6 +87,132 @@ def test_clear_command_with_yes_flag(mock_get_db, mock_get_chroma, mock_rmtree, 
     # Verify files were deleted
     mock_db_path.unlink.assert_called_once()
     mock_rmtree.assert_called_once()
+
+
+@patch('lmsys_query_analysis.cli.commands.data.HuggingFaceAdapter')
+@patch('lmsys_query_analysis.cli.commands.data.load_dataset')
+@patch('lmsys_query_analysis.cli.commands.data.get_db')
+@patch('lmsys_query_analysis.cli.commands.data.create_chroma_client')
+@patch('lmsys_query_analysis.cli.commands.data.parse_embedding_model')
+def test_load_command_with_custom_hf_dataset(mock_parse, mock_chroma_client, mock_get_db, mock_load_dataset, mock_adapter):
+    """Test load command with explicit --hf flag for custom dataset."""
+    from lmsys_query_analysis.cli.commands.data import load
+    
+    # Setup mocks
+    mock_parse.return_value = ("test-model", "test-provider")
+    mock_db = Mock()
+    mock_db.db_path = Path("/tmp/test.db")
+    mock_get_db.return_value = mock_db
+    mock_adapter_instance = Mock()
+    mock_adapter.return_value = mock_adapter_instance
+    mock_load_dataset.return_value = {
+        "total_processed": 50,
+        "loaded": 50,
+        "skipped": 0,
+        "errors": 0
+    }
+    
+    # Execute command with custom HF dataset
+    load(
+        hf="custom/dataset-name",
+        limit=50,
+        db_path="/tmp/test.db",
+        use_chroma=False,
+        chroma_path="/tmp/chroma",
+        embedding_model="test-model",
+        db_batch_size=1000,
+        streaming=False,
+        no_pragmas=False,
+        force_reload=False
+    )
+    
+    # Verify adapter was created with custom dataset name
+    mock_adapter.assert_called_once_with(dataset_name="custom/dataset-name", use_streaming=False)
+    mock_load_dataset.assert_called_once()
+
+
+@patch('lmsys_query_analysis.cli.commands.data.HuggingFaceAdapter')
+@patch('lmsys_query_analysis.cli.commands.data.load_dataset')
+@patch('lmsys_query_analysis.cli.commands.data.get_db')
+@patch('lmsys_query_analysis.cli.commands.data.create_chroma_client')
+@patch('lmsys_query_analysis.cli.commands.data.parse_embedding_model')
+def test_load_command_without_hf_flag_uses_default(mock_parse, mock_chroma_client, mock_get_db, mock_load_dataset, mock_adapter):
+    """Test load command without --hf flag uses default dataset (backwards compatibility)."""
+    from lmsys_query_analysis.cli.commands.data import load
+    
+    # Setup mocks
+    mock_parse.return_value = ("test-model", "test-provider")
+    mock_db = Mock()
+    mock_db.db_path = Path("/tmp/test.db")
+    mock_get_db.return_value = mock_db
+    mock_adapter_instance = Mock()
+    mock_adapter.return_value = mock_adapter_instance
+    mock_load_dataset.return_value = {
+        "total_processed": 100,
+        "loaded": 90,
+        "skipped": 10,
+        "errors": 0
+    }
+    
+    # Execute command with default hf parameter (simulating not providing --hf flag)
+    load(
+        hf="lmsys/lmsys-chat-1m",  # Default value - what CLI would pass when --hf is not specified
+        limit=100,
+        db_path="/tmp/test.db",
+        use_chroma=False,
+        chroma_path="/tmp/chroma",
+        embedding_model="test-model",
+        db_batch_size=1000,
+        streaming=False,
+        no_pragmas=False,
+        force_reload=False
+    )
+    
+    # Verify adapter was created with default dataset name "lmsys/lmsys-chat-1m"
+    mock_adapter.assert_called_once_with(dataset_name="lmsys/lmsys-chat-1m", use_streaming=False)
+    mock_load_dataset.assert_called_once()
+
+
+@patch('lmsys_query_analysis.cli.commands.data.HuggingFaceAdapter')
+@patch('lmsys_query_analysis.cli.commands.data.load_dataset')
+@patch('lmsys_query_analysis.cli.commands.data.get_db')
+@patch('lmsys_query_analysis.cli.commands.data.create_chroma_client')
+@patch('lmsys_query_analysis.cli.commands.data.parse_embedding_model')
+def test_load_command_with_streaming(mock_parse, mock_chroma_client, mock_get_db, mock_load_dataset, mock_adapter):
+    """Test load command with streaming enabled."""
+    from lmsys_query_analysis.cli.commands.data import load
+    
+    # Setup mocks
+    mock_parse.return_value = ("test-model", "test-provider")
+    mock_db = Mock()
+    mock_db.db_path = Path("/tmp/test.db")
+    mock_get_db.return_value = mock_db
+    mock_adapter_instance = Mock()
+    mock_adapter.return_value = mock_adapter_instance
+    mock_load_dataset.return_value = {
+        "total_processed": 100,
+        "loaded": 90,
+        "skipped": 10,
+        "errors": 0
+    }
+    
+    # Execute command with streaming=True
+    load(
+        hf="lmsys/lmsys-chat-1m",
+        limit=100,
+        db_path="/tmp/test.db",
+        use_chroma=False,
+        chroma_path="/tmp/chroma",
+        embedding_model="test-model",
+        db_batch_size=1000,
+        streaming=True,  # Enable streaming
+        no_pragmas=False,
+        force_reload=False
+    )
+    
+    # Verify adapter was created with streaming enabled
+    mock_adapter.assert_called_once_with(dataset_name="lmsys/lmsys-chat-1m", use_streaming=True)
+    mock_load_dataset.assert_called_once()
 
 
 @patch('lmsys_query_analysis.cli.commands.data.create_embedding_generator')

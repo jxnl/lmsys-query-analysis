@@ -23,6 +23,11 @@ console = Console()
 
 @with_error_handling
 def load(
+    hf: str = typer.Option(
+        "lmsys/lmsys-chat-1m",
+        "--hf",
+        help="Hugging Face dataset name to load (default: lmsys/lmsys-chat-1m)",
+    ),
     limit: int = typer.Option(None, help="Limit number of records to load"),
     db_path: str = db_path_option,
     use_chroma: bool = typer.Option(False, help="Enable ChromaDB for semantic search"),
@@ -37,18 +42,29 @@ def load(
         False, "--force-reload", help="Reload existing queries (skip duplicate check)"
     ),
 ):
-    """Download and load LMSYS-1M dataset into SQLite."""
+    """Download and load dataset from Hugging Face into SQLite.
+    
+    Examples:
+        # Load default LMSYS-1M dataset (first 10k records)
+        lmsys load --limit 10000
+        
+        # Load specific Hugging Face dataset
+        lmsys load --hf lmsys/lmsys-chat-1m --limit 5000
+        
+        # Load with ChromaDB enabled
+        lmsys load --hf lmsys/lmsys-chat-1m --limit 10000 --use-chroma
+    """
     model, provider = parse_embedding_model(embedding_model)
     
     console.print(
-        f"[cyan]Starting data load: limit={limit}, use_chroma={use_chroma}, force_reload={force_reload}[/cyan]"
+        f"[cyan]Starting data load: dataset={hf}, limit={limit}, use_chroma={use_chroma}, force_reload={force_reload}[/cyan]"
     )
     
     db = get_db(db_path)
     chroma = create_chroma_client(chroma_path, model, provider) if use_chroma else None
     
-    # Create adapter for LMSYS dataset
-    adapter = HuggingFaceAdapter(use_streaming=streaming)
+    # Create adapter for Hugging Face dataset
+    adapter = HuggingFaceAdapter(dataset_name=hf, use_streaming=streaming)
     
     stats = load_dataset(
         db,
