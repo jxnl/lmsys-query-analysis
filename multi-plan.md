@@ -16,8 +16,16 @@
 - ✅ Updated `runner.py` and CLI `data.py` to use new function
 - ✅ All existing tests passing - zero regressions
 
-### Next: Phase 2 - CLI Integration 🚧
-Add `--hf <dataset_name>` flag to the CLI and wire up the HuggingFaceAdapter.
+### Phase 2.1 Completed ✅
+- ✅ Added `--hf` CLI option with default value "lmsys/lmsys-chat-1m"
+- ✅ Updated load command to accept and use `--hf` parameter
+- ✅ Added comprehensive tests for CLI flag (4 new tests)
+- ✅ Verified backwards compatibility (no flag = default dataset)
+- ✅ Updated help text and docstrings
+- ✅ All 402 tests passing - zero regressions
+
+### Next: Phase 2.2 - Wire up HF adapter creation 🚧
+Continue with task 2.2a: Verify adapter wiring and test all options pass through correctly.
 
 ---
 
@@ -200,26 +208,26 @@ Complete end-to-end support for `--hf <dataset_name>` flag before moving to CSV.
 
 **Test each CLI change immediately! HF ONLY!**
 
-- [ ] **2.1a**: Add `--hf` CLI option (as specified above)
-- [ ] **2.1b**: **TEST IT IMMEDIATELY** - CLI flag validation
-  - [ ] Update `tests/unit/cli/commands/test_data.py`
-  - [ ] Test with `--hf <dataset>` (should work)
-  - [ ] **CRITICAL: Test with no `--hf` flag (should work - backwards compatible default)**
-  - [ ] Verify default uses "lmsys/lmsys-chat-1m" dataset
-  - [ ] **Run tests and verify they pass before moving on**
+- [x] **2.1a**: Add `--hf` CLI option (as specified above)
+- [x] **2.1b**: **TEST IT IMMEDIATELY** - CLI flag validation
+  - [x] Update `tests/unit/cli/commands/test_data.py`
+  - [x] Test with `--hf <dataset>` (should work)
+  - [x] **CRITICAL: Test with no `--hf` flag (should work - backwards compatible default)**
+  - [x] Verify default uses "lmsys/lmsys-chat-1m" dataset
+  - [x] **Run tests and verify they pass before moving on**
 
-- [ ] **2.2a**: Wire up HF adapter creation (as specified above)
-- [ ] **2.2b**: **TEST IT IMMEDIATELY** - Adapter wiring
-  - [ ] Mock adapter creation and verify HuggingFaceAdapter is used
-  - [ ] Test with `--hf` flag creates HuggingFaceAdapter with correct dataset
-  - [ ] Test without flag creates HuggingFaceAdapter with default dataset
-  - [ ] Verify all other options passed through correctly (limit, chroma, etc.)
-  - [ ] **Run tests and verify they pass**
+- [x] **2.2a**: Wire up HF adapter creation (as specified above)
+- [x] **2.2b**: **TEST IT IMMEDIATELY** - Adapter wiring
+  - [x] Mock adapter creation and verify HuggingFaceAdapter is used
+  - [x] Test with `--hf` flag creates HuggingFaceAdapter with correct dataset
+  - [x] Test without flag creates HuggingFaceAdapter with default dataset
+  - [x] Verify all other options passed through correctly (limit, chroma, etc.)
+  - [x] **Run tests and verify they pass**
 
-- [ ] **2.3a**: Update help text and examples (as specified above)
-- [ ] **2.3b**: **VERIFY IT IMMEDIATELY** - Manual testing
-  - [ ] Run `lmsys load --help` and verify output
-  - [ ] Check that examples are clear and accurate
+- [x] **2.3a**: Update help text and examples (as specified above)
+- [x] **2.3b**: **VERIFY IT IMMEDIATELY** - Manual testing
+  - [x] Run `lmsys load --help` and verify output
+  - [x] Check that examples are clear and accurate
 
 - [ ] **2.4**: **END-TO-END CLI TEST**
   - [ ] Run `lmsys load --limit 10` (no flags) against test database
