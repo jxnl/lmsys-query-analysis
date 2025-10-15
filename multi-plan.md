@@ -84,10 +84,10 @@ Complete end-to-end support for `--hf <dataset_name>` flag before moving to CSV.
 
 ### Tasks
 
-- [ ] **1.1**: Create `adapters.py` with base adapter interface
-  - [ ] Define `BaseAdapter` protocol/ABC with `iter_records()` method
-  - [ ] Define `RecordDict` TypedDict for normalized record format
-  - [ ] Add docstrings explaining adapter contract
+- [x] **1.1**: Create `adapters.py` with base adapter interface
+  - [x] Define `BaseAdapter` protocol/ABC with `iter_records()` method
+  - [x] Define `RecordDict` TypedDict for normalized record format
+  - [x] Add docstrings explaining adapter contract
 
 - [ ] **1.2**: Implement `HuggingFaceAdapter` ONLY
   - [ ] Extract existing HF loading logic from `load_lmsys_dataset()`
@@ -113,10 +113,10 @@ Complete end-to-end support for `--hf <dataset_name>` flag before moving to CSV.
 
 **Test as we build each component! HF ONLY - NO CSV!**
 
-- [ ] **1.1a**: Create `adapters.py` with base interface (as specified above)
-- [ ] **1.1b**: Write tests for adapter interface before implementations
-  - [ ] Create `tests/unit/db/test_adapters.py`
-  - [ ] Define test fixtures for mock records
+- [x] **1.1a**: Create `adapters.py` with base interface (as specified above)
+- [x] **1.1b**: Write tests for adapter interface before implementations
+  - [x] Create `tests/unit/db/test_adapters.py`
+  - [x] Define test fixtures for mock records
 
 - [ ] **1.2a**: Implement `HuggingFaceAdapter` (as specified above)
 - [ ] **1.2b**: **TEST IT IMMEDIATELY** - Unit tests for HuggingFaceAdapter
