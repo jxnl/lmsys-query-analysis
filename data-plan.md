@@ -328,12 +328,12 @@ def test_load_command_with_adapter(tmp_path):
 
 ### Success Criteria
 
-- [ ] All unit tests pass: `uv run pytest tests/unit/db/ -v`
-- [ ] All integration tests pass: `uv run pytest tests/integration/test_cli.py -v`
-- [ ] Manual CLI test loads data successfully
-- [ ] Manual CLI test with Chroma works
-- [ ] New integration test added and passing
-- [ ] No errors or warnings in CLI output
+- [x] All unit tests pass: `uv run pytest tests/unit/db/ -v`
+- [x] All integration tests pass: `uv run pytest tests/integration/test_cli.py -v`
+- [x] Manual CLI test loads data successfully
+- [x] Manual CLI test with Chroma works
+- [x] New integration test added and passing
+- [x] No errors or warnings in CLI output
 
 ---
 
