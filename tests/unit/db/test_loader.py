@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import Mock, patch
 from lmsys_query_analysis.db.adapters import extract_first_query
-from lmsys_query_analysis.db.loader import load_lmsys_dataset
+from lmsys_query_analysis.db.loader import load_dataset
 from lmsys_query_analysis.db.connection import Database
 from lmsys_query_analysis.db.models import Query
 from sqlmodel import select
@@ -160,7 +160,7 @@ def test_load_lmsys_dataset_basic(temp_db):
     mock_adapter.__len__ = Mock(return_value=len(mock_normalized_data))
     
     with patch('lmsys_query_analysis.db.loader.HuggingFaceAdapter', return_value=mock_adapter):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, skip_existing=True, apply_pragmas=False)
+        stats = load_dataset(db=temp_db, limit=None, skip_existing=True, apply_pragmas=False)
     
     assert stats["total_processed"] == 2
     assert stats["loaded"] == 2
@@ -211,7 +211,7 @@ def test_load_lmsys_dataset_skip_existing(temp_db):
     mock_adapter.__len__ = Mock(return_value=len(mock_normalized_data))
     
     with patch('lmsys_query_analysis.db.loader.HuggingFaceAdapter', return_value=mock_adapter):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, skip_existing=True, apply_pragmas=False)
+        stats = load_dataset(db=temp_db, limit=None, skip_existing=True, apply_pragmas=False)
     
     assert stats["total_processed"] == 2
     assert stats["loaded"] == 1  # Only conv2 loaded
@@ -247,7 +247,7 @@ def test_load_lmsys_dataset_handles_errors(temp_db):
     mock_adapter.__len__ = Mock(return_value=len(mock_normalized_data))
     
     with patch('lmsys_query_analysis.db.loader.HuggingFaceAdapter', return_value=mock_adapter):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
+        stats = load_dataset(db=temp_db, limit=None, apply_pragmas=False)
     
     assert stats["total_processed"] == 1
     assert stats["loaded"] == 1  # Only conv4 loaded
@@ -278,7 +278,7 @@ def test_load_lmsys_dataset_with_limit(temp_db):
     mock_adapter.__len__ = Mock(return_value=len(mock_normalized_data))
     
     with patch('lmsys_query_analysis.db.loader.HuggingFaceAdapter', return_value=mock_adapter):
-        stats = load_lmsys_dataset(db=temp_db, limit=5, apply_pragmas=False)
+        stats = load_dataset(db=temp_db, limit=5, apply_pragmas=False)
     
     # Should process exactly 5
     assert stats["total_processed"] == 5
@@ -320,7 +320,7 @@ def test_load_lmsys_dataset_deduplicates_within_batch(temp_db):
     mock_adapter.__len__ = Mock(return_value=len(mock_normalized_data))
     
     with patch('lmsys_query_analysis.db.loader.HuggingFaceAdapter', return_value=mock_adapter):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
+        stats = load_dataset(db=temp_db, limit=None, apply_pragmas=False)
     
     assert stats["total_processed"] == 3
     assert stats["loaded"] == 2  # Only first "dup" and "unique"
@@ -350,7 +350,7 @@ def test_load_lmsys_dataset_handles_json_conversation(temp_db):
     mock_adapter.__len__ = Mock(return_value=len(mock_normalized_data))
     
     with patch('lmsys_query_analysis.db.loader.HuggingFaceAdapter', return_value=mock_adapter):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
+        stats = load_dataset(db=temp_db, limit=None, apply_pragmas=False)
     
     assert stats["loaded"] == 1
     
@@ -383,7 +383,7 @@ def test_load_lmsys_dataset_stores_metadata(temp_db):
     mock_adapter.__len__ = Mock(return_value=len(mock_normalized_data))
     
     with patch('lmsys_query_analysis.db.loader.HuggingFaceAdapter', return_value=mock_adapter):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
+        stats = load_dataset(db=temp_db, limit=None, apply_pragmas=False)
     
     assert stats["loaded"] == 1
     
@@ -430,7 +430,7 @@ def test_load_lmsys_dataset_with_chroma(temp_db):
         mock_embedder.generate_embeddings = Mock(return_value=[[0.1] * 10])
         mock_emb_gen.return_value = mock_embedder
         
-        stats = load_lmsys_dataset(
+        stats = load_dataset(
             db=temp_db,
             limit=None,
             chroma=mock_chroma,
@@ -467,7 +467,7 @@ def test_load_lmsys_dataset_large_batch(temp_db):
     mock_adapter.__len__ = Mock(return_value=len(mock_normalized_data))
     
     with patch('lmsys_query_analysis.db.loader.HuggingFaceAdapter', return_value=mock_adapter):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, batch_size=20, apply_pragmas=False)
+        stats = load_dataset(db=temp_db, limit=None, batch_size=20, apply_pragmas=False)
     
     assert stats["total_processed"] == 100
     assert stats["loaded"] == 100
@@ -497,7 +497,7 @@ def test_load_lmsys_dataset_missing_language(temp_db):
     mock_adapter.__len__ = Mock(return_value=len(mock_normalized_data))
     
     with patch('lmsys_query_analysis.db.loader.HuggingFaceAdapter', return_value=mock_adapter):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
+        stats = load_dataset(db=temp_db, limit=None, apply_pragmas=False)
     
     assert stats["loaded"] == 1
     
@@ -505,3 +505,62 @@ def test_load_lmsys_dataset_missing_language(temp_db):
     with temp_db.get_session() as session:
         query = session.exec(select(Query)).first()
         assert query.language is None
+
+
+def test_load_with_custom_dataset_name(temp_db):
+    """Test loader accepts custom dataset name and passes it to adapter."""
+    with patch('lmsys_query_analysis.db.loader.HuggingFaceAdapter') as mock_adapter_class:
+        # Mock the adapter instance
+        mock_adapter = Mock()
+        mock_adapter.__iter__ = Mock(return_value=iter([
+            {
+                "conversation_id": "test1",
+                "query_text": "What is Python?",
+                "model": "gpt-4",
+                "language": "en",
+                "timestamp": None,
+                "extra_metadata": {},
+            }
+        ]))
+        mock_adapter.__len__ = Mock(return_value=1)
+        mock_adapter_class.return_value = mock_adapter
+        
+        # Call load_dataset with custom dataset name
+        stats = load_dataset(
+            db=temp_db,
+            dataset_name="custom/dataset",
+            limit=10,
+            apply_pragmas=False,
+        )
+        
+        # Verify adapter was initialized with custom dataset
+        mock_adapter_class.assert_called_once()
+        call_kwargs = mock_adapter_class.call_args[1]
+        assert call_kwargs["dataset_name"] == "custom/dataset"
+        assert call_kwargs["split"] == "train"
+        assert call_kwargs["limit"] == 10
+        
+        # Verify data was loaded
+        assert stats["loaded"] == 1
+
+
+def test_load_defaults_to_lmsys_dataset(temp_db):
+    """Test loader defaults to lmsys/lmsys-chat-1m when no dataset specified."""
+    with patch('lmsys_query_analysis.db.loader.HuggingFaceAdapter') as mock_adapter_class:
+        # Mock the adapter instance
+        mock_adapter = Mock()
+        mock_adapter.__iter__ = Mock(return_value=iter([]))
+        mock_adapter.__len__ = Mock(return_value=0)
+        mock_adapter_class.return_value = mock_adapter
+        
+        # Call load_dataset without dataset_name parameter
+        stats = load_dataset(
+            db=temp_db,
+            limit=10,
+            apply_pragmas=False,
+        )
+        
+        # Verify adapter was initialized with default dataset
+        mock_adapter_class.assert_called_once()
+        call_kwargs = mock_adapter_class.call_args[1]
+        assert call_kwargs["dataset_name"] == "lmsys/lmsys-chat-1m"

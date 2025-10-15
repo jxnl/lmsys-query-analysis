@@ -24,7 +24,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 # LMSYS SDK imports
 from .db.connection import Database
-from .db.loader import load_lmsys_dataset
+from .db.loader import load_dataset
 from .db.chroma import ChromaManager
 from .clustering.kmeans import run_kmeans_clustering
 from .clustering.hierarchy import merge_clusters_hierarchical
@@ -175,7 +175,7 @@ def load_data(db: Database, chroma: ChromaManager, config: RunnerConfig) -> Dict
     start_time = time.time()
 
     try:
-        stats = load_lmsys_dataset(
+        stats = load_dataset(
             db=db,
             limit=config.query_limit,
             skip_existing=config.skip_existing,

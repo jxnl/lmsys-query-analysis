@@ -25,7 +25,7 @@ from .adapters import HuggingFaceAdapter
 # Note: extract_first_query moved to adapters.py
 
 
-def load_lmsys_dataset(
+def load_dataset(
     db: Database,
     limit: int | None = None,
     skip_existing: bool = True,
@@ -35,8 +35,9 @@ def load_lmsys_dataset(
     batch_size: int = 5000,
     use_streaming: bool = False,
     apply_pragmas: bool = True,
+    dataset_name: str = "lmsys/lmsys-chat-1m",
 ) -> dict:
-    """Load LMSYS-1M dataset into the database.
+    """Load dataset from HuggingFace (or other sources in future).
 
     Args:
         db: Database instance
@@ -44,6 +45,11 @@ def load_lmsys_dataset(
         skip_existing: Skip conversations that already exist in DB
         chroma: Optional ChromaDB manager for vector storage
         embedding_model: Model for generating embeddings (if chroma is provided)
+        embedding_provider: Provider for embeddings (cohere, openai, etc.)
+        batch_size: Number of records per batch for DB inserts
+        use_streaming: Use streaming dataset iteration
+        apply_pragmas: Apply SQLite PRAGMA speedups during load
+        dataset_name: HuggingFace dataset identifier (default: lmsys/lmsys-chat-1m)
 
     Returns:
         Dictionary with loading statistics
@@ -65,11 +71,11 @@ def load_lmsys_dataset(
         BarColumn(),
         TaskProgressColumn(),
     ) as progress:
-        task = progress.add_task("[cyan]Downloading LMSYS-1M dataset...", total=None)
+        task = progress.add_task(f"[cyan]Downloading dataset {dataset_name}...", total=None)
         
         # Create the adapter (it will handle dataset loading internally)
         adapter = HuggingFaceAdapter(
-            dataset_name="lmsys/lmsys-chat-1m",
+            dataset_name=dataset_name,
             split="train",
             limit=limit,
             use_streaming=use_streaming,

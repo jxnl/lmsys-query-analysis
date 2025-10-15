@@ -417,74 +417,114 @@ Architecture:
 
 ---
 
-## Phase 5: Add --hf Flag (Optional Dataset Selection)
+## Phase 5: Rename Function and Add --hf Flag
 
-**Goal**: Add a `--hf` flag to the CLI to allow users to specify which HuggingFace dataset to load, while maintaining backward compatibility with the default dataset.
+**Goal**: Rename `load_lmsys_dataset` to `load_dataset` (since it's now generic) and add a `--hf` flag to the CLI to allow users to specify which HuggingFace dataset to load. Maintain backward compatibility via function alias.
+
+### Rationale
+
+Since the function now supports any HuggingFace dataset (not just LMSYS), the name should reflect its generic purpose. Clean rename with no deprecated alias.
 
 ### Files to Modify
 
+- `src/lmsys_query_analysis/db/loader.py`
+  - Rename `load_lmsys_dataset` to `load_dataset`
+  - Add optional `dataset_name` parameter with default `"lmsys/lmsys-chat-1m"`
+  - Pass `dataset_name` to `HuggingFaceAdapter`
+
 - `src/lmsys_query_analysis/cli/commands/data.py`
+  - Update import to use `load_dataset` (new name)
   - Add `--hf` option to `load` command
   - Default to `lmsys/lmsys-chat-1m` if not specified
-  - Pass dataset name to `load_lmsys_dataset()`
+  - Pass dataset name to `load_dataset()`
 
-- `src/lmsys_query_analysis/db/loader.py`
-  - Add optional `dataset_name` parameter to `load_lmsys_dataset()`
-  - Pass `dataset_name` to `HuggingFaceAdapter`
+- `src/lmsys_query_analysis/runner.py`
+  - Update import to use `load_dataset` (preferred, but old name still works)
+
+- All test files referencing `load_lmsys_dataset`
+  - Update to use new function name `load_dataset`
 
 ### What to Build
 
 ```python
-# data.py changes:
-
-@data_app.command(name="load")
-def load_data(
-    limit: int = typer.Option(None, help="Limit number of records to load"),
-    use_chroma: bool = typer.Option(False, help="Store embeddings in Chroma"),
-    hf: str = typer.Option(
-        "lmsys/lmsys-chat-1m",
-        "--hf",
-        help="HuggingFace dataset to load (default: lmsys/lmsys-chat-1m)"
-    ),
-    # ... other options
-):
-    """Load data from HuggingFace datasets."""
-    # ...
-    load_lmsys_dataset(
-        session,
-        limit=limit,
-        use_chroma=use_chroma,
-        dataset_name=hf,  # Pass the dataset name
-        # ... other args
-    )
-```
-
-```python
 # loader.py changes:
 
-def load_lmsys_dataset(
-    session: Session,
+def load_dataset(
+    db: Database,
     limit: int | None = None,
-    use_chroma: bool = False,
-    dataset_name: str = "lmsys/lmsys-chat-1m",  # New parameter with default
-    # ... other parameters
-) -> int:
-    """Load dataset from HuggingFace.
+    skip_existing: bool = True,
+    chroma: Optional[ChromaManager] = None,
+    embedding_model: str = "embed-v4.0",
+    embedding_provider: str = "cohere",
+    batch_size: int = 5000,
+    use_streaming: bool = False,
+    apply_pragmas: bool = True,
+    dataset_name: str = "lmsys/lmsys-chat-1m",  # NEW parameter with default
+) -> dict:
+    """Load dataset from HuggingFace (or other sources in future).
     
     Args:
-        session: Database session
+        db: Database instance
         limit: Maximum records to load
-        use_chroma: Whether to store in Chroma
-        dataset_name: HuggingFace dataset identifier
-        ...
+        skip_existing: Skip conversations that already exist in DB
+        chroma: Optional ChromaDB manager for vector storage
+        embedding_model: Model for generating embeddings
+        embedding_provider: Provider for embeddings
+        batch_size: Number of records per batch for DB inserts
+        use_streaming: Use streaming dataset iteration
+        apply_pragmas: Apply SQLite PRAGMA speedups during load
+        dataset_name: HuggingFace dataset identifier (default: lmsys/lmsys-chat-1m)
+        
+    Returns:
+        Dictionary with loading statistics
     """
+    # ... existing implementation, but pass dataset_name to adapter ...
     adapter = HuggingFaceAdapter(
         dataset_name=dataset_name,  # Use the parameter
         split="train",
         limit=limit,
         use_streaming=use_streaming,
     )
-    # ... rest of function unchanged
+    # ... rest of function unchanged ...
+
+
+```
+
+```python
+# data.py changes:
+
+from ...db.loader import load_dataset  # Updated import
+
+@with_error_handling
+def load(
+    limit: int = typer.Option(None, help="Limit number of records to load"),
+    db_path: str = db_path_option,
+    use_chroma: bool = typer.Option(False, help="Enable ChromaDB for semantic search"),
+    hf: str = typer.Option(
+        "lmsys/lmsys-chat-1m",
+        "--hf",
+        help="HuggingFace dataset to load"
+    ),  # NEW option
+    chroma_path: str = chroma_path_option,
+    embedding_model: str = embedding_model_option,
+    # ... other options
+):
+    """Download and load HuggingFace dataset into SQLite."""
+    # ... setup code ...
+    
+    stats = load_dataset(  # Updated function name
+        db,
+        limit=limit,
+        skip_existing=not force_reload,
+        chroma=chroma,
+        embedding_model=model,
+        embedding_provider=provider,
+        batch_size=db_batch_size,
+        use_streaming=streaming,
+        apply_pragmas=not no_pragmas,
+        dataset_name=hf,  # Pass the dataset name
+    )
+    # ... rest unchanged ...
 ```
 
 ### Tests to Write
@@ -568,11 +608,15 @@ rm /tmp/test-default.db /tmp/test-custom.db
 
 ### Success Criteria
 
+- [x] Function renamed from `load_lmsys_dataset` to `load_dataset` in `loader.py`
+- [x] `dataset_name` parameter added to `load_dataset()` with default value
+- [x] Dataset name passed to `HuggingFaceAdapter` correctly
+- [x] CLI imports updated to use `load_dataset` (new name)
 - [ ] `--hf` flag added to CLI load command
-- [ ] Default value is `lmsys/lmsys-chat-1m` (backward compatible)
-- [ ] `dataset_name` parameter added to `load_lmsys_dataset()`
-- [ ] Dataset name passed to `HuggingFaceAdapter` correctly
-- [ ] All existing tests still pass (backward compatibility maintained)
+- [ ] Default value for `--hf` is `lmsys/lmsys-chat-1m` (backward compatible)
+- [ ] Runner imports updated to use `load_dataset` (new name)
+- [ ] All test files updated to use new function name
+- [ ] All existing tests still pass
 - [ ] New unit tests for custom dataset name pass
 - [ ] New CLI tests for `--hf` flag pass
 - [ ] Help text displays the new option clearly
