@@ -15,7 +15,7 @@ This project enables systematic investigation of how people use LLM systems thro
 The CLI implements specialized tools across multiple categories:
 
 **1. Data Loading Tools**
-- Load datasets from Hugging Face or custom sources
+- Load datasets from Hugging Face (default: lmsys/lmsys-chat-1m, or custom datasets via `--hf` flag)
 - Generate and backfill embeddings for semantic analysis
 - Manage dataset lifecycle (status checks, clearing)
 
@@ -122,7 +122,7 @@ export COHERE_API_KEY="sk-cohere-..."   # For Cohere Embed v4 / Chat
 ## Quick Start
 
 ```bash
-# 1. Load 10k queries (test dataset)
+# 1. Load 10k queries from default dataset (lmsys/lmsys-chat-1m)
 uv run lmsys load --limit 10000 --use-chroma
 
 # 2. Run clustering with 100 clusters
@@ -136,6 +136,17 @@ uv run lmsys list-clusters <RUN_ID>
 
 # 5. Semantic search
 uv run lmsys search "python programming" --search-type clusters
+```
+
+### Loading from Custom Hugging Face Datasets
+
+```bash
+# Load from a custom HF dataset
+uv run lmsys load --hf username/my-conversations --limit 5000 --use-chroma
+
+# Then run the same clustering and analysis pipeline
+uv run lmsys cluster --n-clusters 50 --use-chroma
+uv run lmsys summarize <RUN_ID> --alias "custom-analysis"
 ```
 
 ### Quick 5k End-to-End (Local, no API keys)
@@ -178,16 +189,26 @@ uv run lmsys verify sync <RUN_ID> --json | jq .
 
 ### Data Loading
 
+The `load` command supports loading data from Hugging Face datasets. By default, it loads from the `lmsys/lmsys-chat-1m` dataset, but you can specify any compatible HF dataset using the `--hf` flag.
+
 ```bash
-# Load all queries (1M records)
+# Load all queries from default dataset (1M records from lmsys/lmsys-chat-1m)
 uv run lmsys load
 
-# Load limited number for testing
+# Load limited number for testing (default dataset)
 uv run lmsys load --limit 10000
 
-# Enable ChromaDB for semantic search
+# Enable ChromaDB for semantic search (default dataset)
 uv run lmsys load --limit 10000 --use-chroma
+
+# Load from a custom Hugging Face dataset
+uv run lmsys load --hf username/custom-dataset --limit 10000 --use-chroma
+
+# Explicitly specify the default dataset (same as omitting --hf)
+uv run lmsys load --hf lmsys/lmsys-chat-1m --limit 10000 --use-chroma
 ```
+
+**Backwards Compatibility**: Existing commands continue to work without changes. When `--hf` is not specified, the system automatically loads from the default `lmsys/lmsys-chat-1m` dataset.
 
 **Default database:** `~/.lmsys-query-analysis/queries.db`
 

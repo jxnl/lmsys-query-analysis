@@ -17,7 +17,8 @@ This repository provides **terminal-based CLI tools for agents to perform compre
 The CLI implements specialized tools across multiple categories:
 
 **1. Data Loading Tools**
-- Load datasets from Hugging Face or custom sources
+- Load datasets from Hugging Face (default: `lmsys/lmsys-chat-1m`, or custom datasets via `--hf` flag)
+- Adapter pattern ready for additional data sources (CSV, JSON, etc.)
 - Generate and backfill embeddings for semantic analysis
 - Manage dataset lifecycle (status checks, clearing)
 
@@ -116,11 +117,22 @@ If agents identify gaps in functionality or need additional tools to enhance the
 **Default Analysis Workflow**: When the user requests to "run an analysis" or similar commands, ALWAYS execute the complete analysis pipeline including hierarchical merging:
 
 1. Load data with embeddings (`lmsys load --limit N --use-chroma`)
+   - By default, loads from `lmsys/lmsys-chat-1m` dataset
+   - For custom datasets: `lmsys load --hf username/dataset --limit N --use-chroma`
 2. Run clustering (`lmsys cluster kmeans --n-clusters N --use-chroma`)
 3. Generate LLM summaries (`lmsys summarize <RUN_ID> --alias "analysis-v1"`)
 4. **ALWAYS run hierarchical merge** (`lmsys merge-clusters <RUN_ID>`)
 
 The hierarchical merge step is essential for organizing clusters into a navigable structure and should never be skipped.
+
+**Custom Dataset Support**: Agents can now analyze any Hugging Face dataset using the `--hf` flag:
+```bash
+# Example: Analyze a custom conversation dataset
+uv run lmsys load --hf company/customer-support --limit 20000 --use-chroma
+uv run lmsys cluster kmeans --n-clusters 100 --use-chroma
+uv run lmsys summarize <RUN_ID> --alias "support-analysis-v1"
+uv run lmsys merge-clusters <RUN_ID>
+```
 
 ## Build, Test, and Dev Commands
 
@@ -134,7 +146,12 @@ export ANTHROPIC_API_KEY="..."   # Or OPENAI_API_KEY, COHERE_API_KEY, GROQ_API_K
 **CLI commands:**
 ```bash
 uv run lmsys --help                                        # Show all commands
-uv run lmsys load --limit 10000 --use-chroma              # Load data with embeddings
+
+# Data Loading (default dataset: lmsys/lmsys-chat-1m)
+uv run lmsys load --limit 10000 --use-chroma              # Load from default dataset
+uv run lmsys load --hf username/my-dataset --limit 5000   # Load from custom HF dataset
+
+# Clustering & Analysis
 uv run lmsys cluster kmeans --n-clusters 200 --use-chroma # Run clustering
 uv run lmsys runs --latest                                # Show most recent run
 uv run lmsys summarize <RUN_ID> --alias "v1"              # Generate LLM summaries
