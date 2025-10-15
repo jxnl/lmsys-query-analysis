@@ -25,28 +25,49 @@ Refactor the data loading pipeline to support multiple data sources (HuggingFace
 
 ## Phase 1: Create Adapter Infrastructure
 
-**Goal**: Create the adapter interface and extract HuggingFace-specific logic into a dedicated adapter class.
+**Goal**: Create the adapter interface, test it with mocks, then implement the HuggingFace adapter.
 
-### Files to Create
+### Phase 1a: Create Protocol and Mock Tests
+
+**Goal**: Define the adapter interface and test it with mock implementations before building the real adapter.
+
+#### Files to Create
 
 - `src/lmsys_query_analysis/db/adapters.py`
   - `DataSourceAdapter` Protocol (defines interface)
-  - `HuggingFaceAdapter` class (hardcoded to `lmsys/lmsys-chat-1m`)
   - Helper functions (`extract_first_query` moved here)
 
-### Files to Read/Reference
+- `tests/unit/db/test_adapters.py`
+  - Mock adapter implementation for testing
+  - Tests for the protocol interface
+  - Tests for `extract_first_query` helper
+
+#### Files to Read/Reference
 
 - `src/lmsys_query_analysis/db/loader.py` (lines 39-56: `extract_first_query`)
-- `src/lmsys_query_analysis/db/loader.py` (lines 92-103: HF dataset loading logic)
-- `src/lmsys_query_analysis/db/loader.py` (lines 164-223: batch iteration and data extraction)
+- `tests/unit/db/test_loader.py` (lines 11-70: existing `extract_first_query` tests)
 
-### What to Build
+#### What to Build
 
 ```python
-# adapters.py structure:
+# adapters.py structure (Phase 1a):
 
+from typing import Protocol, Iterator, runtime_checkable
+
+@runtime_checkable
 class DataSourceAdapter(Protocol):
-    """Protocol defining interface for data source adapters."""
+    """Protocol defining interface for data source adapters.
+    
+    All adapters must yield normalized records with this schema:
+    {
+        "conversation_id": str,
+        "query_text": str,
+        "model": str,
+        "language": str | None,
+        "timestamp": datetime | None,
+        "extra_metadata": dict,
+    }
+    """
     def __iter__(self) -> Iterator[dict]:
         """Yield normalized records with standard schema."""
         ...
@@ -55,6 +76,59 @@ class DataSourceAdapter(Protocol):
         """Return total count if known, None for streaming sources."""
         ...
 
+
+def extract_first_query(conversation: list[dict] | None) -> str | None:
+    """Extract the first user query from a conversation.
+    
+    Args:
+        conversation: List of conversation turns in OpenAI format
+    
+    Returns:
+        The first user message content, or None if not found
+    """
+    # Move implementation from loader.py
+    ...
+```
+
+#### Tests to Write (Phase 1a)
+
+- `tests/unit/db/test_adapters.py`
+  - `MockDataSourceAdapter` class for testing
+  - `test_extract_first_query_*` (move from `test_loader.py`)
+  - `test_adapter_protocol_interface`
+  - `test_mock_adapter_iteration`
+  - `test_mock_adapter_length`
+  - `test_adapter_normalized_output_schema`
+
+#### Success Criteria (Phase 1a)
+
+- [ ] `adapters.py` created with `DataSourceAdapter` protocol
+- [ ] `extract_first_query` moved from `loader.py` to `adapters.py`
+- [ ] `test_adapters.py` created with mock adapter
+- [ ] Protocol tests pass with mock implementation
+- [ ] Unit tests pass: `uv run pytest tests/unit/db/test_adapters.py -v`
+
+---
+
+### Phase 1b: Implement HuggingFace Adapter
+
+**Goal**: Implement the real HuggingFace adapter using the tested protocol interface.
+
+#### Files to Modify
+
+- `src/lmsys_query_analysis/db/adapters.py`
+  - Add `HuggingFaceAdapter` class (implements `DataSourceAdapter`)
+  - Extract HF-specific logic from `loader.py`
+
+#### Files to Read/Reference
+
+- `src/lmsys_query_analysis/db/loader.py` (lines 92-103: HF dataset loading logic)
+- `src/lmsys_query_analysis/db/loader.py` (lines 164-223: batch iteration and data extraction)
+
+#### What to Build
+
+```python
+# Add to adapters.py:
 
 class HuggingFaceAdapter:
     """Adapter for HuggingFace datasets (lmsys/lmsys-chat-1m)."""
@@ -66,20 +140,17 @@ class HuggingFaceAdapter:
         limit: int | None = None,
         use_streaming: bool = False,
     ):
-        # Load dataset
-        # Store limit for iteration
+        # Load dataset using datasets.load_dataset()
+        # Apply limit if specified
+        # Store dataset and configuration
         ...
     
     def __iter__(self) -> Iterator[dict]:
-        # Yield normalized dicts:
-        # {
-        #   "conversation_id": str,
-        #   "query_text": str,
-        #   "model": str,
-        #   "language": str | None,
-        #   "timestamp": datetime | None,
-        #   "extra_metadata": dict,
-        # }
+        # Iterate over HF dataset
+        # Parse conversation field (handle JSON strings)
+        # Extract first query using extract_first_query()
+        # Build extra_metadata from HF fields
+        # Yield normalized dicts matching protocol schema
         ...
     
     def __len__(self) -> int | None:
@@ -87,10 +158,9 @@ class HuggingFaceAdapter:
         ...
 ```
 
-### Tests to Write
+#### Tests to Write (Phase 1b)
 
-- `tests/unit/db/test_adapters.py`
-  - `test_extract_first_query_*` (move from `test_loader.py`)
+- Add to `tests/unit/db/test_adapters.py`
   - `test_hf_adapter_initialization`
   - `test_hf_adapter_iteration_basic`
   - `test_hf_adapter_with_limit`
@@ -98,14 +168,16 @@ class HuggingFaceAdapter:
   - `test_hf_adapter_handles_json_conversations`
   - `test_hf_adapter_handles_missing_fields`
   - `test_hf_adapter_streaming_mode`
+  - `test_hf_adapter_conforms_to_protocol`
 
-### Success Criteria
+#### Success Criteria (Phase 1b)
 
-- [ ] `adapters.py` created with `DataSourceAdapter` protocol
 - [ ] `HuggingFaceAdapter` class extracts all HF-specific logic
-- [ ] `extract_first_query` moved to `adapters.py`
+- [ ] Adapter conforms to `DataSourceAdapter` protocol
+- [ ] All HF adapter tests pass
 - [ ] Unit tests pass: `uv run pytest tests/unit/db/test_adapters.py -v`
 - [ ] Adapter can be instantiated and iterated independently
+- [ ] Mock HF dataset used in tests (no real HF downloads)
 
 ---
 
@@ -345,14 +417,172 @@ Architecture:
 
 ---
 
+## Phase 5: Add --hf Flag (Optional Dataset Selection)
+
+**Goal**: Add a `--hf` flag to the CLI to allow users to specify which HuggingFace dataset to load, while maintaining backward compatibility with the default dataset.
+
+### Files to Modify
+
+- `src/lmsys_query_analysis/cli/commands/data.py`
+  - Add `--hf` option to `load` command
+  - Default to `lmsys/lmsys-chat-1m` if not specified
+  - Pass dataset name to `load_lmsys_dataset()`
+
+- `src/lmsys_query_analysis/db/loader.py`
+  - Add optional `dataset_name` parameter to `load_lmsys_dataset()`
+  - Pass `dataset_name` to `HuggingFaceAdapter`
+
+### What to Build
+
+```python
+# data.py changes:
+
+@data_app.command(name="load")
+def load_data(
+    limit: int = typer.Option(None, help="Limit number of records to load"),
+    use_chroma: bool = typer.Option(False, help="Store embeddings in Chroma"),
+    hf: str = typer.Option(
+        "lmsys/lmsys-chat-1m",
+        "--hf",
+        help="HuggingFace dataset to load (default: lmsys/lmsys-chat-1m)"
+    ),
+    # ... other options
+):
+    """Load data from HuggingFace datasets."""
+    # ...
+    load_lmsys_dataset(
+        session,
+        limit=limit,
+        use_chroma=use_chroma,
+        dataset_name=hf,  # Pass the dataset name
+        # ... other args
+    )
+```
+
+```python
+# loader.py changes:
+
+def load_lmsys_dataset(
+    session: Session,
+    limit: int | None = None,
+    use_chroma: bool = False,
+    dataset_name: str = "lmsys/lmsys-chat-1m",  # New parameter with default
+    # ... other parameters
+) -> int:
+    """Load dataset from HuggingFace.
+    
+    Args:
+        session: Database session
+        limit: Maximum records to load
+        use_chroma: Whether to store in Chroma
+        dataset_name: HuggingFace dataset identifier
+        ...
+    """
+    adapter = HuggingFaceAdapter(
+        dataset_name=dataset_name,  # Use the parameter
+        split="train",
+        limit=limit,
+        use_streaming=use_streaming,
+    )
+    # ... rest of function unchanged
+```
+
+### Tests to Write
+
+Add to `tests/unit/cli/test_data_cli.py` (or create if needed):
+
+```python
+def test_load_with_custom_hf_dataset(tmp_path):
+    """Test load command with custom HuggingFace dataset."""
+    db_path = tmp_path / "custom-hf.db"
+    
+    with patch('lmsys_query_analysis.db.loader.HuggingFaceAdapter') as mock_adapter:
+        mock_adapter.return_value.__iter__ = Mock(return_value=iter([]))
+        mock_adapter.return_value.__len__ = Mock(return_value=0)
+        
+        result = runner.invoke(
+            app,
+            ["load", "--hf", "custom/dataset", "--limit", "10", "--db-path", str(db_path)]
+        )
+        
+        # Verify HuggingFaceAdapter was called with custom dataset
+        mock_adapter.assert_called_once()
+        call_kwargs = mock_adapter.call_args[1]
+        assert call_kwargs["dataset_name"] == "custom/dataset"
+
+def test_load_defaults_to_lmsys_dataset(tmp_path):
+    """Test load command defaults to lmsys/lmsys-chat-1m."""
+    db_path = tmp_path / "default-hf.db"
+    
+    with patch('lmsys_query_analysis.db.loader.HuggingFaceAdapter') as mock_adapter:
+        mock_adapter.return_value.__iter__ = Mock(return_value=iter([]))
+        mock_adapter.return_value.__len__ = Mock(return_value=0)
+        
+        result = runner.invoke(
+            app,
+            ["load", "--limit", "10", "--db-path", str(db_path)]
+        )
+        
+        # Verify default dataset was used
+        mock_adapter.assert_called_once()
+        call_kwargs = mock_adapter.call_args[1]
+        assert call_kwargs["dataset_name"] == "lmsys/lmsys-chat-1m"
+```
+
+Add to `tests/unit/db/test_loader.py`:
+
+```python
+def test_load_with_custom_dataset_name(temp_db):
+    """Test loader accepts custom dataset name."""
+    with patch('lmsys_query_analysis.db.adapters.HuggingFaceAdapter') as mock_adapter:
+        mock_adapter.return_value.__iter__ = Mock(return_value=iter([]))
+        mock_adapter.return_value.__len__ = Mock(return_value=0)
+        
+        session = Session(temp_db)
+        load_lmsys_dataset(
+            session,
+            dataset_name="custom/dataset",
+            limit=10
+        )
+        
+        # Verify adapter was initialized with custom dataset
+        mock_adapter.assert_called_once()
+        assert mock_adapter.call_args[1]["dataset_name"] == "custom/dataset"
+```
+
+### Manual CLI Testing
+
+```bash
+# Test with default dataset (should work as before)
+uv run lmsys load --limit 10 --db-path /tmp/test-default.db
+
+# Test with custom dataset (using another LMSYS dataset)
+uv run lmsys load --hf lmsys/chatbot-arena-conversations --limit 10 --db-path /tmp/test-custom.db
+
+# Test help text shows the new flag
+uv run lmsys load --help | grep -A2 "\-\-hf"
+
+# Clean up
+rm /tmp/test-default.db /tmp/test-custom.db
+```
+
+### Success Criteria
+
+- [ ] `--hf` flag added to CLI load command
+- [ ] Default value is `lmsys/lmsys-chat-1m` (backward compatible)
+- [ ] `dataset_name` parameter added to `load_lmsys_dataset()`
+- [ ] Dataset name passed to `HuggingFaceAdapter` correctly
+- [ ] All existing tests still pass (backward compatibility maintained)
+- [ ] New unit tests for custom dataset name pass
+- [ ] New CLI tests for `--hf` flag pass
+- [ ] Help text displays the new option clearly
+- [ ] Manual testing with different datasets works
+
+---
+
 ## Future Phases (Not in This Plan)
 
-After this refactor is complete and tested, future work includes:
-
-### Phase 5: Add --hf Flag (Optional Dataset Selection)
-- Add `--hf <dataset_name>` flag to CLI
-- Default to `lmsys/lmsys-chat-1m` if not specified
-- Pass dataset name to `HuggingFaceAdapter`
+After Phase 5 is complete, future work includes:
 
 ### Phase 6: CSV Adapter
 - Create `CSVAdapter` class in `adapters.py`
@@ -394,8 +624,9 @@ After this refactor is complete and tested, future work includes:
 - **Phase 2** (Refactor Loader): 2-3 hours
 - **Phase 3** (CLI Testing): 1-2 hours
 - **Phase 4** (Documentation): 1 hour
+- **Phase 5** (Add --hf Flag): 1-2 hours
 
-**Total**: 6-9 hours for complete backward-compatible refactor
+**Total**: 7-11 hours for complete backward-compatible refactor with HF dataset selection
 
 ---
 
