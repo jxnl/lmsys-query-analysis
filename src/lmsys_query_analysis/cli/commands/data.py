@@ -14,7 +14,8 @@ from ..formatters import tables
 from ..helpers.client_factory import parse_embedding_model, create_chroma_client, create_embedding_generator
 from ...db.connection import get_db
 from ...db.chroma import get_chroma
-from ...db.loader import load_lmsys_dataset
+from ...db.loader import load_dataset
+from ...db.adapters import HuggingFaceAdapter
 from ...db.models import Query
 
 console = Console()
@@ -46,15 +47,18 @@ def load(
     db = get_db(db_path)
     chroma = create_chroma_client(chroma_path, model, provider) if use_chroma else None
     
-    stats = load_lmsys_dataset(
+    # Create adapter for LMSYS dataset
+    adapter = HuggingFaceAdapter(use_streaming=streaming)
+    
+    stats = load_dataset(
         db,
+        adapter=adapter,
         limit=limit,
         skip_existing=not force_reload,
         chroma=chroma,
         embedding_model=model,
         embedding_provider=provider,
         batch_size=db_batch_size,
-        use_streaming=streaming,
         apply_pragmas=not no_pragmas,
     )
     

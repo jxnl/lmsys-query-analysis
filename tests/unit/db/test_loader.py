@@ -1,11 +1,26 @@
 """Tests for data loader."""
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from lmsys_query_analysis.db.loader import extract_first_query, load_lmsys_dataset
+from unittest.mock import Mock, patch
+from typing import Iterator, Optional
+from lmsys_query_analysis.db.loader import load_dataset
+from lmsys_query_analysis.db.adapters import extract_first_query, HuggingFaceAdapter, RecordDict
 from lmsys_query_analysis.db.connection import Database
 from lmsys_query_analysis.db.models import Query
 from sqlmodel import select
+
+
+class MockAdapter:
+    """Mock adapter for testing."""
+    
+    def __init__(self, records: list[RecordDict]):
+        self.records = records
+    
+    def iter_records(self, limit: Optional[int] = None) -> Iterator[RecordDict]:
+        for i, record in enumerate(self.records):
+            if limit is not None and i >= limit:
+                break
+            yield record
 
 
 def test_extract_first_query_basic():
@@ -132,35 +147,28 @@ def test_skip_duplicate_conversation_id(temp_db):
     session.close()
 
 
-def test_load_lmsys_dataset_basic(temp_db):
+def test_load_dataset_basic(temp_db):
     """Test basic dataset loading with mocked data."""
-    # Create mock dataset
-    mock_data = [
-        {
-            "conversation_id": "conv1",
-            "model": "gpt-4",
-            "language": "English",
-            "conversation": [
-                {"role": "user", "content": "What is AI?"},
-                {"role": "assistant", "content": "AI is..."},
-            ],
-        },
-        {
-            "conversation_id": "conv2",
-            "model": "claude-3",
-            "language": "Spanish",
-            "conversation": [
-                {"role": "user", "content": "Hola mundo"},
-            ],
-        },
+    # Create mock records
+    mock_records = [
+        RecordDict(
+            conversation_id="conv1",
+            query_text="What is AI?",
+            model="gpt-4",
+            language="English",
+            extra_metadata={"turn_count": 2},
+        ),
+        RecordDict(
+            conversation_id="conv2",
+            query_text="Hola mundo",
+            model="claude-3",
+            language="Spanish",
+            extra_metadata={"turn_count": 1},
+        ),
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, skip_existing=True, apply_pragmas=False)
+    adapter = MockAdapter(mock_records)
+    stats = load_dataset(db=temp_db, adapter=adapter, limit=None, skip_existing=True, apply_pragmas=False)
     
     assert stats["total_processed"] == 2
     assert stats["loaded"] == 2
@@ -174,7 +182,7 @@ def test_load_lmsys_dataset_basic(temp_db):
         assert queries[0].query_text in ["What is AI?", "Hola mundo"]
 
 
-def test_load_lmsys_dataset_skip_existing(temp_db):
+def test_load_dataset_skip_existing(temp_db):
     """Test that existing conversations are skipped."""
     # Add existing query
     with temp_db.get_session() as session:
@@ -186,26 +194,26 @@ def test_load_lmsys_dataset_skip_existing(temp_db):
         session.add(existing)
         session.commit()
     
-    # Mock dataset with one existing, one new
-    mock_data = [
-        {
-            "conversation_id": "conv1",  # Existing
-            "model": "gpt-4",
-            "conversation": [{"role": "user", "content": "What is AI?"}],
-        },
-        {
-            "conversation_id": "conv2",  # New
-            "model": "claude-3",
-            "conversation": [{"role": "user", "content": "Hello"}],
-        },
+    # Create mock records with one existing, one new
+    mock_records = [
+        RecordDict(
+            conversation_id="conv1",  # Existing
+            query_text="What is AI?",
+            model="gpt-4",
+            language="English",
+            extra_metadata={"turn_count": 1},
+        ),
+        RecordDict(
+            conversation_id="conv2",  # New
+            query_text="Hello",
+            model="claude-3",
+            language="English",
+            extra_metadata={"turn_count": 1},
+        ),
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, skip_existing=True, apply_pragmas=False)
+    adapter = MockAdapter(mock_records)
+    stats = load_dataset(db=temp_db, adapter=adapter, limit=None, skip_existing=True, apply_pragmas=False)
     
     assert stats["total_processed"] == 2
     assert stats["loaded"] == 1  # Only conv2 loaded
@@ -217,111 +225,88 @@ def test_load_lmsys_dataset_skip_existing(temp_db):
         assert count == 2
 
 
-def test_load_lmsys_dataset_handles_errors(temp_db):
-    """Test that loader handles various error conditions."""
-    mock_data = [
-        # Missing conversation_id
-        {
-            "model": "gpt-4",
-            "conversation": [{"role": "user", "content": "Test"}],
-        },
-        # Invalid JSON in conversation
-        {
-            "conversation_id": "conv2",
-            "model": "gpt-4",
-            "conversation": "invalid json string {",
-        },
-        # No user messages
-        {
-            "conversation_id": "conv3",
-            "model": "gpt-4",
-            "conversation": [{"role": "system", "content": "System msg"}],
-        },
-        # Valid one
-        {
-            "conversation_id": "conv4",
-            "model": "gpt-4",
-            "conversation": [{"role": "user", "content": "Valid query"}],
-        },
+def test_load_dataset_handles_errors(temp_db):
+    """Test that loader handles records correctly (error handling is done by adapter)."""
+    # The adapter is responsible for filtering out invalid records
+    # This test verifies that the loader processes valid records correctly
+    mock_records = [
+        RecordDict(
+            conversation_id="conv1",
+            query_text="Valid query",
+            model="gpt-4",
+            language="English",
+            extra_metadata={"turn_count": 1},
+        ),
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
+    adapter = MockAdapter(mock_records)
+    stats = load_dataset(db=temp_db, adapter=adapter, limit=None, apply_pragmas=False)
     
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
-    
-    assert stats["total_processed"] == 4
-    assert stats["loaded"] == 1  # Only conv4 loaded
-    assert stats["errors"] == 3  # Three errors
+    assert stats["total_processed"] == 1
+    assert stats["loaded"] == 1
+    assert stats["errors"] == 0
 
 
-def test_load_lmsys_dataset_with_limit(temp_db):
+def test_load_dataset_with_limit(temp_db):
     """Test loading with a limit."""
-    mock_data = [
-        {
-            "conversation_id": f"conv{i}",
-            "model": "gpt-4",
-            "conversation": [{"role": "user", "content": f"Query {i}"}],
-        }
+    mock_records = [
+        RecordDict(
+            conversation_id=f"conv{i}",
+            query_text=f"Query {i}",
+            model="gpt-4",
+            language="English",
+            extra_metadata={"turn_count": 1},
+        )
         for i in range(10)
     ]
     
-    # Create limited dataset
-    limited_data = mock_data[:5]
-    mock_dataset_limited = Mock()
-    mock_dataset_limited.__iter__ = Mock(return_value=iter(limited_data))
-    mock_dataset_limited.__len__ = Mock(return_value=len(limited_data))
-    
-    mock_dataset = Mock()
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    mock_dataset.select = Mock(return_value=mock_dataset_limited)
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=5, apply_pragmas=False)
+    adapter = MockAdapter(mock_records)
+    stats = load_dataset(db=temp_db, adapter=adapter, limit=5, apply_pragmas=False)
     
     # Should process exactly 5
     assert stats["total_processed"] == 5
     assert stats["loaded"] == 5
 
 
-def test_load_lmsys_dataset_deduplicates_within_batch(temp_db):
+def test_load_dataset_deduplicates_within_batch(temp_db):
     """Test that duplicate conversation IDs within a batch are handled."""
-    mock_data = [
-        {
-            "conversation_id": "dup",
-            "model": "gpt-4",
-            "conversation": [{"role": "user", "content": "First"}],
-        },
-        {
-            "conversation_id": "dup",  # Duplicate in same batch
-            "model": "gpt-4",
-            "conversation": [{"role": "user", "content": "Second"}],
-        },
-        {
-            "conversation_id": "unique",
-            "model": "gpt-4",
-            "conversation": [{"role": "user", "content": "Unique"}],
-        },
+    mock_records = [
+        RecordDict(
+            conversation_id="dup",
+            query_text="First",
+            model="gpt-4",
+            language="English",
+            extra_metadata={"turn_count": 1},
+        ),
+        RecordDict(
+            conversation_id="dup",  # Duplicate in same batch
+            query_text="Second",
+            model="gpt-4",
+            language="English",
+            extra_metadata={"turn_count": 1},
+        ),
+        RecordDict(
+            conversation_id="unique",
+            query_text="Unique",
+            model="gpt-4",
+            language="English",
+            extra_metadata={"turn_count": 1},
+        ),
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
+    adapter = MockAdapter(mock_records)
+    stats = load_dataset(db=temp_db, adapter=adapter, limit=None, apply_pragmas=False)
     
     assert stats["total_processed"] == 3
     assert stats["loaded"] == 2  # Only first "dup" and "unique"
     assert stats["skipped"] == 1  # Second "dup" skipped
 
 
-def test_load_lmsys_dataset_handles_json_conversation(temp_db):
-    """Test that JSON string conversations are parsed correctly."""
+def test_load_dataset_handles_json_conversation(temp_db):
+    """Test that JSON string conversations are parsed correctly by HuggingFaceAdapter."""
     import json
     
+    # Mock a Hugging Face dataset with JSON string conversation
     mock_data = [
         {
             "conversation_id": "conv1",
@@ -334,12 +319,12 @@ def test_load_lmsys_dataset_handles_json_conversation(temp_db):
         },
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
+    # Create HuggingFaceAdapter with mocked dataset
+    adapter = HuggingFaceAdapter()
     
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
+    # Mock the dataset loading
+    with patch.object(adapter, '_load_dataset', return_value=mock_data):
+        stats = load_dataset(db=temp_db, adapter=adapter, limit=None, apply_pragmas=False)
     
     assert stats["loaded"] == 1
     
@@ -349,28 +334,24 @@ def test_load_lmsys_dataset_handles_json_conversation(temp_db):
         assert query.query_text == "Parsed from JSON"
 
 
-def test_load_lmsys_dataset_stores_metadata(temp_db):
+def test_load_dataset_stores_metadata(temp_db):
     """Test that extra metadata is stored correctly."""
-    mock_data = [
-        {
-            "conversation_id": "conv1",
-            "model": "gpt-4",
-            "language": "English",
-            "redacted": True,
-            "openai_moderation": {"flagged": False},
-            "conversation": [
-                {"role": "user", "content": "Test query"},
-                {"role": "assistant", "content": "Response"},
-            ],
-        },
+    mock_records = [
+        RecordDict(
+            conversation_id="conv1",
+            query_text="Test query",
+            model="gpt-4",
+            language="English",
+            extra_metadata={
+                "turn_count": 2,
+                "redacted": True,
+                "openai_moderation": {"flagged": False},
+            },
+        ),
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
+    adapter = MockAdapter(mock_records)
+    stats = load_dataset(db=temp_db, adapter=adapter, limit=None, apply_pragmas=False)
     
     assert stats["loaded"] == 1
     
@@ -384,37 +365,36 @@ def test_load_lmsys_dataset_stores_metadata(temp_db):
         assert query.extra_metadata["openai_moderation"]["flagged"] is False
 
 
-def test_load_lmsys_dataset_with_chroma(temp_db):
+def test_load_dataset_with_chroma(temp_db):
     """Test loading with ChromaDB integration."""
     from lmsys_query_analysis.db.chroma import ChromaManager
     
-    mock_data = [
-        {
-            "conversation_id": "conv1",
-            "model": "gpt-4",
-            "conversation": [{"role": "user", "content": "Test with chroma"}],
-        },
+    mock_records = [
+        RecordDict(
+            conversation_id="conv1",
+            query_text="Test with chroma",
+            model="gpt-4",
+            language="English",
+            extra_metadata={"turn_count": 1},
+        ),
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
+    adapter = MockAdapter(mock_records)
     
     # Mock ChromaDB
     mock_chroma = Mock(spec=ChromaManager)
     mock_chroma.add_queries_batch = Mock()
     
     # Mock EmbeddingGenerator - it's imported inside the function
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset), \
-         patch('lmsys_query_analysis.clustering.embeddings.EmbeddingGenerator') as mock_emb_gen:
-        
+    with patch('lmsys_query_analysis.clustering.embeddings.EmbeddingGenerator') as mock_emb_gen:
         # Mock embeddings
         mock_embedder = Mock()
         mock_embedder.generate_embeddings = Mock(return_value=[[0.1] * 10])
         mock_emb_gen.return_value = mock_embedder
         
-        stats = load_lmsys_dataset(
+        stats = load_dataset(
             db=temp_db,
+            adapter=adapter,
             limit=None,
             chroma=mock_chroma,
             embedding_model="test-model",
@@ -430,24 +410,22 @@ def test_load_lmsys_dataset_with_chroma(temp_db):
     mock_chroma.add_queries_batch.assert_called_once()
 
 
-def test_load_lmsys_dataset_large_batch(temp_db):
+def test_load_dataset_large_batch(temp_db):
     """Test loading a large batch of queries."""
     # Create 100 mock queries
-    mock_data = [
-        {
-            "conversation_id": f"conv{i}",
-            "model": "gpt-4",
-            "conversation": [{"role": "user", "content": f"Query {i}"}],
-        }
+    mock_records = [
+        RecordDict(
+            conversation_id=f"conv{i}",
+            query_text=f"Query {i}",
+            model="gpt-4",
+            language="English",
+            extra_metadata={"turn_count": 1},
+        )
         for i in range(100)
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, batch_size=20, apply_pragmas=False)
+    adapter = MockAdapter(mock_records)
+    stats = load_dataset(db=temp_db, adapter=adapter, limit=None, batch_size=20, apply_pragmas=False)
     
     assert stats["total_processed"] == 100
     assert stats["loaded"] == 100
@@ -458,23 +436,21 @@ def test_load_lmsys_dataset_large_batch(temp_db):
         assert count == 100
 
 
-def test_load_lmsys_dataset_missing_language(temp_db):
+def test_load_dataset_missing_language(temp_db):
     """Test that missing language field is handled correctly."""
-    mock_data = [
-        {
-            "conversation_id": "conv1",
-            "model": "gpt-4",
-            # No language field
-            "conversation": [{"role": "user", "content": "Test"}],
-        },
+    mock_records = [
+        RecordDict(
+            conversation_id="conv1",
+            query_text="Test",
+            model="gpt-4",
+            # No language field (None)
+            language=None,
+            extra_metadata={"turn_count": 1},
+        ),
     ]
     
-    mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
-    mock_dataset.__len__ = Mock(return_value=len(mock_data))
-    
-    with patch('lmsys_query_analysis.db.loader.load_dataset', return_value=mock_dataset):
-        stats = load_lmsys_dataset(db=temp_db, limit=None, apply_pragmas=False)
+    adapter = MockAdapter(mock_records)
+    stats = load_dataset(db=temp_db, adapter=adapter, limit=None, apply_pragmas=False)
     
     assert stats["loaded"] == 1
     
