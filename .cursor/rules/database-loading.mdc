@@ -1,0 +1,86 @@
+---
+description: Guidelines for data loading and database management in LMSYS Query Analysis
+---
+
+# Database Loading Best Practices
+
+## Clear Database Before Loading New Data
+
+**Important**: Always clear the database before loading new data to avoid conflicts, duplicates, or mixing data from different sources.
+
+### Why Clear First?
+
+- **Prevents duplicates**: Loading data multiple times can create duplicate entries
+- **Avoids source conflicts**: Mixing data from different HuggingFace datasets or sources can lead to inconsistent data
+- **Schema assumptions**: The current implementation assumes a single data source per database
+- **Clean state**: Ensures analysis results are based on a single, well-defined dataset
+
+### How to Clear
+
+Use the `clear` command with the `--yes` flag to skip confirmation:
+
+```bash
+# Clear both SQLite database and Chroma embeddings
+uv run lmsys clear --db-path /path/to/db --chroma-path /path/to/chroma --yes
+
+# Clear default locations
+uv run lmsys clear --yes
+```
+
+### Recommended Workflow
+
+1. **Clear existing data** (if any):
+   ```bash
+   uv run lmsys clear --yes
+   ```
+
+2. **Load new data**:
+   ```bash
+   # Load from default HuggingFace dataset
+   uv run lmsys load --limit 10000 --use-chroma
+   
+   # Or load from specific dataset
+   uv run lmsys load --hf lmsys/chatbot-arena-conversations --limit 5000
+   ```
+
+3. **Verify data loaded correctly**:
+   ```bash
+   uv run lmsys list --limit 10
+   ```
+
+### Testing with Temporary Databases
+
+When testing, use temporary database paths to avoid affecting your main data:
+
+```bash
+# Test loading without affecting main database
+uv run lmsys load --limit 10 \
+  --db-path /tmp/test-adapter.db \
+  --chroma-path /tmp/test-chroma
+
+# Clean up test databases
+uv run lmsys clear \
+  --db-path /tmp/test-adapter.db \
+  --chroma-path /tmp/test-chroma \
+  --yes
+```
+
+### Default Database Locations
+
+- SQLite: `~/.lmsys-query-analysis/queries.db`
+- Chroma: `~/.lmsys-query-analysis/chroma`
+
+### Related Commands
+
+- [src/lmsys_query_analysis/cli/commands/data.py](mdc:src/lmsys_query_analysis/cli/commands/data.py) - Load command implementation
+- [src/lmsys_query_analysis/db/loader.py](mdc:src/lmsys_query_analysis/db/loader.py) - Data loading logic
+- [src/lmsys_query_analysis/db/adapters.py](mdc:src/lmsys_query_analysis/db/adapters.py) - Data source adapters
+
+### Future Considerations
+
+In the future, we may support:
+- Multi-dataset persistence in a single database
+- Source tagging and conflict detection
+- Incremental loading with duplicate detection across sources
+
+Until then, **always clear before loading new data**.

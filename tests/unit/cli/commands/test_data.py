@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 
 
-@patch('lmsys_query_analysis.cli.commands.data.load_lmsys_dataset')
+@patch('lmsys_query_analysis.cli.commands.data.load_dataset')
 @patch('lmsys_query_analysis.cli.commands.data.get_db')
 @patch('lmsys_query_analysis.cli.commands.data.create_chroma_client')
 @patch('lmsys_query_analysis.cli.commands.data.parse_embedding_model')
@@ -30,6 +30,7 @@ def test_load_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_lo
         limit=100,
         db_path="/tmp/test.db",
         use_chroma=False,
+        hf="lmsys/lmsys-chat-1m",  # Added default --hf flag value
         chroma_path="/tmp/chroma",
         embedding_model="test-model",
         db_batch_size=1000,
@@ -141,3 +142,84 @@ def test_backfill_chroma_command(mock_parse, mock_get_db, mock_chroma_client, mo
     # Verify
     mock_get_db.assert_called_once()
     mock_chroma_client.assert_called_once()
+
+
+@patch('lmsys_query_analysis.cli.commands.data.load_dataset')
+@patch('lmsys_query_analysis.cli.commands.data.get_db')
+@patch('lmsys_query_analysis.cli.commands.data.create_chroma_client')
+@patch('lmsys_query_analysis.cli.commands.data.parse_embedding_model')
+def test_load_command_with_custom_hf_dataset(mock_parse, mock_chroma_client, mock_get_db, mock_load_dataset):
+    """Test load command with custom HuggingFace dataset via --hf flag."""
+    from lmsys_query_analysis.cli.commands.data import load
+    
+    # Setup mocks
+    mock_parse.return_value = ("test-model", "test-provider")
+    mock_db = Mock()
+    mock_db.db_path = Path("/tmp/test.db")
+    mock_get_db.return_value = mock_db
+    mock_load_dataset.return_value = {
+        "total_processed": 50,
+        "loaded": 50,
+        "skipped": 0,
+        "errors": 0
+    }
+    
+    # Execute command with custom dataset
+    load(
+        limit=50,
+        db_path="/tmp/test.db",
+        use_chroma=False,
+        hf="custom/dataset",  # Custom dataset name
+        chroma_path="/tmp/chroma",
+        embedding_model="test-model",
+        db_batch_size=1000,
+        streaming=False,
+        no_pragmas=False,
+        force_reload=False
+    )
+    
+    # Verify load_dataset was called with custom dataset name
+    mock_load_dataset.assert_called_once()
+    call_kwargs = mock_load_dataset.call_args[1]
+    assert call_kwargs["dataset_name"] == "custom/dataset"
+    assert call_kwargs["limit"] == 50
+
+
+@patch('lmsys_query_analysis.cli.commands.data.load_dataset')
+@patch('lmsys_query_analysis.cli.commands.data.get_db')
+@patch('lmsys_query_analysis.cli.commands.data.create_chroma_client')
+@patch('lmsys_query_analysis.cli.commands.data.parse_embedding_model')
+def test_load_command_defaults_to_lmsys_dataset(mock_parse, mock_chroma_client, mock_get_db, mock_load_dataset):
+    """Test load command defaults to lmsys/lmsys-chat-1m."""
+    from lmsys_query_analysis.cli.commands.data import load
+    
+    # Setup mocks
+    mock_parse.return_value = ("test-model", "test-provider")
+    mock_db = Mock()
+    mock_db.db_path = Path("/tmp/test.db")
+    mock_get_db.return_value = mock_db
+    mock_load_dataset.return_value = {
+        "total_processed": 100,
+        "loaded": 100,
+        "skipped": 0,
+        "errors": 0
+    }
+    
+    # Execute command without specifying --hf (use default)
+    load(
+        limit=100,
+        db_path="/tmp/test.db",
+        use_chroma=False,
+        hf="lmsys/lmsys-chat-1m",  # Default value
+        chroma_path="/tmp/chroma",
+        embedding_model="test-model",
+        db_batch_size=1000,
+        streaming=False,
+        no_pragmas=False,
+        force_reload=False
+    )
+    
+    # Verify load_dataset was called with default dataset name
+    mock_load_dataset.assert_called_once()
+    call_kwargs = mock_load_dataset.call_args[1]
+    assert call_kwargs["dataset_name"] == "lmsys/lmsys-chat-1m"
