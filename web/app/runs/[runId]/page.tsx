@@ -40,7 +40,7 @@ export default async function RunPage({ params }: RunPageProps) {
     hierarchyTree = treeResponse.nodes;
   }
 
-  const runParams = run.parameters as Record<string, any> | null;
+  const runParams = run.parameters as Record<string, unknown> | null;
 
   return (
     <div className="container mx-auto py-8 space-y-6">

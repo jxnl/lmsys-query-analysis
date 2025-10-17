@@ -143,7 +143,7 @@ def summarize(
                     description=summary_data["description"],
                     summary=f"{summary_data['title']}\n\n{summary_data['description']}",
                     num_queries=sizes_map.get(cid, 0),
-                    representative_queries=[q for q in summary_data["sample_queries"]],
+                    representative_queries=list(summary_data["sample_queries"]),
                     model=model,
                     parameters=summary_params,
                 )

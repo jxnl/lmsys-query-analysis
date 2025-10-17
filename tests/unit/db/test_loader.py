@@ -561,7 +561,7 @@ def test_load_defaults_to_lmsys_dataset(temp_db):
         mock_adapter_class.return_value = mock_adapter
 
         # Call load_dataset without dataset_name parameter
-        stats = load_dataset(
+        load_dataset(
             db=temp_db,
             limit=10,
             apply_pragmas=False,

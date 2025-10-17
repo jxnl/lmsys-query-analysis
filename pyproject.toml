@@ -113,3 +113,6 @@ indent-style = "space"
 
 [tool.ruff.lint.isort]
 known-first-party = ["lmsys_query_analysis"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/lmsys_query_analysis/api/routers/*.py" = ["B008"]  # Allow Depends() in FastAPI routes

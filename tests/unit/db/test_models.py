@@ -69,7 +69,9 @@ def test_unique_conversation_id(session):
     )
     session.add(query2)
 
-    with pytest.raises(Exception):  # Should raise integrity error
+    from sqlalchemy.exc import IntegrityError
+
+    with pytest.raises(IntegrityError):  # Should raise integrity error
         session.commit()
 
 

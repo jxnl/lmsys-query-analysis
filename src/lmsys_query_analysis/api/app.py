@@ -5,6 +5,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from .routers import analysis, clustering, curation, hierarchy, search, summaries
+
 # Create FastAPI app
 app = FastAPI(
     title="LMSYS Query Analysis API",
@@ -84,9 +86,6 @@ async def health_check():
 
 
 # ===== Register Routers =====
-
-# Import routers (will be created next)
-from .routers import analysis, clustering, curation, hierarchy, search, summaries
 
 app.include_router(clustering.router, prefix="/api/clustering", tags=["clustering"])
 app.include_router(analysis.router, prefix="/api", tags=["analysis"])

@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Search, X } from "lucide-react";
 
 type PaginatedQueriesResponse = components["schemas"]["PaginatedQueriesResponse"];
-type Query = components["schemas"]["QueryResponse"];
 type SearchQueryResult = components["schemas"]["QuerySearchResult"];
 
 interface ClusterQueriesClientProps {

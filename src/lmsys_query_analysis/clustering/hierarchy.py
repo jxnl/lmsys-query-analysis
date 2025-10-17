@@ -637,15 +637,18 @@ async def merge_clusters_hierarchical(
                     f"  Neighborhood {neigh_id + 1}/{n_neighborhoods}: {len(neigh_clusters)} clusters → {target_cat} categories"
                 )
 
+            # Run all neighborhoods in parallel with concurrency control
+            semaphore = anyio.Semaphore(concurrency)
+
             # Worker function for parallel neighborhood processing
             async def process_neighborhood(
-                neigh_id: int, neigh_clusters: list[dict], target_cat: int
+                neigh_id: int, neigh_clusters: list[dict], target_cat: int, sem=semaphore, lim=limiter
             ):
                 """Process a single neighborhood and return results."""
-                async with semaphore:
+                async with sem:
                     try:
-                        if limiter:
-                            async with limiter:
+                        if lim:
+                            async with lim:
                                 categories = await generate_neighborhood_categories(
                                     client, neigh_clusters, target_count=target_cat
                                 )
@@ -666,9 +669,6 @@ async def merge_clusters_hierarchical(
                         logger.error(f"Failed to process neighborhood {neigh_id + 1}: {e}")
                         raise
 
-            # Run all neighborhoods in parallel with concurrency control
-            semaphore = anyio.Semaphore(concurrency)
-
             # Execute all neighborhoods in parallel
             tasks = [
                 process_neighborhood(neigh_id, neigh_clusters, target_cat)
@@ -683,7 +683,7 @@ async def merge_clusters_hierarchical(
             results.sort(key=lambda x: x[0])
 
             # Collect all candidates
-            for neigh_id, categories in results:
+            for _neigh_id, categories in results:
                 all_candidates.extend(categories)
 
             logger.info(
@@ -749,12 +749,12 @@ async def merge_clusters_hierarchical(
             assignments = []
 
             # Worker function for parallel assignments
-            async def assign_worker(cluster):
-                async with semaphore:
+            async def assign_worker(cluster, sem=semaphore, p_names=parent_names, assigns=assignments, prog_task=task):
+                async with sem:
                     try:
                         # Remove rate limiting for assignment step to maximize throughput
-                        assignment = await assign_to_parent_cluster(client, cluster, parent_names)
-                        assignments.append((cluster, assignment))
+                        assignment = await assign_to_parent_cluster(client, cluster, p_names)
+                        assigns.append((cluster, assignment))
                     except Exception as e:
                         logger.error(
                             f"Failed to assign cluster {cluster['cluster_id']} "
@@ -762,7 +762,7 @@ async def merge_clusters_hierarchical(
                         )
                         raise
                     finally:
-                        progress.update(task, advance=1)
+                        progress.update(prog_task, advance=1)
 
             # Run all assignments in parallel
             async with anyio.create_task_group() as tg:
@@ -883,18 +883,18 @@ async def merge_clusters_hierarchical(
             refine_semaphore = anyio.Semaphore(refinement_concurrency)
 
             # Worker function for parallel refinements
-            async def refine_worker(parent_name, child_ids):
+            async def refine_worker(parent_name, child_ids, clusters=current_clusters, sem=refine_semaphore, results=refinement_results):
                 if not child_ids:
                     logger.warning(f"Skipping parent '{parent_name}' - has no children assigned")
                     return None
 
                 child_titles = [
-                    c["title"] for c in current_clusters if c["cluster_id"] in child_ids
+                    c["title"] for c in clusters if c["cluster_id"] in child_ids
                 ]
                 logger.debug(f"Refining '{parent_name[:50]}...' from {len(child_titles)} children")
 
                 try:
-                    async with refine_semaphore:
+                    async with sem:
                         # Remove rate limiting for refinement step to maximize throughput
                         refined = await refine_parent_cluster(client, child_titles)
 
@@ -904,7 +904,7 @@ async def merge_clusters_hierarchical(
                     for i, child_title in enumerate(child_titles, 1):
                         logger.debug(f"      {i}. {child_title}")
 
-                    refinement_results.append((parent_name, child_ids, child_titles, refined))
+                    results.append((parent_name, child_ids, child_titles, refined))
                 except Exception as e:
                     logger.error(f"Failed to refine parent '{parent_name[:50]}...': {e}")
                     raise
@@ -916,7 +916,7 @@ async def merge_clusters_hierarchical(
                     tg.start_soon(refine_worker, parent_name, child_ids)
 
             # Process results and build hierarchy
-            for parent_name, child_ids, child_titles, refined in refinement_results:
+            for _parent_name, child_ids, _child_titles, refined in refinement_results:
                 if refined is None:
                     continue
 
@@ -998,7 +998,7 @@ async def merge_clusters_hierarchical(
     validation_errors = []
 
     total_nodes = len(hierarchy)
-    levels = sorted(set(h["level"] for h in hierarchy))
+    levels = sorted({h["level"] for h in hierarchy})
     logger.debug(
         f"Hierarchy summary: {total_nodes} total nodes across {len(levels)} levels: {levels}"
     )

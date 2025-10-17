@@ -113,7 +113,7 @@ async def get_hierarchy_tree(
             .group_by(QueryCluster.cluster_id)
         )
         cluster_counts = session.exec(count_stmt).all()
-        query_count_cache = {cluster_id: count for cluster_id, count in cluster_counts}
+        query_count_cache = dict(cluster_counts)
 
         # Calculate counts for parent nodes by summing children (bottom-up)
         # Process nodes from LOWEST parent level to HIGHEST (level 0 are leaf nodes, already have counts)

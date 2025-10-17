@@ -4,11 +4,6 @@ import typer
 from dotenv import load_dotenv
 
 from ..utils.logging import setup_logging
-
-# Load .env file at startup
-load_dotenv()
-
-# Import command modules
 from .commands import (
     analysis,
     chroma,
@@ -20,6 +15,9 @@ from .commands import (
     summarization,
     verify,
 )
+
+# Load .env file at startup
+load_dotenv()
 
 app = typer.Typer(help="LMSYS Query Analysis CLI")
 

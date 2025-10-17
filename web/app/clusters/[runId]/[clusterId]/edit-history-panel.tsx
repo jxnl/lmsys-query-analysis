@@ -10,7 +10,7 @@ interface EditHistoryPanelProps {
   clusterId: number;
 }
 
-export function EditHistoryPanel({ edits, runId, clusterId }: EditHistoryPanelProps) {
+export function EditHistoryPanel({ edits }: EditHistoryPanelProps) {
   const getEditTypeBadge = (editType: string) => {
     const variants: Record<
       string,
@@ -76,17 +76,17 @@ export function EditHistoryPanel({ edits, runId, clusterId }: EditHistoryPanelPr
               {edit.edit_type === "rename" && edit.old_value && edit.new_value && (
                 <div className="mt-2 text-xs">
                   <div className="text-muted-foreground">
-                    <span className="line-through">{(edit.old_value as any).title}</span>
+                    <span className="line-through">{(edit.old_value as Record<string, unknown>).title as string}</span>
                     {" → "}
-                    <span className="font-medium">{(edit.new_value as any).title}</span>
+                    <span className="font-medium">{(edit.new_value as Record<string, unknown>).title as string}</span>
                   </div>
                 </div>
               )}
 
               {edit.edit_type === "move_query" && edit.old_value && edit.new_value && (
                 <div className="mt-2 text-xs text-muted-foreground">
-                  Moved query {(edit.old_value as any).query_id} from cluster{" "}
-                  {(edit.old_value as any).cluster_id} → {(edit.new_value as any).cluster_id}
+                  Moved query {(edit.old_value as Record<string, unknown>).query_id as string} from cluster{" "}
+                  {(edit.old_value as Record<string, unknown>).cluster_id as number} → {(edit.new_value as Record<string, unknown>).cluster_id as number}
                 </div>
               )}
             </div>

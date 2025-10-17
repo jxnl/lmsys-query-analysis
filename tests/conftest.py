@@ -230,7 +230,7 @@ def mock_chroma():
             return len(self.summaries)
 
         def list_runs_in_summaries(self):
-            return list(set(k[0] for k in self.summaries))
+            return list({k[0] for k in self.summaries})
 
         def get_query_embeddings_map(self, ids):
             return {qid: True for qid in ids if qid in self.queries}

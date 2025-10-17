@@ -229,9 +229,12 @@ class QueriesClient:
         cluster_ids: list[int] | None = None,
         within_clusters: str | None = None,
         top_clusters: int = 10,
-        facet_by: list[str] = ["cluster"],
+        facet_by: list[str] | None = None,
     ) -> dict[str, list[FacetBucket]]:
         """Return facet buckets for the filtered/conditioned result set."""
+        if facet_by is None:
+            facet_by = ["cluster"]
+
         effective_run = run_id or self._run_id
         hits = self.find(
             text=text,

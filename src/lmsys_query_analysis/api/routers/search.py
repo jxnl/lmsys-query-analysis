@@ -70,13 +70,13 @@ async def search_queries(
         if cluster_ids:
             try:
                 cluster_ids_list = [int(x.strip()) for x in cluster_ids.split(",") if x.strip()]
-            except Exception:
+            except Exception as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail={
                         "error": {"type": "ValueError", "message": "Invalid cluster_ids format"}
                     },
-                )
+                ) from e
 
         # Create ChromaManager and semantic clients
         chroma_manager = create_chroma_manager(run_id, db, chroma_path)

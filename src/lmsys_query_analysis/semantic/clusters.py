@@ -112,7 +112,7 @@ class ClustersClient:
             metas = results.get("metadatas", [[]])[0]
             dists = results.get("distances", [[]])[0]
 
-            for cid, doc, meta, dist in zip(ids, docs, metas, dists, strict=False):
+            for cid, _doc, meta, dist in zip(ids, docs, metas, dists, strict=False):
                 # Optional post-filter by alias/summary_run_id
                 if alias and meta.get("alias") != alias:
                     continue
@@ -159,7 +159,7 @@ class ClustersClient:
         if text is None:
             # If no text, estimate by counting summaries in Chroma for run
             # and optionally post-filter in a lightweight way
-            results = self.chroma.search_cluster_summaries(
+            _results = self.chroma.search_cluster_summaries(
                 query_text="*",  # Chroma requires a string; wildcard won't match, so fall back to get
                 run_id=run_id or self._run_id,
                 n_results=1,

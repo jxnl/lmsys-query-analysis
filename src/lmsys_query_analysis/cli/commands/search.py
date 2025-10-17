@@ -58,9 +58,9 @@ def search(
     if cluster_ids:
         try:
             cluster_ids_list = [int(x.strip()) for x in cluster_ids.split(",") if x.strip()]
-        except Exception:
+        except Exception as e:
             console.print("[red]Invalid --cluster-ids. Use comma-separated integers.[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
     db = get_db(None)
 

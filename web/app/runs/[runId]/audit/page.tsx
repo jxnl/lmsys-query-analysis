@@ -118,9 +118,9 @@ export default async function AuditLogPage({ params }: AuditLogPageProps) {
                     <div className="mt-2 p-2 bg-muted rounded text-xs">
                       <div className="font-medium mb-1">Title Change:</div>
                       <div className="line-through text-muted-foreground">
-                        {(edit.old_value as any).title}
+                        {(edit.old_value as Record<string, unknown>).title as string}
                       </div>
-                      <div>→ {(edit.new_value as any).title}</div>
+                      <div>→ {(edit.new_value as Record<string, unknown>).title as string}</div>
                     </div>
                   )}
 
@@ -128,8 +128,8 @@ export default async function AuditLogPage({ params }: AuditLogPageProps) {
                     <div className="mt-2 p-2 bg-muted rounded text-xs">
                       <div className="font-medium mb-1">Query Movement:</div>
                       <div>
-                        Query {(edit.old_value as any).query_id}: Cluster{" "}
-                        {(edit.old_value as any).cluster_id} → {(edit.new_value as any).cluster_id}
+                        Query {(edit.old_value as Record<string, unknown>).query_id as string}: Cluster{" "}
+                        {(edit.old_value as Record<string, unknown>).cluster_id as number} → {(edit.new_value as Record<string, unknown>).cluster_id as number}
                       </div>
                     </div>
                   )}
@@ -138,11 +138,11 @@ export default async function AuditLogPage({ params }: AuditLogPageProps) {
                     <div className="mt-2 p-2 bg-muted rounded text-xs">
                       <div className="font-medium mb-1">Cluster Merge:</div>
                       <div>
-                        Merged {((edit.old_value as any).source_clusters || []).join(", ")} →
-                        Cluster {(edit.new_value as any).target_cluster}
+                        Merged {((edit.old_value as Record<string, unknown>).source_clusters as string[] || []).join(", ")} →
+                        Cluster {(edit.new_value as Record<string, unknown>).target_cluster as number}
                       </div>
                       <div className="text-muted-foreground">
-                        {(edit.new_value as any).queries_moved} queries moved
+                        {(edit.new_value as Record<string, unknown>).queries_moved as number} queries moved
                       </div>
                     </div>
                   )}
@@ -150,11 +150,11 @@ export default async function AuditLogPage({ params }: AuditLogPageProps) {
                   {edit.edit_type === "tag" && edit.new_value && (
                     <div className="mt-2 p-2 bg-muted rounded text-xs">
                       <div className="font-medium mb-1">Metadata Update:</div>
-                      {(edit.new_value as any).quality && (
-                        <div>Quality: {(edit.new_value as any).quality}</div>
+                      {(edit.new_value as Record<string, unknown>).quality && (
+                        <div>Quality: {(edit.new_value as Record<string, unknown>).quality as string}</div>
                       )}
-                      {(edit.new_value as any).coherence_score && (
-                        <div>Coherence: {(edit.new_value as any).coherence_score}/5</div>
+                      {(edit.new_value as Record<string, unknown>).coherence_score && (
+                        <div>Coherence: {(edit.new_value as Record<string, unknown>).coherence_score as number}/5</div>
                       )}
                     </div>
                   )}

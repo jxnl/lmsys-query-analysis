@@ -163,7 +163,6 @@ def show_hierarchy_cmd(
             raise typer.Exit(1)
 
         # Build tree structure
-        nodes_by_id = {node.cluster_id: node for node in hierarchy_nodes}
         children_by_parent = defaultdict(list)
         root_nodes = []
 

@@ -84,5 +84,5 @@ def test_kmeans_clustering_end_to_end():
             assert len(assignments) == 8  # All 8 queries should be assigned
 
             # Check that we have 2 distinct clusters
-            cluster_ids = set(a.cluster_id for a in assignments)
+            cluster_ids = {a.cluster_id for a in assignments}
             assert len(cluster_ids) == 2

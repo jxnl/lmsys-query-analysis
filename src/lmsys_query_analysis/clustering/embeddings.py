@@ -324,7 +324,7 @@ class EmbeddingGenerator:
         async def worker(idx: int, payload: list[str]):
             backoff = 1.0
             last_exception = None
-            for attempt in range(5):
+            for _attempt in range(5):
                 try:
                     async with semaphore:
                         resp = await self._async_client.embeddings.create(
@@ -348,7 +348,7 @@ class EmbeddingGenerator:
                 raise RuntimeError("All retries failed but no exception captured")
 
         async with anyio.create_task_group() as tg:
-            for j, (start, payload) in enumerate(batches):
+            for j, (_start, payload) in enumerate(batches):
                 tg.start_soon(worker, j, payload)
 
         # Flatten preserving original order
@@ -375,7 +375,7 @@ class EmbeddingGenerator:
         async def worker(idx: int, payload: list[str]):
             backoff = 1.0
             last_exception = None
-            for attempt in range(5):
+            for _attempt in range(5):
                 try:
                     async with semaphore:
                         resp = await self._async_client.embed(
@@ -402,7 +402,7 @@ class EmbeddingGenerator:
                 raise RuntimeError("All retries failed but no exception captured")
 
         async with anyio.create_task_group() as tg:
-            for j, (start, payload) in enumerate(batches):
+            for j, (_start, payload) in enumerate(batches):
                 tg.start_soon(worker, j, payload)
 
         # Flatten preserving original order

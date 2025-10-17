@@ -47,6 +47,6 @@ def with_error_handling(func: Callable) -> Callable:
             else:
                 console.print(f"[red]Error: {e}[/red]")
 
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
     return wrapper

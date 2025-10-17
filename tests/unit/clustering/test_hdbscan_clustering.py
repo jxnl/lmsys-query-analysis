@@ -109,7 +109,7 @@ def test_hdbscan_empty_embeddings():
 
     # HDBSCAN requires at least one sample
     with pytest.raises(ValueError, match="minimum of 1 is required"):
-        labels = clusterer.fit_predict(embeddings)
+        clusterer.fit_predict(embeddings)
 
 
 def test_hdbscan_single_point():
@@ -121,7 +121,7 @@ def test_hdbscan_single_point():
 
     # Single point doesn't have enough neighbors for HDBSCAN
     with pytest.raises(ValueError, match="k must be less than or equal"):
-        labels = clusterer.fit_predict(embeddings)
+        clusterer.fit_predict(embeddings)
 
 
 def test_hdbscan_high_dimensional():

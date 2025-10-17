@@ -186,12 +186,12 @@ def test_chroma_manager_different_providers_create_different_collections(mock_cl
     mock_client_class.return_value = mock_client
 
     # Create with provider A
-    manager1 = ChromaManager(
+    ChromaManager(
         persist_directory="/tmp/test", embedding_model="model-a", embedding_provider="provider-a"
     )
 
     # Create with provider B
-    manager2 = ChromaManager(
+    ChromaManager(
         persist_directory="/tmp/test", embedding_model="model-b", embedding_provider="provider-b"
     )
 
@@ -222,7 +222,7 @@ def test_chroma_manager_cohere_includes_dimension(mock_client_class):
     mock_client.get_or_create_collection.return_value = mock_collection
     mock_client_class.return_value = mock_client
 
-    manager = ChromaManager(
+    ChromaManager(
         persist_directory="/tmp/test",
         embedding_model="embed-v4.0",
         embedding_provider="cohere",
@@ -455,7 +455,7 @@ def test_chroma_manager_search_cluster_summaries(mock_client_class):
     )
 
     # Search summaries
-    results = manager.search_cluster_summaries("test query", run_id="test", n_results=5)
+    manager.search_cluster_summaries("test query", run_id="test", n_results=5)
 
     # Verify query was called with filters
     mock_summaries_collection.query.assert_called_once()

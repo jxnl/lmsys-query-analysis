@@ -31,7 +31,7 @@ def test_database_initialization_with_path(tmp_path):
 def test_database_initialization_creates_directory(tmp_path):
     """Test that Database creates parent directories."""
     db_path = tmp_path / "subdir" / "nested" / "test.db"
-    db = Database(db_path)
+    Database(db_path)
 
     assert db_path.parent.exists()
     assert db_path.parent.is_dir()
@@ -72,8 +72,10 @@ def test_database_auto_create_tables_false(tmp_path):
 
     # Tables should not exist yet
     # Trying to query will raise an error
+    from sqlmodel import OperationalError
+
     with db.get_session() as session:
-        with pytest.raises(Exception):  # SQLite operational error
+        with pytest.raises(OperationalError):  # SQLite operational error
             session.exec(select(Query)).first()
 
 
@@ -155,8 +157,10 @@ def test_database_drop_tables(tmp_path):
     db.drop_tables()
 
     # Tables should not exist
+    from sqlmodel import OperationalError
+
     with db.get_session() as session:
-        with pytest.raises(Exception):  # SQLite operational error
+        with pytest.raises(OperationalError):  # SQLite operational error
             session.exec(select(Query)).first()
 
 

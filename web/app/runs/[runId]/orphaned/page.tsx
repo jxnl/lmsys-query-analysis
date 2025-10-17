@@ -78,9 +78,9 @@ export default async function OrphanedQueriesPage({ params }: OrphanedQueriesPag
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs text-muted-foreground">Query {query.id}</span>
-                        {(orphan as any).original_cluster_id && (
+                        {(orphan as Record<string, unknown>).original_cluster_id && (
                           <Badge variant="outline" className="text-xs">
-                            From cluster {(orphan as any).original_cluster_id}
+                            From cluster {(orphan as Record<string, unknown>).original_cluster_id as number}
                           </Badge>
                         )}
                       </div>
@@ -88,7 +88,7 @@ export default async function OrphanedQueriesPage({ params }: OrphanedQueriesPag
                     </div>
                     <div className="text-right">
                       <div className="text-xs text-muted-foreground">
-                        {new Date((orphan as any).orphaned_at).toLocaleDateString()}
+                        {new Date((orphan as Record<string, unknown>).orphaned_at as string).toLocaleDateString()}
                       </div>
                     </div>
                   </div>
@@ -98,9 +98,9 @@ export default async function OrphanedQueriesPage({ params }: OrphanedQueriesPag
                     {query.language && <span>Language: {query.language}</span>}
                   </div>
 
-                  {(orphan as any).reason && (
+                  {(orphan as Record<string, unknown>).reason && (
                     <div className="mt-2 text-xs text-muted-foreground border-t pt-2">
-                      Reason: {(orphan as any).reason}
+                      Reason: {(orphan as Record<string, unknown>).reason as string}
                     </div>
                   )}
                 </div>
