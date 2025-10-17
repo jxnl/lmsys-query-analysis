@@ -262,6 +262,7 @@ def test_get_cluster_probabilities():
     probabilities = clusterer.get_cluster_probabilities()
 
     # Check shape and values
+    assert len(labels) == 60
     assert len(probabilities) == 60
     assert probabilities.min() >= 0.0
     assert probabilities.max() <= 1.0
@@ -449,10 +450,11 @@ def test_compute_centroids_accuracy():
 
 def test_run_hdbscan_clustering_basic(tmp_path):
     """Test run_hdbscan_clustering with basic parameters."""
+    from sqlmodel import select
+
     from lmsys_query_analysis.clustering.hdbscan_clustering import run_hdbscan_clustering
     from lmsys_query_analysis.db.connection import Database
-    from lmsys_query_analysis.db.models import Query
-    from sqlmodel import select
+    from lmsys_query_analysis.db.models import ClusteringRun, Query, QueryCluster
 
     db = Database(db_path=":memory:", auto_create_tables=True)
 
@@ -487,8 +489,6 @@ def test_run_hdbscan_clustering_basic(tmp_path):
         assert run_id.startswith("hdbscan-5-")
 
         # Verify clustering run exists in database
-        from lmsys_query_analysis.db.models import ClusteringRun, QueryCluster
-
         run = session.exec(select(ClusteringRun).where(ClusteringRun.run_id == run_id)).first()
         assert run is not None
         assert run.algorithm == "hdbscan"
@@ -521,10 +521,11 @@ def test_run_hdbscan_clustering_empty_database():
 
 def test_run_hdbscan_clustering_with_max_queries():
     """Test run_hdbscan_clustering with max_queries limit."""
+    from sqlmodel import select
+
     from lmsys_query_analysis.clustering.hdbscan_clustering import run_hdbscan_clustering
     from lmsys_query_analysis.db.connection import Database
-    from lmsys_query_analysis.db.models import Query
-    from sqlmodel import select
+    from lmsys_query_analysis.db.models import ClusteringRun, Query, QueryCluster
 
     db = Database(db_path=":memory:", auto_create_tables=True)
 
@@ -554,8 +555,6 @@ def test_run_hdbscan_clustering_with_max_queries():
         assert run_id is not None
 
         # Verify only 50 queries were clustered
-        from lmsys_query_analysis.db.models import ClusteringRun, QueryCluster
-
         run = session.exec(select(ClusteringRun).where(ClusteringRun.run_id == run_id)).first()
         assert run.parameters.get("limit") == 50
 
@@ -573,7 +572,6 @@ def test_run_hdbscan_clustering_with_chroma():
     from lmsys_query_analysis.clustering.hdbscan_clustering import run_hdbscan_clustering
     from lmsys_query_analysis.db.connection import Database
     from lmsys_query_analysis.db.models import Query
-    from sqlmodel import select
 
     db = Database(db_path=":memory:", auto_create_tables=True)
 
@@ -615,10 +613,11 @@ def test_run_hdbscan_clustering_with_chroma():
 
 def test_run_hdbscan_clustering_custom_parameters():
     """Test run_hdbscan_clustering with custom parameters."""
+    from sqlmodel import select
+
     from lmsys_query_analysis.clustering.hdbscan_clustering import run_hdbscan_clustering
     from lmsys_query_analysis.db.connection import Database
-    from lmsys_query_analysis.db.models import Query
-    from sqlmodel import select
+    from lmsys_query_analysis.db.models import ClusteringRun, Query
 
     db = Database(db_path=":memory:", auto_create_tables=True)
 
@@ -652,8 +651,6 @@ def test_run_hdbscan_clustering_custom_parameters():
         assert run_id is not None
 
         # Verify parameters were stored
-        from lmsys_query_analysis.db.models import ClusteringRun
-
         run = session.exec(select(ClusteringRun).where(ClusteringRun.run_id == run_id)).first()
         assert run.parameters["min_cluster_size"] == 10
         assert run.parameters["min_samples"] == 5
