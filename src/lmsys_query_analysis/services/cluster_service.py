@@ -1,27 +1,27 @@
 """Service for cluster operations."""
 
-from typing import List, Optional, Tuple
 from sqlmodel import select
+
 from ..db.connection import Database
-from ..db.models import ClusterSummary, QueryCluster, Query
+from ..db.models import ClusterSummary, Query, QueryCluster
 
 
 def list_cluster_summaries(
     db: Database,
     run_id: str,
-    summary_run_id: Optional[str] = None,
-    alias: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> List[ClusterSummary]:
+    summary_run_id: str | None = None,
+    alias: str | None = None,
+    limit: int | None = None,
+) -> list[ClusterSummary]:
     """List cluster summaries for a run.
-    
+
     Args:
         db: Database manager instance
         run_id: Clustering run ID
         summary_run_id: Optional specific summary run ID filter
         alias: Optional summary alias filter
         limit: Optional limit on number of summaries
-    
+
     Returns:
         List of ClusterSummary objects
     """
@@ -29,19 +29,17 @@ def list_cluster_summaries(
         statement = (
             select(ClusterSummary)
             .where(ClusterSummary.run_id == run_id)
-            .order_by(
-                ClusterSummary.num_queries.desc(), ClusterSummary.cluster_id.asc()
-            )
+            .order_by(ClusterSummary.num_queries.desc(), ClusterSummary.cluster_id.asc())
         )
-        
+
         if summary_run_id:
             statement = statement.where(ClusterSummary.summary_run_id == summary_run_id)
         elif alias:
             statement = statement.where(ClusterSummary.alias == alias)
-        
+
         if limit:
             statement = statement.limit(limit)
-        
+
         return session.exec(statement).all()
 
 
@@ -49,14 +47,14 @@ def get_cluster_summary(
     db: Database,
     run_id: str,
     cluster_id: int,
-) -> Optional[ClusterSummary]:
+) -> ClusterSummary | None:
     """Get cluster summary for a specific cluster.
-    
+
     Args:
         db: Database manager instance
         run_id: Clustering run ID
         cluster_id: Cluster ID
-    
+
     Returns:
         ClusterSummary object or None if not found
     """
@@ -71,22 +69,18 @@ def get_cluster_summary(
 def get_cluster_ids_for_run(
     db: Database,
     run_id: str,
-) -> List[int]:
+) -> list[int]:
     """Get all cluster IDs for a run.
-    
+
     Args:
         db: Database manager instance
         run_id: Clustering run ID
-    
+
     Returns:
         List of cluster IDs
     """
     with db.get_session() as session:
-        statement = (
-            select(QueryCluster.cluster_id)
-            .where(QueryCluster.run_id == run_id)
-            .distinct()
-        )
+        statement = select(QueryCluster.cluster_id).where(QueryCluster.run_id == run_id).distinct()
         return list(session.exec(statement))
 
 
@@ -94,14 +88,14 @@ def get_cluster_queries_with_texts(
     db: Database,
     run_id: str,
     cluster_id: int,
-) -> Tuple[List[Query], List[str]]:
+) -> tuple[list[Query], list[str]]:
     """Get queries and their texts for a cluster.
-    
+
     Args:
         db: Database manager instance
         run_id: Clustering run ID
         cluster_id: Cluster ID
-    
+
     Returns:
         Tuple of (queries list, query_texts list)
     """
@@ -120,13 +114,13 @@ def get_cluster_queries_with_texts(
 def get_latest_summary_run_id(
     db: Database,
     run_id: str,
-) -> Optional[str]:
+) -> str | None:
     """Get the latest summary run ID for a clustering run.
-    
+
     Args:
         db: Database manager instance
         run_id: Clustering run ID
-    
+
     Returns:
         Latest summary_run_id or None if no summaries exist
     """
@@ -138,4 +132,3 @@ def get_latest_summary_run_id(
             .limit(1)
         )
         return session.exec(statement).first()
-

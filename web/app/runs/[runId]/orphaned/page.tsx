@@ -2,13 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { components } from "@/lib/api/types";
 
@@ -19,9 +13,7 @@ interface OrphanedQueriesPageProps {
   params: Promise<{ runId: string }>;
 }
 
-export default async function OrphanedQueriesPage({
-  params,
-}: OrphanedQueriesPageProps) {
+export default async function OrphanedQueriesPage({ params }: OrphanedQueriesPageProps) {
   const { runId } = await params;
 
   // Fetch run metadata
@@ -61,17 +53,12 @@ export default async function OrphanedQueriesPage({
         <Card>
           <CardHeader>
             <CardTitle>No Orphaned Queries</CardTitle>
-            <CardDescription>
-              All queries in this run are assigned to clusters
-            </CardDescription>
+            <CardDescription>All queries in this run are assigned to clusters</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
               Orphaned queries appear here when clusters are deleted with the{" "}
-              <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                --orphan
-              </code>{" "}
-              flag.
+              <code className="text-xs bg-muted px-1 py-0.5 rounded">--orphan</code> flag.
             </p>
           </CardContent>
         </Card>
@@ -90,9 +77,7 @@ export default async function OrphanedQueriesPage({
                   <div className="flex items-start justify-between gap-4 mb-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs text-muted-foreground">
-                          Query {query.id}
-                        </span>
+                        <span className="text-xs text-muted-foreground">Query {query.id}</span>
                         {(orphan as any).original_cluster_id && (
                           <Badge variant="outline" className="text-xs">
                             From cluster {(orphan as any).original_cluster_id}
@@ -103,9 +88,7 @@ export default async function OrphanedQueriesPage({
                     </div>
                     <div className="text-right">
                       <div className="text-xs text-muted-foreground">
-                        {new Date(
-                          (orphan as any).orphaned_at,
-                        ).toLocaleDateString()}
+                        {new Date((orphan as any).orphaned_at).toLocaleDateString()}
                       </div>
                     </div>
                   </div>
@@ -131,8 +114,7 @@ export default async function OrphanedQueriesPage({
         <p>
           To reassign orphaned queries, use:{" "}
           <code className="bg-muted px-1 py-0.5 rounded text-xs">
-            lmsys edit move-query {runId} --query-id &lt;ID&gt; --to-cluster
-            &lt;CLUSTER_ID&gt;
+            lmsys edit move-query {runId} --query-id &lt;ID&gt; --to-cluster &lt;CLUSTER_ID&gt;
           </code>
         </p>
       </div>

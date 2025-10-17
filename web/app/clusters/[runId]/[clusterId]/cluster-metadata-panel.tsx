@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ClusterMetadata } from "@/lib/types";
 
@@ -16,11 +10,7 @@ interface ClusterMetadataPanelProps {
   clusterId: number;
 }
 
-export function ClusterMetadataPanel({
-  metadata,
-  runId,
-  clusterId,
-}: ClusterMetadataPanelProps) {
+export function ClusterMetadataPanel({ metadata, runId, clusterId }: ClusterMetadataPanelProps) {
   if (!metadata) {
     return (
       <Card className="border-dashed">
@@ -62,10 +52,7 @@ export function ClusterMetadataPanel({
     return (
       <div className="flex items-center gap-1">
         {[...Array(5)].map((_, i) => (
-          <span
-            key={i}
-            className={i < score ? "text-yellow-500" : "text-gray-300"}
-          >
+          <span key={i} className={i < score ? "text-yellow-500" : "text-gray-300"}>
             ★
           </span>
         ))}
@@ -104,11 +91,7 @@ export function ClusterMetadataPanel({
             <div className="text-sm font-medium mb-2">Flags</div>
             <div className="flex flex-wrap gap-2">
               {flags.map((flag, idx) => (
-                <Badge
-                  key={idx}
-                  variant="outline"
-                  className="text-red-600 border-red-300"
-                >
+                <Badge key={idx} variant="outline" className="text-red-600 border-red-300">
                   {flag}
                 </Badge>
               ))}
@@ -119,9 +102,7 @@ export function ClusterMetadataPanel({
         {metadata.notes && (
           <div>
             <div className="text-sm font-medium mb-1">Notes</div>
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-              {metadata.notes}
-            </p>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{metadata.notes}</p>
           </div>
         )}
 

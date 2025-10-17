@@ -4,10 +4,10 @@ from fastapi.testclient import TestClient
 
 from lmsys_query_analysis.db.connection import Database
 from lmsys_query_analysis.db.models import (
-    Query,
-    ClusteringRun,
-    QueryCluster,
     ClusterHierarchy,
+    ClusteringRun,
+    Query,
+    QueryCluster,
 )
 
 
@@ -144,7 +144,9 @@ def test_hierarchy_query_counts_bottom_up(db: Database, client: TestClient):
     assert nodes[100]["query_count"] == 30, "Mid-level cluster should have 30 queries (5+10+15)"
 
     # Verify root cluster count (sum of descendants)
-    assert nodes[200]["query_count"] == 30, "Root cluster should have 30 queries (sum of all descendants)"
+    assert nodes[200]["query_count"] == 30, (
+        "Root cluster should have 30 queries (sum of all descendants)"
+    )
 
     # Verify total queries in response
     assert data["total_queries"] == 30, "Total queries should be 30"

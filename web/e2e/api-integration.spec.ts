@@ -1,8 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("API Integration", () => {
-  const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   test("should connect to FastAPI backend", async ({ request }) => {
     const response = await request.get(`${API_BASE_URL}/api/health`);
@@ -14,9 +13,7 @@ test.describe("API Integration", () => {
   });
 
   test("should fetch clustering runs", async ({ request }) => {
-    const response = await request.get(
-      `${API_BASE_URL}/api/clustering/runs?limit=10`,
-    );
+    const response = await request.get(`${API_BASE_URL}/api/clustering/runs?limit=10`);
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -38,7 +35,7 @@ test.describe("API Integration", () => {
 
   test("should perform fulltext search on queries", async ({ request }) => {
     const response = await request.get(
-      `${API_BASE_URL}/api/search/queries?text=python&mode=fulltext&limit=5`,
+      `${API_BASE_URL}/api/search/queries?text=python&mode=fulltext&limit=5`
     );
     expect(response.ok()).toBeTruthy();
 
@@ -48,9 +45,7 @@ test.describe("API Integration", () => {
   });
 
   test("should handle 404 for non-existent run", async ({ request }) => {
-    const response = await request.get(
-      `${API_BASE_URL}/api/clustering/runs/nonexistent-run-id`,
-    );
+    const response = await request.get(`${API_BASE_URL}/api/clustering/runs/nonexistent-run-id`);
     expect(response.status()).toBe(404);
 
     const data = await response.json();
@@ -59,12 +54,8 @@ test.describe("API Integration", () => {
     expect(data.detail.error.type).toBe("NotFound");
   });
 
-  test("should return 501 for unimplemented POST endpoints", async ({
-    request,
-  }) => {
-    const response = await request.post(
-      `${API_BASE_URL}/api/clustering/kmeans`,
-    );
+  test("should return 501 for unimplemented POST endpoints", async ({ request }) => {
+    const response = await request.post(`${API_BASE_URL}/api/clustering/kmeans`);
     expect(response.status()).toBe(501);
 
     const data = await response.json();

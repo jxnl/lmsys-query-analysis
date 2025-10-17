@@ -5,9 +5,9 @@ Implementations will be added incrementally; current stubs define method
 signatures and docstrings for discussion and scaffolding.
 """
 
-from .types import RunSpace, ClusterHit, QueryHit, FacetBucket, SearchResult
 from .clusters import ClustersClient
 from .queries import QueriesClient
+from .types import ClusterHit, FacetBucket, QueryHit, RunSpace, SearchResult
 
 __all__ = [
     "RunSpace",
@@ -18,4 +18,3 @@ __all__ = [
     "ClustersClient",
     "QueriesClient",
 ]
-

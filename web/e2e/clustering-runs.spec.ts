@@ -13,15 +13,10 @@ test.describe("Clustering Runs Page", () => {
     await expect(body).toBeVisible();
   });
 
-  test("should be able to access run details page directly", async ({
-    page,
-  }) => {
+  test("should be able to access run details page directly", async ({ page }) => {
     // First, get a valid run ID from the API
-    const API_BASE_URL =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    const response = await page.request.get(
-      `${API_BASE_URL}/api/clustering/runs?limit=1`,
-    );
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const response = await page.request.get(`${API_BASE_URL}/api/clustering/runs?limit=1`);
     const data = await response.json();
 
     if (data.items && data.items.length > 0) {
@@ -39,9 +34,7 @@ test.describe("Clustering Runs Page", () => {
       await expect(body).toBeVisible();
     } else {
       // If no runs exist, skip the test
-      console.log(
-        "No clustering runs found in database - skipping navigation test",
-      );
+      console.log("No clustering runs found in database - skipping navigation test");
     }
   });
 });

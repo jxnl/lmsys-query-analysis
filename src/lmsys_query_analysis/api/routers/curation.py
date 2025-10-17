@@ -1,20 +1,21 @@
 """Curation endpoints for metadata, edit history, and orphaned queries."""
 
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlmodel import select
 
+from ...db.connection import Database
+from ...db.models import ClusterEdit, OrphanedQuery
+from ...db.models import ClusterMetadata as ClusterMetadataModel
+from ...db.models import Query as QueryModel
 from ..dependencies import get_db
 from ..schemas import (
     ClusterMetadata,
-    EditHistoryResponse,
     EditHistoryRecord,
+    EditHistoryResponse,
     OrphanedQueriesResponse,
     OrphanInfo,
     QueryResponse,
 )
-from ...db.connection import Database
-from ...db.models import ClusterMetadata as ClusterMetadataModel, ClusterEdit, OrphanedQuery, Query as QueryModel
-from sqlmodel import select
 
 router = APIRouter()
 
@@ -120,7 +121,11 @@ async def get_run_audit(
 ):
     """Get the full edit history (audit log) for a clustering run."""
     with db.get_session() as session:
-        stmt = select(ClusterEdit).where(ClusterEdit.run_id == run_id).order_by(ClusterEdit.timestamp.desc())
+        stmt = (
+            select(ClusterEdit)
+            .where(ClusterEdit.run_id == run_id)
+            .order_by(ClusterEdit.timestamp.desc())
+        )
 
         all_edits = session.exec(stmt).all()
 

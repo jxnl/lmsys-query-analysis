@@ -1,8 +1,7 @@
 import numpy as np
-import pytest
 
 from lmsys_query_analysis.db.connection import Database
-from lmsys_query_analysis.db.models import Query, QueryCluster, ClusteringRun
+from lmsys_query_analysis.db.models import ClusteringRun, Query, QueryCluster
 from lmsys_query_analysis.semantic import ClustersClient, QueriesClient
 
 
@@ -53,9 +52,30 @@ class FakeChroma:
     def search_cluster_summaries(self, query_text, run_id=None, n_results=5, query_embedding=None):  # noqa: D401
         # Return top clusters, optionally filtered by run_id
         metas = [
-            {"run_id": "runA", "cluster_id": 1, "title": "Vector Databases", "alias": "v1", "summary_run_id": "s1", "num_queries": 2},
-            {"run_id": "runA", "cluster_id": 3, "title": "Greetings FR", "alias": "v1", "summary_run_id": "s1", "num_queries": 1},
-            {"run_id": "runB", "cluster_id": 7, "title": "Other", "alias": "v1", "summary_run_id": "s1", "num_queries": 1},
+            {
+                "run_id": "runA",
+                "cluster_id": 1,
+                "title": "Vector Databases",
+                "alias": "v1",
+                "summary_run_id": "s1",
+                "num_queries": 2,
+            },
+            {
+                "run_id": "runA",
+                "cluster_id": 3,
+                "title": "Greetings FR",
+                "alias": "v1",
+                "summary_run_id": "s1",
+                "num_queries": 1,
+            },
+            {
+                "run_id": "runB",
+                "cluster_id": 7,
+                "title": "Other",
+                "alias": "v1",
+                "summary_run_id": "s1",
+                "num_queries": 1,
+            },
         ]
         docs = [
             "Vector Databases\n\nTopical cluster",
@@ -117,12 +137,33 @@ def seed_db(tmp_path) -> Database:
             )
         )
         # Queries
-        q1 = Query(conversation_id="c1", model="vicuna", query_text="hybrid search with bm25 and vectors", language="en")
-        q2 = Query(conversation_id="c2", model="llama", query_text="how to tune hnsw ef parameter", language="en")
-        q3 = Query(conversation_id="c3", model="vicuna", query_text="bonjour le monde", language="fr")
-        q4 = Query(conversation_id="c4", model="mistral", query_text="vector db schema design", language="en")
+        q1 = Query(
+            conversation_id="c1",
+            model="vicuna",
+            query_text="hybrid search with bm25 and vectors",
+            language="en",
+        )
+        q2 = Query(
+            conversation_id="c2",
+            model="llama",
+            query_text="how to tune hnsw ef parameter",
+            language="en",
+        )
+        q3 = Query(
+            conversation_id="c3", model="vicuna", query_text="bonjour le monde", language="fr"
+        )
+        q4 = Query(
+            conversation_id="c4",
+            model="mistral",
+            query_text="vector db schema design",
+            language="en",
+        )
         q5 = Query(conversation_id="c5", model="vicuna", query_text="modelo espanol", language="es")
-        s.add(q1); s.add(q2); s.add(q3); s.add(q4); s.add(q5)
+        s.add(q1)
+        s.add(q2)
+        s.add(q3)
+        s.add(q4)
+        s.add(q5)
         s.commit()
 
         # Assign clusters in runA
@@ -221,9 +262,14 @@ def test_facets_cluster_includes_title_when_available(tmp_path):
     db = seed_db(tmp_path)
     # Seed minimal cluster summaries for titles
     from lmsys_query_analysis.db.models import ClusterSummary
+
     with db.get_session() as s:
-        s.add(ClusterSummary(run_id="runA", cluster_id=1, title="Vector Databases", description="..."))
-        s.add(ClusterSummary(run_id="runA", cluster_id=3, title="French Greetings", description="..."))
+        s.add(
+            ClusterSummary(run_id="runA", cluster_id=1, title="Vector Databases", description="...")
+        )
+        s.add(
+            ClusterSummary(run_id="runA", cluster_id=3, title="French Greetings", description="...")
+        )
         s.commit()
 
     chroma = FakeChroma()

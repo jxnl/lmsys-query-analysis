@@ -1,17 +1,12 @@
 """Test cases for FastAPI endpoints."""
 
-from datetime import datetime
-
-import pytest
 from fastapi.testclient import TestClient
 
 from lmsys_query_analysis.db.connection import Database
 from lmsys_query_analysis.db.models import (
-    Query,
     ClusteringRun,
-    QueryCluster,
     ClusterSummary,
-    ClusterHierarchy,
+    Query,
 )
 
 

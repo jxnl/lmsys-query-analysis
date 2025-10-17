@@ -1,14 +1,12 @@
 """Cluster curation and editing commands under 'lmsys edit' namespace."""
 
 import typer
-from typing import Optional, List
 from rich.console import Console
 from rich.table import Table
-from rich.panel import Panel
 
-from ..common import with_error_handling, db_path_option
 from ...db.connection import get_db
 from ...services import curation_service
+from ..common import db_path_option, with_error_handling
 
 app = typer.Typer(help="Edit and curate clusters")
 console = Console()
@@ -71,7 +69,7 @@ def move_query(
     run_id: str = typer.Argument(..., help="Run ID"),
     query_id: int = typer.Option(..., "--query-id", help="Query ID to move"),
     to_cluster: int = typer.Option(..., "--to-cluster", help="Target cluster ID"),
-    reason: Optional[str] = typer.Option(None, "--reason", help="Reason for move"),
+    reason: str | None = typer.Option(None, "--reason", help="Reason for move"),
     db_path: str = db_path_option,
 ):
     """Move a query from one cluster to another."""
@@ -91,7 +89,7 @@ def move_queries(
     run_id: str = typer.Argument(..., help="Run ID"),
     query_ids: str = typer.Option(..., "--query-ids", help="Comma-separated query IDs"),
     to_cluster: int = typer.Option(..., "--to-cluster", help="Target cluster ID"),
-    reason: Optional[str] = typer.Option(None, "--reason", help="Reason for move"),
+    reason: str | None = typer.Option(None, "--reason", help="Reason for move"),
     db_path: str = db_path_option,
 ):
     """Move multiple queries to a cluster."""
@@ -99,9 +97,7 @@ def move_queries(
     ids = [int(x.strip()) for x in query_ids.split(",")]
     result = curation_service.move_queries_batch(db, run_id, ids, to_cluster, reason=reason)
 
-    console.print(
-        f"[green]✓[/green] Moved {result['moved']} queries to cluster {to_cluster}"
-    )
+    console.print(f"[green]✓[/green] Moved {result['moved']} queries to cluster {to_cluster}")
     if result["failed"] > 0:
         console.print(f"[red]✗[/red] Failed to move {result['failed']} queries")
         for error in result["errors"]:
@@ -118,8 +114,8 @@ def move_queries(
 def rename_cluster(
     run_id: str = typer.Argument(..., help="Run ID"),
     cluster_id: int = typer.Option(..., "--cluster-id", help="Cluster ID to rename"),
-    title: Optional[str] = typer.Option(None, "--title", help="New title"),
-    description: Optional[str] = typer.Option(None, "--description", help="New description"),
+    title: str | None = typer.Option(None, "--title", help="New title"),
+    description: str | None = typer.Option(None, "--description", help="New description"),
     db_path: str = db_path_option,
 ):
     """Rename a cluster (update title and/or description)."""
@@ -137,7 +133,7 @@ def rename_cluster(
         console.print(f"  [yellow]Old title:[/yellow] {result['old_title']}")
         console.print(f"  [yellow]New title:[/yellow] {result['new_title']}")
     if description:
-        console.print(f"  [yellow]Description updated[/yellow]")
+        console.print("  [yellow]Description updated[/yellow]")
 
 
 @app.command()
@@ -146,10 +142,8 @@ def merge_clusters(
     run_id: str = typer.Argument(..., help="Run ID"),
     source: str = typer.Option(..., "--source", help="Comma-separated source cluster IDs"),
     target: int = typer.Option(..., "--target", help="Target cluster ID"),
-    new_title: Optional[str] = typer.Option(None, "--new-title", help="New title for merged cluster"),
-    new_description: Optional[str] = typer.Option(
-        None, "--new-description", help="New description"
-    ),
+    new_title: str | None = typer.Option(None, "--new-title", help="New title for merged cluster"),
+    new_description: str | None = typer.Option(None, "--new-description", help="New description"),
     db_path: str = db_path_option,
 ):
     """Merge multiple clusters into a target cluster."""
@@ -159,9 +153,7 @@ def merge_clusters(
         db, run_id, source_ids, target, new_title=new_title, new_description=new_description
     )
 
-    console.print(
-        f"[green]✓[/green] Merged clusters {source_ids} → cluster {target}"
-    )
+    console.print(f"[green]✓[/green] Merged clusters {source_ids} → cluster {target}")
     console.print(f"  [yellow]Queries moved:[/yellow] {result['queries_moved']}")
     console.print(f"  [yellow]New title:[/yellow] {result['new_title']}")
 
@@ -173,21 +165,23 @@ def split_cluster(
     cluster_id: int = typer.Option(..., "--cluster-id", help="Original cluster ID"),
     query_ids: str = typer.Option(..., "--query-ids", help="Comma-separated query IDs to split"),
     new_title: str = typer.Option(..., "--new-title", help="Title for new cluster"),
-    new_description: str = typer.Option(..., "--new-description", help="Description for new cluster"),
+    new_description: str = typer.Option(
+        ..., "--new-description", help="Description for new cluster"
+    ),
     db_path: str = db_path_option,
 ):
     """Split queries from a cluster into a new cluster."""
     db = get_db(db_path)
     ids = [int(x.strip()) for x in query_ids.split(",")]
-    result = curation_service.split_cluster(
-        db, run_id, cluster_id, ids, new_title, new_description
-    )
+    result = curation_service.split_cluster(db, run_id, cluster_id, ids, new_title, new_description)
 
     console.print(
         f"[green]✓[/green] Split cluster {cluster_id} → created cluster {result['new_cluster_id']}"
     )
     console.print(f"  [yellow]Original:[/yellow] Cluster {cluster_id}")
-    console.print(f"  [yellow]New:[/yellow] Cluster {result['new_cluster_id']} - {result['new_title']}")
+    console.print(
+        f"  [yellow]New:[/yellow] Cluster {result['new_cluster_id']} - {result['new_title']}"
+    )
     console.print(f"  [yellow]Queries moved:[/yellow] {result['queries_moved']}")
 
 
@@ -197,8 +191,8 @@ def delete_cluster(
     run_id: str = typer.Argument(..., help="Run ID"),
     cluster_id: int = typer.Option(..., "--cluster-id", help="Cluster ID to delete"),
     orphan: bool = typer.Option(False, "--orphan", help="Orphan queries instead of reassigning"),
-    move_to: Optional[int] = typer.Option(None, "--move-to", help="Move queries to this cluster"),
-    reason: Optional[str] = typer.Option(None, "--reason", help="Reason for deletion"),
+    move_to: int | None = typer.Option(None, "--move-to", help="Move queries to this cluster"),
+    reason: str | None = typer.Option(None, "--reason", help="Reason for deletion"),
     db_path: str = db_path_option,
 ):
     """Delete a cluster, orphaning or reassigning its queries."""
@@ -214,7 +208,7 @@ def delete_cluster(
     console.print(f"[green]✓[/green] Deleted cluster {cluster_id}")
     console.print(f"  [yellow]Queries:[/yellow] {result['query_count']}")
     if orphan:
-        console.print(f"  [yellow]Status:[/yellow] Orphaned")
+        console.print("  [yellow]Status:[/yellow] Orphaned")
     else:
         console.print(f"  [yellow]Moved to:[/yellow] Cluster {result['moved_to']}")
     if reason:
@@ -231,9 +225,9 @@ def delete_cluster(
 def tag_cluster(
     run_id: str = typer.Argument(..., help="Run ID"),
     cluster_id: int = typer.Option(..., "--cluster-id", help="Cluster ID to tag"),
-    coherence: Optional[int] = typer.Option(None, "--coherence", help="Coherence score (1-5)"),
-    quality: Optional[str] = typer.Option(None, "--quality", help="Quality (high/medium/low)"),
-    notes: Optional[str] = typer.Option(None, "--notes", help="Free-form notes"),
+    coherence: int | None = typer.Option(None, "--coherence", help="Coherence score (1-5)"),
+    quality: str | None = typer.Option(None, "--quality", help="Quality (high/medium/low)"),
+    notes: str | None = typer.Option(None, "--notes", help="Free-form notes"),
     db_path: str = db_path_option,
 ):
     """Tag a cluster with metadata (coherence, quality, notes)."""
@@ -294,7 +288,7 @@ def flag_cluster(
 @with_error_handling
 def history(
     run_id: str = typer.Argument(..., help="Run ID"),
-    cluster_id: Optional[int] = typer.Option(None, "--cluster-id", help="Filter by cluster ID"),
+    cluster_id: int | None = typer.Option(None, "--cluster-id", help="Filter by cluster ID"),
     db_path: str = db_path_option,
 ):
     """Show edit history for a cluster or entire run."""
@@ -335,7 +329,7 @@ def history(
 @with_error_handling
 def audit(
     run_id: str = typer.Argument(..., help="Run ID"),
-    since: Optional[str] = typer.Option(None, "--since", help="Filter edits since date (YYYY-MM-DD)"),
+    since: str | None = typer.Option(None, "--since", help="Filter edits since date (YYYY-MM-DD)"),
     db_path: str = db_path_option,
 ):
     """Show full audit log for a run."""
@@ -350,6 +344,7 @@ def audit(
     # Filter by date if provided
     if since:
         from datetime import datetime
+
         since_date = datetime.strptime(since, "%Y-%m-%d")
         edits = [e for e in edits if e.timestamp >= since_date]
 
@@ -365,7 +360,7 @@ def audit(
     for edit in edits:
         changes = f"{edit.edit_type}"
         if edit.old_value and edit.new_value:
-            changes += f" (see details)"
+            changes += " (see details)"
 
         table.add_row(
             edit.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
@@ -425,16 +420,23 @@ def orphaned(
 @with_error_handling
 def select_bad_clusters(
     run_id: str = typer.Argument(..., help="Run ID"),
-    max_size: Optional[int] = typer.Option(None, "--max-size", help="Maximum cluster size"),
-    min_size: Optional[int] = typer.Option(None, "--min-size", help="Minimum cluster size"),
-    min_languages: Optional[int] = typer.Option(None, "--min-languages", help="Minimum language count"),
-    quality: Optional[str] = typer.Option(None, "--quality", help="Quality filter (high/medium/low)"),
+    max_size: int | None = typer.Option(None, "--max-size", help="Maximum cluster size"),
+    min_size: int | None = typer.Option(None, "--min-size", help="Minimum cluster size"),
+    min_languages: int | None = typer.Option(
+        None, "--min-languages", help="Minimum language count"
+    ),
+    quality: str | None = typer.Option(None, "--quality", help="Quality filter (high/medium/low)"),
     db_path: str = db_path_option,
 ):
     """Find clusters matching quality criteria."""
     db = get_db(db_path)
     clusters = curation_service.find_problematic_clusters(
-        db, run_id, max_size=max_size, min_size=min_size, min_languages=min_languages, quality=quality
+        db,
+        run_id,
+        max_size=max_size,
+        min_size=min_size,
+        min_languages=min_languages,
+        quality=quality,
     )
 
     if not clusters:

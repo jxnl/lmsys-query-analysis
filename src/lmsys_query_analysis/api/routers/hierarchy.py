@@ -1,13 +1,12 @@
 """Hierarchy endpoints for cluster hierarchies."""
 
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlmodel import func, select
 
-from ..dependencies import get_db
-from ..schemas import HierarchyListResponse, HierarchyTreeResponse, HierarchyNode, HierarchyRunInfo
 from ...db.connection import Database
 from ...db.models import ClusterHierarchy, QueryCluster
-from sqlmodel import select, func
+from ..dependencies import get_db
+from ..schemas import HierarchyListResponse, HierarchyNode, HierarchyRunInfo, HierarchyTreeResponse
 
 router = APIRouter()
 
@@ -18,7 +17,7 @@ router = APIRouter()
     summary="List all hierarchy runs",
 )
 async def list_hierarchies(
-    run_id: Optional[str] = Query(None, description="Filter by clustering run ID"),
+    run_id: str | None = Query(None, description="Filter by clustering run ID"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
     db: Database = Depends(get_db),
@@ -26,14 +25,11 @@ async def list_hierarchies(
     """List all hierarchy runs with optional filtering by clustering run_id."""
     with db.get_session() as session:
         # Get distinct hierarchy runs
-        stmt = (
-            select(
-                ClusterHierarchy.hierarchy_run_id,
-                ClusterHierarchy.run_id,
-                ClusterHierarchy.created_at,
-            )
-            .distinct()
-        )
+        stmt = select(
+            ClusterHierarchy.hierarchy_run_id,
+            ClusterHierarchy.run_id,
+            ClusterHierarchy.created_at,
+        ).distinct()
 
         if run_id:
             stmt = stmt.where(ClusterHierarchy.run_id == run_id)
@@ -93,7 +89,12 @@ async def get_hierarchy_tree(
         if not nodes:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail={"error": {"type": "NotFound", "message": f"Hierarchy {hierarchy_run_id} not found"}},
+                detail={
+                    "error": {
+                        "type": "NotFound",
+                        "message": f"Hierarchy {hierarchy_run_id} not found",
+                    }
+                },
             )
 
         run_id = nodes[0].run_id
@@ -123,7 +124,7 @@ async def get_hierarchy_tree(
             for node in level_nodes:
                 # Sum up children counts
                 children_count = 0
-                for child_id in (node.children_ids or []):
+                for child_id in node.children_ids or []:
                     children_count += query_count_cache.get(child_id, 0)
                 query_count_cache[node.cluster_id] = children_count
 

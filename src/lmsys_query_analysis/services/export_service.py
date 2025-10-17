@@ -2,22 +2,23 @@
 
 import csv
 import json
-from typing import List, Tuple
+
 from sqlmodel import select
+
 from ..db.connection import Database
-from ..db.models import Query, QueryCluster, ClusterSummary
+from ..db.models import ClusterSummary, Query, QueryCluster
 
 
 def get_export_data(
     db: Database,
     run_id: str,
-) -> List[Tuple[Query, QueryCluster, ClusterSummary]]:
+) -> list[tuple[Query, QueryCluster, ClusterSummary]]:
     """Get all data needed for export.
-    
+
     Args:
         db: Database manager instance
         run_id: Clustering run ID to export
-    
+
     Returns:
         List of tuples (Query, QueryCluster, ClusterSummary)
     """
@@ -37,14 +38,14 @@ def get_export_data(
 
 def export_to_csv(
     output_path: str,
-    data: List[Tuple[Query, QueryCluster, ClusterSummary]],
+    data: list[tuple[Query, QueryCluster, ClusterSummary]],
 ) -> int:
     """Export data to CSV file.
-    
+
     Args:
         output_path: Path to output CSV file
         data: List of tuples (Query, QueryCluster, ClusterSummary)
-    
+
     Returns:
         Number of rows exported
     """
@@ -61,7 +62,7 @@ def export_to_csv(
                 "cluster_description",
             ]
         )
-        
+
         for query, qc, summary in data:
             writer.writerow(
                 [
@@ -74,20 +75,20 @@ def export_to_csv(
                     summary.description if summary else "",
                 ]
             )
-    
+
     return len(data)
 
 
 def export_to_json(
     output_path: str,
-    data: List[Tuple[Query, QueryCluster, ClusterSummary]],
+    data: list[tuple[Query, QueryCluster, ClusterSummary]],
 ) -> int:
     """Export data to JSON file.
-    
+
     Args:
         output_path: Path to output JSON file
         data: List of tuples (Query, QueryCluster, ClusterSummary)
-    
+
     Returns:
         Number of records exported
     """
@@ -104,9 +105,8 @@ def export_to_json(
                 "cluster_description": summary.description if summary else None,
             }
         )
-    
+
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(json_data, f, indent=2, ensure_ascii=False)
-    
-    return len(json_data)
 
+    return len(json_data)

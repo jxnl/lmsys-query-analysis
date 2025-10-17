@@ -7,20 +7,21 @@ Optimizations:
 - Cohere embed-v4.0 supports Matryoshka output dimensions
 """
 
-from typing import List, Optional, Literal
+import logging
 import os
 import time
-import logging
-import numpy as np
-from sentence_transformers import SentenceTransformer
+from typing import Literal
+
 import anyio
+import numpy as np
 from rich.progress import (
+    BarColumn,
     Progress,
     SpinnerColumn,
-    TextColumn,
-    BarColumn,
     TaskProgressColumn,
+    TextColumn,
 )
+from sentence_transformers import SentenceTransformer
 
 # Type definitions for Cohere models
 CohereModel = Literal["embed-v4.0"]
@@ -36,10 +37,10 @@ class EmbeddingGenerator:
         self,
         model_name: str = "text-embedding-3-small",
         provider: str = "openai",
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         concurrency: int = 50,
         request_timeout: float = 30.0,
-        output_dimension: Optional[int] = None,
+        output_dimension: int | None = None,
     ):
         """Initialize embedding generator.
 
@@ -60,12 +61,10 @@ class EmbeddingGenerator:
         self.output_dimension = output_dimension
 
         if provider == "openai":
-            from openai import OpenAI, AsyncOpenAI
+            from openai import AsyncOpenAI, OpenAI
 
             self.openai_client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
-            self._async_client = AsyncOpenAI(
-                api_key=api_key or os.getenv("OPENAI_API_KEY")
-            )
+            self._async_client = AsyncOpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
         elif provider == "cohere":
             import cohere
 
@@ -91,7 +90,7 @@ class EmbeddingGenerator:
 
     def generate_embeddings(
         self,
-        texts: List[str],
+        texts: list[str],
         batch_size: int = 32,
         show_progress: bool = True,
     ) -> np.ndarray:
@@ -124,28 +123,42 @@ class EmbeddingGenerator:
         start = time.perf_counter()
 
         if self.provider == "openai":
-            valid_embeddings_list = anyio.run(self._async_openai_batches, filtered_texts, batch_size, None, None)
+            valid_embeddings_list = anyio.run(
+                self._async_openai_batches, filtered_texts, batch_size, None, None
+            )
             valid_embeddings = np.array(valid_embeddings_list)
             elapsed = time.perf_counter() - start
             if len(filtered_texts) > 0:
                 rate = len(filtered_texts) / elapsed if elapsed > 0 else float("inf")
                 logger.info(
                     "Embeddings(OpenAI): %s texts in %.2fs (%.1f/s) using %s (concurrency=%s)",
-                    len(filtered_texts), elapsed, rate, self.model_name, self.concurrency
+                    len(filtered_texts),
+                    elapsed,
+                    rate,
+                    self.model_name,
+                    self.concurrency,
                 )
         elif self.provider == "cohere":
-            valid_embeddings_list = anyio.run(self._async_cohere_batches, filtered_texts, batch_size, None, None)
+            valid_embeddings_list = anyio.run(
+                self._async_cohere_batches, filtered_texts, batch_size, None, None
+            )
             valid_embeddings = np.array(valid_embeddings_list)
             elapsed = time.perf_counter() - start
             if len(filtered_texts) > 0:
                 rate = len(filtered_texts) / elapsed if elapsed > 0 else float("inf")
                 logger.info(
                     "Embeddings(Cohere): %s texts in %.2fs (%.1f/s) using %s (concurrency=%s)",
-                    len(filtered_texts), elapsed, rate, self.model_name, self.concurrency
+                    len(filtered_texts),
+                    elapsed,
+                    rate,
+                    self.model_name,
+                    self.concurrency,
                 )
         else:
             # For sentence transformers, use sync version
-            valid_embeddings = self._generate_st_embeddings(filtered_texts, batch_size, show_progress)
+            valid_embeddings = self._generate_st_embeddings(
+                filtered_texts, batch_size, show_progress
+            )
 
         # If all texts were valid, return as-is
         if len(filtered_texts) == len(texts):
@@ -162,7 +175,7 @@ class EmbeddingGenerator:
 
     def _generate_st_embeddings(
         self,
-        texts: List[str],
+        texts: list[str],
         batch_size: int,
         show_progress: bool,
     ) -> np.ndarray:
@@ -211,7 +224,7 @@ class EmbeddingGenerator:
 
     async def generate_embeddings_async(
         self,
-        texts: List[str],
+        texts: list[str],
         batch_size: int = 32,
         show_progress: bool = True,
     ) -> np.ndarray:
@@ -244,28 +257,42 @@ class EmbeddingGenerator:
         start = time.perf_counter()
 
         if self.provider == "openai":
-            valid_embeddings_list = await self._async_openai_batches(filtered_texts, batch_size, None, None)
+            valid_embeddings_list = await self._async_openai_batches(
+                filtered_texts, batch_size, None, None
+            )
             valid_embeddings = np.array(valid_embeddings_list)
             elapsed = time.perf_counter() - start
             if len(filtered_texts) > 0:
                 rate = len(filtered_texts) / elapsed if elapsed > 0 else float("inf")
                 logger.info(
                     "Embeddings(OpenAI): %s texts in %.2fs (%.1f/s) using %s (concurrency=%s)",
-                    len(filtered_texts), elapsed, rate, self.model_name, self.concurrency
+                    len(filtered_texts),
+                    elapsed,
+                    rate,
+                    self.model_name,
+                    self.concurrency,
                 )
         elif self.provider == "cohere":
-            valid_embeddings_list = await self._async_cohere_batches(filtered_texts, batch_size, None, None)
+            valid_embeddings_list = await self._async_cohere_batches(
+                filtered_texts, batch_size, None, None
+            )
             valid_embeddings = np.array(valid_embeddings_list)
             elapsed = time.perf_counter() - start
             if len(filtered_texts) > 0:
                 rate = len(filtered_texts) / elapsed if elapsed > 0 else float("inf")
                 logger.info(
                     "Embeddings(Cohere): %s texts in %.2fs (%.1f/s) using %s (concurrency=%s)",
-                    len(filtered_texts), elapsed, rate, self.model_name, self.concurrency
+                    len(filtered_texts),
+                    elapsed,
+                    rate,
+                    self.model_name,
+                    self.concurrency,
                 )
         else:
             # For sentence transformers, use sync version
-            valid_embeddings = self._generate_st_embeddings(filtered_texts, batch_size, show_progress)
+            valid_embeddings = self._generate_st_embeddings(
+                filtered_texts, batch_size, show_progress
+            )
 
         # If all texts were valid, return as-is
         if len(filtered_texts) == len(texts):
@@ -281,20 +308,20 @@ class EmbeddingGenerator:
         return full_embeddings
 
     async def _async_openai_batches(
-        self, texts: List[str], batch_size: int, progress_task, progress
-    ) -> List[List[float]]:
+        self, texts: list[str], batch_size: int, progress_task, progress
+    ) -> list[list[float]]:
         """Run OpenAI embedding requests concurrently preserving order."""
         assert self._async_client is not None
 
         # Split into batches with original indices
-        batches: list[tuple[int, List[str]]] = []
+        batches: list[tuple[int, list[str]]] = []
         for i in range(0, len(texts), batch_size):
             batches.append((i, texts[i : i + batch_size]))
 
-        results: list[Optional[List[List[float]]]] = [None] * len(batches)
+        results: list[list[list[float]] | None] = [None] * len(batches)
         semaphore = anyio.Semaphore(self.concurrency)
 
-        async def worker(idx: int, payload: List[str]):
+        async def worker(idx: int, payload: list[str]):
             backoff = 1.0
             last_exception = None
             for attempt in range(5):
@@ -325,27 +352,27 @@ class EmbeddingGenerator:
                 tg.start_soon(worker, j, payload)
 
         # Flatten preserving original order
-        flat: list[List[float]] = []
+        flat: list[list[float]] = []
         for r in results:
             if r is not None:
                 flat.extend(r)
         return flat
 
     async def _async_cohere_batches(
-        self, texts: List[str], batch_size: int, progress_task, progress
-    ) -> List[List[float]]:
+        self, texts: list[str], batch_size: int, progress_task, progress
+    ) -> list[list[float]]:
         """Run Cohere embedding requests concurrently preserving order."""
         assert self._async_client is not None
 
         # Split into batches with original indices
-        batches: list[tuple[int, List[str]]] = []
+        batches: list[tuple[int, list[str]]] = []
         for i in range(0, len(texts), batch_size):
             batches.append((i, texts[i : i + batch_size]))
 
-        results: list[Optional[List[List[float]]]] = [None] * len(batches)
+        results: list[list[list[float]] | None] = [None] * len(batches)
         semaphore = anyio.Semaphore(self.concurrency)
 
-        async def worker(idx: int, payload: List[str]):
+        async def worker(idx: int, payload: list[str]):
             backoff = 1.0
             last_exception = None
             for attempt in range(5):
@@ -379,7 +406,7 @@ class EmbeddingGenerator:
                 tg.start_soon(worker, j, payload)
 
         # Flatten preserving original order
-        flat: list[List[float]] = []
+        flat: list[list[float]] = []
         for r in results:
             if r is not None:
                 flat.extend(r)

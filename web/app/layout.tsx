@@ -15,8 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "LMSYS Query Analysis",
-  description:
-    "Interactive web interface for exploring LMSYS clustering analysis results",
+  description: "Interactive web interface for exploring LMSYS clustering analysis results",
 };
 
 export default function RootLayout({
@@ -26,9 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <div className="flex h-screen overflow-hidden">
           <Sidebar />
           <main className="flex-1 overflow-y-auto">{children}</main>

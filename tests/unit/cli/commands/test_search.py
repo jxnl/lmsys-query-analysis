@@ -1,29 +1,27 @@
 """Unit tests for search CLI commands."""
 
-import pytest
 from unittest.mock import Mock, patch
-import numpy as np
 
 
-@patch('lmsys_query_analysis.cli.commands.search.create_queries_client')
-@patch('lmsys_query_analysis.cli.commands.search.create_clusters_client')
-@patch('lmsys_query_analysis.cli.commands.search.get_db')
+@patch("lmsys_query_analysis.cli.commands.search.create_queries_client")
+@patch("lmsys_query_analysis.cli.commands.search.create_clusters_client")
+@patch("lmsys_query_analysis.cli.commands.search.get_db")
 def test_search_command(mock_get_db, mock_create_clusters, mock_create_queries):
     """Test search command."""
     from lmsys_query_analysis.cli.commands.search import search
-    
+
     # Setup mocks
     mock_db = Mock()
     mock_get_db.return_value = mock_db
-    
+
     mock_client = Mock()
     mock_client.find.return_value = []
     mock_create_queries.return_value = mock_client
-    
+
     mock_cclient = Mock()
     mock_cclient.find.return_value = []
     mock_create_clusters.return_value = mock_cclient
-    
+
     # Execute command
     search(
         text="test query",
@@ -40,29 +38,29 @@ def test_search_command(mock_get_db, mock_create_clusters, mock_create_queries):
         table=False,
         xml=False,
         chroma_path="/tmp/chroma",
-        embedding_model="openai/text-embedding-3-small"
+        embedding_model="openai/text-embedding-3-small",
     )
-    
+
     # Verify
     mock_get_db.assert_called_once()
     mock_create_queries.assert_called_once()
     mock_client.find.assert_called_once()
 
 
-@patch('lmsys_query_analysis.cli.commands.search.create_clusters_client')
-@patch('lmsys_query_analysis.cli.commands.search.get_db')
+@patch("lmsys_query_analysis.cli.commands.search.create_clusters_client")
+@patch("lmsys_query_analysis.cli.commands.search.get_db")
 def test_search_cluster_command(mock_get_db, mock_create_clusters):
     """Test search-cluster command."""
     from lmsys_query_analysis.cli.commands.search import search_cluster
-    
+
     # Setup mocks
     mock_db = Mock()
     mock_get_db.return_value = mock_db
-    
+
     mock_client = Mock()
     mock_client.find.return_value = []
     mock_create_clusters.return_value = mock_client
-    
+
     # Execute command
     search_cluster(
         text="test query",
@@ -72,11 +70,10 @@ def test_search_cluster_command(mock_get_db, mock_create_clusters):
         table=False,
         xml=False,
         chroma_path="/tmp/chroma",
-        embedding_model="openai/text-embedding-3-small"
+        embedding_model="openai/text-embedding-3-small",
     )
-    
+
     # Verify
     mock_get_db.assert_called_once()
     mock_create_clusters.assert_called_once()
     mock_client.find.assert_called_once()
-

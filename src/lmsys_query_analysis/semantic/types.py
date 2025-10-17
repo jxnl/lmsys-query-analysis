@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -14,8 +14,8 @@ class RunSpace(BaseModel):
 
     embedding_provider: str
     embedding_model: str
-    embedding_dimension: Optional[int] = None
-    run_id: Optional[str] = None
+    embedding_dimension: int | None = None
+    run_id: str | None = None
 
 
 class ClusterHit(BaseModel):
@@ -23,9 +23,9 @@ class ClusterHit(BaseModel):
 
     cluster_id: int
     distance: float
-    title: Optional[str] = None
-    description: Optional[str] = None
-    num_queries: Optional[int] = None
+    title: str | None = None
+    description: str | None = None
+    num_queries: int | None = None
 
 
 class QueryHit(BaseModel):
@@ -34,24 +34,24 @@ class QueryHit(BaseModel):
     query_id: int
     distance: float
     snippet: str
-    model: Optional[str] = None
-    language: Optional[str] = None
-    cluster_id: Optional[int] = None
+    model: str | None = None
+    language: str | None = None
+    cluster_id: int | None = None
 
 
 class FacetBucket(BaseModel):
     """A single facet bucket with optional metadata."""
 
-    key: Union[str, int]
+    key: str | int
     count: int
-    meta: Dict[str, Any] = Field(default_factory=dict)
+    meta: dict[str, Any] = Field(default_factory=dict)
 
 
 class SearchResult(BaseModel):
     """Canonical JSON-friendly result shape for CLI/SDK."""
 
     text: str
-    run_id: Optional[str] = None
-    applied_clusters: List[ClusterHit] = Field(default_factory=list)
-    results: List[QueryHit] = Field(default_factory=list)
-    facets: Dict[str, List[FacetBucket]] = Field(default_factory=dict)
+    run_id: str | None = None
+    applied_clusters: list[ClusterHit] = Field(default_factory=list)
+    results: list[QueryHit] = Field(default_factory=list)
+    facets: dict[str, list[FacetBucket]] = Field(default_factory=dict)

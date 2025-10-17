@@ -2,7 +2,7 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import create_engine, SQLModel
+from sqlmodel import SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
 from lmsys_query_analysis.api.app import app

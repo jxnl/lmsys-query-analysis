@@ -1,25 +1,26 @@
 """JSON and XML output formatting utilities for CLI."""
 
+from typing import Any
+
 from jinja2 import Template
-from typing import Any, Dict, List
 
 
 def format_search_queries_json(
     text: str,
     run_id: str,
     hits: list,
-    applied_clusters: List[Dict] = None,
-    facets: Dict = None,
-) -> Dict[str, Any]:
+    applied_clusters: list[dict] = None,
+    facets: dict = None,
+) -> dict[str, Any]:
     """Format query search results as JSON.
-    
+
     Args:
         text: Search text
         run_id: Run ID filter
         hits: List of query hit objects
         applied_clusters: Optional list of applied cluster filters
         facets: Optional facets dictionary
-    
+
     Returns:
         Dictionary ready for JSON serialization
     """
@@ -42,16 +43,14 @@ def format_search_queries_json(
     }
 
 
-def format_search_clusters_json(
-    text: str, run_id: str, hits: list
-) -> Dict[str, Any]:
+def format_search_clusters_json(text: str, run_id: str, hits: list) -> dict[str, Any]:
     """Format cluster search results as JSON.
-    
+
     Args:
         text: Search text
         run_id: Run ID filter
         hits: List of cluster hit objects
-    
+
     Returns:
         Dictionary ready for JSON serialization
     """
@@ -71,12 +70,12 @@ def format_search_clusters_json(
     }
 
 
-def format_chroma_collections_json(collections: list) -> Dict[str, Any]:
+def format_chroma_collections_json(collections: list) -> dict[str, Any]:
     """Format ChromaDB collections as JSON.
-    
+
     Args:
         collections: List of collection dictionaries
-    
+
     Returns:
         Dictionary ready for JSON serialization
     """
@@ -85,14 +84,14 @@ def format_chroma_collections_json(collections: list) -> Dict[str, Any]:
 
 def format_verify_sync_json(
     run_id: str,
-    space: Dict,
-    sqlite: Dict,
-    chroma: Dict,
+    space: dict,
+    sqlite: dict,
+    chroma: dict,
     status: str,
-    issues: List[str],
-) -> Dict[str, Any]:
+    issues: list[str],
+) -> dict[str, Any]:
     """Format verification sync report as JSON.
-    
+
     Args:
         run_id: Run ID being verified
         space: Embedding space configuration
@@ -100,7 +99,7 @@ def format_verify_sync_json(
         chroma: ChromaDB statistics
         status: Status string ("ok" or "mismatch")
         issues: List of issue descriptions
-    
+
     Returns:
         Dictionary ready for JSON serialization
     """
@@ -218,4 +217,3 @@ def format_search_results_clusters_xml(text: str, hits: list) -> str:
 def format_chroma_collections_xml(collections: list) -> str:
     """Format ChromaDB collections as XML using Jinja template."""
     return CHROMA_COLLECTIONS_XML_TEMPLATE.render(collections=collections)
-

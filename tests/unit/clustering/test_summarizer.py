@@ -5,19 +5,19 @@ and output shape without network access.
 """
 
 from types import SimpleNamespace
-from typing import List
+
 import numpy as np
 import pytest
 
-from lmsys_query_analysis.clustering.summarizer import ClusterSummarizer, ClusterData
+from lmsys_query_analysis.clustering.summarizer import ClusterData, ClusterSummarizer
 
 
 class FakeAsyncChat:
-    def __init__(self, prompts: List[str]):
+    def __init__(self, prompts: list[str]):
         self._prompts = prompts
 
     class _Completions:
-        def __init__(self, prompts_ref: List[str]):
+        def __init__(self, prompts_ref: list[str]):
             self._prompts = prompts_ref
 
         async def create(self, response_model=None, messages=None, context=None):  # type: ignore[no-redef]
@@ -38,36 +38,32 @@ class FakeAsyncChat:
 
 
 class FakeAsyncClient:
-    def __init__(self, prompts: List[str]):
+    def __init__(self, prompts: list[str]):
         self.chat = SimpleNamespace(completions=FakeAsyncChat(prompts).completions)
 
 
-def patch_instructor(monkeypatch, prompts: List[str]):
+def patch_instructor(monkeypatch, prompts: list[str]):
     """Patch instructor.from_provider to avoid real client init and capture prompts."""
     import instructor
 
     class _FakeSyncChat:
         class _Completions:
-            def __init__(self, prompts_ref: List[str]):
+            def __init__(self, prompts_ref: list[str]):
                 self._prompts = prompts_ref
 
             def create(self, response_model=None, messages=None):  # sync create
                 content = messages[1]["content"] if messages and len(messages) > 1 else ""
                 self._prompts.append(content)
-                return SimpleNamespace(
-                    title="Test Title", description="Test Description"
-                )
+                return SimpleNamespace(title="Test Title", description="Test Description")
 
-        def __init__(self, prompts_ref: List[str]):
+        def __init__(self, prompts_ref: list[str]):
             self.completions = self._Completions(prompts_ref)
 
     class _FakeSyncClient:
-        def __init__(self, prompts_ref: List[str]):
+        def __init__(self, prompts_ref: list[str]):
             self.chat = _FakeSyncChat(prompts_ref)
 
-    def _fake_from_provider(
-        model: str, api_key=None, async_client: bool = False, **kwargs
-    ):
+    def _fake_from_provider(model: str, api_key=None, async_client: bool = False, **kwargs):
         # Return async or sync fake client capturing prompts
         if async_client:
             return FakeAsyncClient(prompts)
@@ -81,7 +77,7 @@ def fake_embeddings(monkeypatch):
     """Patch EmbeddingGenerator.generate_embeddings to a deterministic matrix."""
 
     def _fake_generate_embeddings(
-        self, texts: List[str], batch_size: int = 32, show_progress: bool = True
+        self, texts: list[str], batch_size: int = 32, show_progress: bool = True
     ):
         # Return a simple embedding matrix that makes 0~1 near and 2 far
         n = len(texts)
@@ -111,13 +107,17 @@ def fake_embeddings(monkeypatch):
 
 def test_summarizer_prompt_includes_contrast_neighbors(fake_embeddings, monkeypatch):
     # Arrange
-    prompts: List[str] = []
+    prompts: list[str] = []
     patch_instructor(monkeypatch, prompts)
     s = ClusterSummarizer(model="openai/gpt-5", concurrency=1)
 
     clusters_data = [
-        ClusterData(cluster_id=0, queries=["python pandas dataframe indexing", "numpy vectorize loop"]),
-        ClusterData(cluster_id=1, queries=["pandas loc keyerror fix", "python typeerror add int str"]),
+        ClusterData(
+            cluster_id=0, queries=["python pandas dataframe indexing", "numpy vectorize loop"]
+        ),
+        ClusterData(
+            cluster_id=1, queries=["pandas loc keyerror fix", "python typeerror add int str"]
+        ),
         ClusterData(cluster_id=2, queries=["how to cook pasta", "boil water add salt"]),
     ]
 
@@ -137,7 +137,7 @@ def test_summarizer_prompt_includes_contrast_neighbors(fake_embeddings, monkeypa
     for v in res.values():
         assert "title" in v and "description" in v and "sample_queries" in v
 
-        # Assert prompts captured and include XML contrast section with neighbor entries                                                                        
+        # Assert prompts captured and include XML contrast section with neighbor entries
         assert len(prompts) == 3
         p0 = prompts[0]
         assert "<contrastive_examples>" in p0
@@ -145,7 +145,7 @@ def test_summarizer_prompt_includes_contrast_neighbors(fake_embeddings, monkeypa
 
 
 def test_summarizer_prompt_keywords_mode(fake_embeddings, monkeypatch):
-    prompts: List[str] = []
+    prompts: list[str] = []
     patch_instructor(monkeypatch, prompts)
     s = ClusterSummarizer(model="openai/gpt-5", concurrency=1)
 
@@ -171,7 +171,7 @@ def test_summarizer_prompt_keywords_mode(fake_embeddings, monkeypatch):
 
 
 def test_summarizer_prompt_no_contrast(fake_embeddings, monkeypatch):
-    prompts: List[str] = []
+    prompts: list[str] = []
     patch_instructor(monkeypatch, prompts)
     s = ClusterSummarizer(model="openai/gpt-5", concurrency=1)
 

@@ -2,6 +2,7 @@
 
 import typer
 from dotenv import load_dotenv
+
 from ..utils.logging import setup_logging
 
 # Load .env file at startup
@@ -9,15 +10,15 @@ load_dotenv()
 
 # Import command modules
 from .commands import (
-    data,
-    clustering,
     analysis,
+    chroma,
+    clustering,
+    data,
+    edit,
+    hierarchy,
     search,
     summarization,
-    hierarchy,
-    chroma,
     verify,
-    edit,
 )
 
 app = typer.Typer(help="LMSYS Query Analysis CLI")
@@ -25,9 +26,7 @@ app = typer.Typer(help="LMSYS Query Analysis CLI")
 
 @app.callback()
 def _configure(
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Enable verbose logging (DEBUG)."
-    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose logging (DEBUG)."),
 ):
     """Configure logging before executing a subcommand."""
     setup_logging(verbose=verbose)

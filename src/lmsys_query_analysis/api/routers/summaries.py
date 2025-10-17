@@ -1,13 +1,12 @@
 """Summary endpoints for LLM-generated cluster summaries."""
 
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlmodel import select
 
-from ..dependencies import get_db
-from ..schemas import SummaryRunListResponse, SummaryRunSummary, ClusterSummaryResponse
 from ...db.connection import Database
 from ...db.models import ClusterSummary
-from sqlmodel import select, func
+from ..dependencies import get_db
+from ..schemas import ClusterSummaryResponse, SummaryRunListResponse, SummaryRunSummary
 
 router = APIRouter()
 
@@ -18,7 +17,7 @@ router = APIRouter()
     summary="List all summary runs",
 )
 async def list_summaries(
-    run_id: Optional[str] = Query(None, description="Filter by clustering run ID"),
+    run_id: str | None = Query(None, description="Filter by clustering run ID"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
     db: Database = Depends(get_db),
@@ -26,16 +25,13 @@ async def list_summaries(
     """List all summary runs with optional filtering by clustering run_id."""
     with db.get_session() as session:
         # Get distinct summary runs
-        stmt = (
-            select(
-                ClusterSummary.summary_run_id,
-                ClusterSummary.run_id,
-                ClusterSummary.alias,
-                ClusterSummary.model,
-                ClusterSummary.generated_at,
-            )
-            .distinct()
-        )
+        stmt = select(
+            ClusterSummary.summary_run_id,
+            ClusterSummary.run_id,
+            ClusterSummary.alias,
+            ClusterSummary.model,
+            ClusterSummary.generated_at,
+        ).distinct()
 
         if run_id:
             stmt = stmt.where(ClusterSummary.run_id == run_id)
@@ -80,7 +76,7 @@ async def list_summaries(
 async def get_cluster_summary(
     summary_run_id: str,
     cluster_id: int,
-    run_id: Optional[str] = Query(None, description="Clustering run ID (optional but recommended)"),
+    run_id: str | None = Query(None, description="Clustering run ID (optional but recommended)"),
     db: Database = Depends(get_db),
 ):
     """Get the summary for a specific cluster in a summary run."""

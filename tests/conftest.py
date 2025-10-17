@@ -1,16 +1,17 @@
 """Shared test fixtures for pytest."""
 
-import pytest
 import tempfile
 from pathlib import Path
-from sqlmodel import Session, create_engine, SQLModel
+
+import pytest
+from sqlmodel import SQLModel, create_engine
+
 from lmsys_query_analysis.db.connection import Database
 from lmsys_query_analysis.db.models import (
-    Query,
-    QueryCluster,
     ClusteringRun,
     ClusterSummary,
-    ClusterHierarchy,
+    Query,
+    QueryCluster,
 )
 
 
@@ -25,13 +26,13 @@ def temp_db():
     """Create a temporary in-memory SQLite database for testing."""
     engine = create_engine("sqlite:///:memory:")
     SQLModel.metadata.create_all(engine)
-    
+
     # Create a Database instance with the test engine
     db = Database(":memory:")
     db.engine = engine
-    
+
     yield db
-    
+
     # Cleanup
     SQLModel.metadata.drop_all(engine)
     engine.dispose()
@@ -100,7 +101,7 @@ def sample_clustering_run():
 @pytest.fixture
 def sample_query_clusters():
     """Sample query-cluster assignments for testing.
-    
+
     Note: query_ids will be set in populated_db after queries are committed.
     """
     return [
@@ -153,20 +154,27 @@ def sample_cluster_summaries(sample_clustering_run):
 
 
 @pytest.fixture
-def populated_db(temp_db, db_session, sample_queries, sample_clustering_run, sample_query_clusters, sample_cluster_summaries):
+def populated_db(
+    temp_db,
+    db_session,
+    sample_queries,
+    sample_clustering_run,
+    sample_query_clusters,
+    sample_cluster_summaries,
+):
     """Database populated with sample data for integration tests."""
     # Add queries first and commit to get IDs
     for query in sample_queries:
         db_session.add(query)
-    
+
     # Add clustering run
     db_session.add(sample_clustering_run)
     db_session.commit()
-    
+
     # Refresh to get auto-generated IDs
     for query in sample_queries:
         db_session.refresh(query)
-    
+
     # Now create query-cluster assignments with real query IDs
     run_id = sample_clustering_run.run_id
     for i, qc_data in enumerate(sample_query_clusters):
@@ -176,13 +184,13 @@ def populated_db(temp_db, db_session, sample_queries, sample_clustering_run, sam
             cluster_id=qc_data["cluster_id"],
         )
         db_session.add(qc)
-    
+
     # Add cluster summaries
     for summary in sample_cluster_summaries:
         db_session.add(summary)
-    
+
     db_session.commit()
-    
+
     return temp_db
 
 
@@ -196,34 +204,37 @@ def temp_dir():
 @pytest.fixture
 def mock_chroma():
     """Mock ChromaDB client for testing."""
+
     class MockChromaManager:
         def __init__(self):
             self.queries = {}
             self.summaries = {}
             self.persist_directory = "/tmp/test-chroma"
-        
+
         def add_queries_batch(self, query_ids, texts, embeddings, metadata):
-            for qid, text in zip(query_ids, texts):
+            for qid, text in zip(query_ids, texts, strict=False):
                 self.queries[qid] = text
-        
-        def add_cluster_summaries_batch(self, run_id, cluster_ids, summaries, embeddings, metadata_list, titles, descriptions):
-            for cid, summary in zip(cluster_ids, summaries):
+
+        def add_cluster_summaries_batch(
+            self, run_id, cluster_ids, summaries, embeddings, metadata_list, titles, descriptions
+        ):
+            for cid, summary in zip(cluster_ids, summaries, strict=False):
                 self.summaries[(run_id, cid)] = summary
-        
+
         def count_queries(self):
             return len(self.queries)
-        
+
         def count_summaries(self, run_id=None):
             if run_id:
                 return len([k for k in self.summaries if k[0] == run_id])
             return len(self.summaries)
-        
+
         def list_runs_in_summaries(self):
             return list(set(k[0] for k in self.summaries))
-        
+
         def get_query_embeddings_map(self, ids):
             return {qid: True for qid in ids if qid in self.queries}
-        
+
         def list_all_collections(self):
             return [
                 {
@@ -236,6 +247,5 @@ def mock_chroma():
                     },
                 }
             ]
-    
-    return MockChromaManager()
 
+    return MockChromaManager()

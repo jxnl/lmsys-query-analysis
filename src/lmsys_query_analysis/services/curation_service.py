@@ -1,28 +1,26 @@
 """Service for cluster curation operations."""
 
-from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
-from sqlmodel import select, and_, or_, delete
-from sqlalchemy.exc import IntegrityError
+from typing import Any
+
+from sqlmodel import and_, delete, select
 
 from ..db.connection import Database
 from ..db.models import (
-    Query,
-    QueryCluster,
-    ClusterSummary,
     ClusterEdit,
     ClusterMetadata,
+    ClusterSummary,
     OrphanedQuery,
-    ClusteringRun,
+    Query,
+    QueryCluster,
 )
-
 
 # ============================================================================
 # Query Operations
 # ============================================================================
 
 
-def get_query_details(db: Database, query_id: int) -> Optional[Dict[str, Any]]:
+def get_query_details(db: Database, query_id: int) -> dict[str, Any] | None:
     """Get query details with all cluster assignments.
 
     Args:
@@ -73,8 +71,8 @@ def move_query(
     query_id: int,
     to_cluster_id: int,
     editor: str = "cli-user",
-    reason: Optional[str] = None,
-) -> Dict[str, Any]:
+    reason: str | None = None,
+) -> dict[str, Any]:
     """Move a query from one cluster to another.
 
     Args:
@@ -105,9 +103,7 @@ def move_query(
         from_cluster_id = current.cluster_id
 
         if from_cluster_id == to_cluster_id:
-            raise ValueError(
-                f"Query {query_id} is already in cluster {to_cluster_id}"
-            )
+            raise ValueError(f"Query {query_id} is already in cluster {to_cluster_id}")
 
         # Update assignment
         current.cluster_id = to_cluster_id
@@ -139,11 +135,11 @@ def move_query(
 def move_queries_batch(
     db: Database,
     run_id: str,
-    query_ids: List[int],
+    query_ids: list[int],
     to_cluster_id: int,
     editor: str = "cli-user",
-    reason: Optional[str] = None,
-) -> Dict[str, Any]:
+    reason: str | None = None,
+) -> dict[str, Any]:
     """Move multiple queries to a cluster.
 
     Args:
@@ -185,10 +181,10 @@ def rename_cluster(
     db: Database,
     run_id: str,
     cluster_id: int,
-    title: Optional[str] = None,
-    description: Optional[str] = None,
+    title: str | None = None,
+    description: str | None = None,
     editor: str = "cli-user",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Rename a cluster (update title and/or description).
 
     Args:
@@ -216,9 +212,7 @@ def rename_cluster(
         ).first()
 
         if not summary:
-            raise ValueError(
-                f"No summary found for cluster {cluster_id} in run {run_id}"
-            )
+            raise ValueError(f"No summary found for cluster {cluster_id} in run {run_id}")
 
         old_values = {"title": summary.title, "description": summary.description}
 
@@ -257,12 +251,12 @@ def rename_cluster(
 def merge_clusters(
     db: Database,
     run_id: str,
-    source_cluster_ids: List[int],
+    source_cluster_ids: list[int],
     target_cluster_id: int,
-    new_title: Optional[str] = None,
-    new_description: Optional[str] = None,
+    new_title: str | None = None,
+    new_description: str | None = None,
     editor: str = "cli-user",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Merge multiple clusters into a target cluster.
 
     Args:
@@ -289,9 +283,7 @@ def merge_clusters(
         ).first()
 
         if not target_summary:
-            raise ValueError(
-                f"Target cluster {target_cluster_id} not found in run {run_id}"
-            )
+            raise ValueError(f"Target cluster {target_cluster_id} not found in run {run_id}")
 
         # Move all queries from source clusters to target
         moved_count = 0
@@ -350,11 +342,11 @@ def split_cluster(
     db: Database,
     run_id: str,
     cluster_id: int,
-    query_ids: List[int],
+    query_ids: list[int],
     new_title: str,
     new_description: str,
     editor: str = "cli-user",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Split queries from a cluster into a new cluster.
 
     Args:
@@ -433,11 +425,11 @@ def delete_cluster(
     db: Database,
     run_id: str,
     cluster_id: int,
-    move_to_cluster_id: Optional[int] = None,
+    move_to_cluster_id: int | None = None,
     orphan: bool = False,
     editor: str = "cli-user",
-    reason: Optional[str] = None,
-) -> Dict[str, Any]:
+    reason: str | None = None,
+) -> dict[str, Any]:
     """Delete a cluster, orphaning or reassigning its queries.
 
     Args:
@@ -481,9 +473,7 @@ def delete_cluster(
             for qc in queries:
                 qc.cluster_id = move_to_cluster_id
         else:
-            raise ValueError(
-                "Must specify either move_to_cluster_id or orphan=True"
-            )
+            raise ValueError("Must specify either move_to_cluster_id or orphan=True")
 
         # Delete cluster summaries
         session.exec(
@@ -531,12 +521,12 @@ def tag_cluster(
     db: Database,
     run_id: str,
     cluster_id: int,
-    coherence_score: Optional[int] = None,
-    quality: Optional[str] = None,
-    flags: Optional[List[str]] = None,
-    notes: Optional[str] = None,
+    coherence_score: int | None = None,
+    quality: str | None = None,
+    flags: list[str] | None = None,
+    notes: str | None = None,
     editor: str = "cli-user",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Tag a cluster with metadata (coherence, quality, flags, notes).
 
     Args:
@@ -615,9 +605,7 @@ def tag_cluster(
         }
 
 
-def get_cluster_metadata(
-    db: Database, run_id: str, cluster_id: int
-) -> Optional[ClusterMetadata]:
+def get_cluster_metadata(db: Database, run_id: str, cluster_id: int) -> ClusterMetadata | None:
     """Get metadata for a cluster.
 
     Args:
@@ -645,8 +633,8 @@ def get_cluster_metadata(
 
 
 def get_cluster_edit_history(
-    db: Database, run_id: str, cluster_id: Optional[int] = None
-) -> List[ClusterEdit]:
+    db: Database, run_id: str, cluster_id: int | None = None
+) -> list[ClusterEdit]:
     """Get edit history for a cluster or entire run.
 
     Args:
@@ -668,7 +656,7 @@ def get_cluster_edit_history(
         return list(session.exec(stmt).all())
 
 
-def get_orphaned_queries(db: Database, run_id: str) -> List[Tuple[OrphanedQuery, Query]]:
+def get_orphaned_queries(db: Database, run_id: str) -> list[tuple[OrphanedQuery, Query]]:
     """Get all orphaned queries for a run.
 
     Args:
@@ -697,11 +685,11 @@ def get_orphaned_queries(db: Database, run_id: str) -> List[Tuple[OrphanedQuery,
 def find_problematic_clusters(
     db: Database,
     run_id: str,
-    max_size: Optional[int] = None,
-    min_size: Optional[int] = None,
-    min_languages: Optional[int] = None,
-    quality: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+    max_size: int | None = None,
+    min_size: int | None = None,
+    min_languages: int | None = None,
+    quality: str | None = None,
+) -> list[dict[str, Any]]:
     """Find clusters matching quality criteria.
 
     Args:

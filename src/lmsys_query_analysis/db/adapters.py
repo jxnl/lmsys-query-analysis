@@ -20,14 +20,16 @@ Architecture:
 
 import json
 import uuid
-from typing import Protocol, Iterator, runtime_checkable, Optional, Any
-from datasets import load_dataset, Dataset, IterableDataset
+from collections.abc import Iterator
+from typing import Any, Protocol, runtime_checkable
+
+from datasets import Dataset, IterableDataset, load_dataset
 
 
 @runtime_checkable
 class DataSourceAdapter(Protocol):
     """Protocol defining interface for data source adapters.
-    
+
     All adapters must yield normalized records with this schema:
     {
         "conversation_id": str,
@@ -38,19 +40,19 @@ class DataSourceAdapter(Protocol):
         "extra_metadata": dict,
     }
     """
-    
+
     def __iter__(self) -> Iterator[dict]:
         """Yield normalized records with standard schema.
-        
+
         Yields:
             dict: Normalized record containing conversation_id, query_text,
                   model, language, timestamp, and extra_metadata.
         """
         ...
-    
+
     def __len__(self) -> int | None:
         """Return total count if known, None for streaming sources.
-        
+
         Returns:
             int | None: Total number of records, or None if unknown/streaming.
         """
@@ -67,7 +69,7 @@ def extract_first_query(conversation: list[dict] | None) -> str | None:
     Returns:
         The first user message content (stripped of whitespace),
         or None if not found
-        
+
     Examples:
         >>> conv = [
         ...     {"role": "user", "content": "What is Python?"},
@@ -75,10 +77,10 @@ def extract_first_query(conversation: list[dict] | None) -> str | None:
         ... ]
         >>> extract_first_query(conv)
         'What is Python?'
-        
+
         >>> extract_first_query([])
         None
-        
+
         >>> extract_first_query(None)
         None
     """
@@ -107,13 +109,13 @@ except Exception:  # pragma: no cover
 
 class HuggingFaceAdapter:
     """Adapter for HuggingFace datasets with flexible schema mapping.
-    
+
     Normalizes HuggingFace dataset records into a standard format for ingestion.
     Supports multiple dataset schemas:
     - LMSYS conversation format (conversation field with JSON structure)
     - Simple prompt format (direct text column, e.g., 'prompt')
     - Custom schemas (configurable field mappings)
-    
+
     Args:
         dataset_name: HuggingFace dataset identifier (e.g., "lmsys/lmsys-chat-1m")
         split: Dataset split to load (default: "train")
@@ -121,13 +123,13 @@ class HuggingFaceAdapter:
         use_streaming: Whether to use streaming mode (default: False)
         query_column: Column name for query text (default: "conversation")
         is_conversation_format: Whether to parse as conversation JSON (default: True)
-    
+
     Example:
         >>> # Default LMSYS format
         >>> adapter = HuggingFaceAdapter("lmsys/lmsys-chat-1m", limit=100)
         >>> for record in adapter:
         ...     print(record["query_text"])
-        
+
         >>> # Simple prompt format
         >>> adapter = HuggingFaceAdapter(
         ...     "fka/awesome-chatgpt-prompts",
@@ -135,18 +137,18 @@ class HuggingFaceAdapter:
         ...     is_conversation_format=False
         ... )
     """
-    
+
     def __init__(
         self,
         dataset_name: str = "lmsys/lmsys-chat-1m",
         split: str = "train",
-        limit: Optional[int] = None,
+        limit: int | None = None,
         use_streaming: bool = False,
         query_column: str = "conversation",
         is_conversation_format: bool = True,
     ):
         """Initialize the HuggingFace adapter.
-        
+
         Args:
             dataset_name: HuggingFace dataset identifier
             split: Dataset split to load
@@ -161,7 +163,7 @@ class HuggingFaceAdapter:
         self.use_streaming = use_streaming
         self.query_column = query_column
         self.is_conversation_format = is_conversation_format
-        
+
         # Load the dataset
         if use_streaming:
             self._dataset: Dataset | IterableDataset = load_dataset(
@@ -169,15 +171,15 @@ class HuggingFaceAdapter:
             )
         else:
             self._dataset = load_dataset(dataset_name, split=split)
-            
+
             # Apply limit if specified (only for non-streaming)
             if limit is not None:
                 dataset_len = len(self._dataset)
                 self._dataset = self._dataset.select(range(min(limit, dataset_len)))
-    
+
     def __iter__(self) -> Iterator[dict]:
         """Iterate over dataset and yield normalized records.
-        
+
         Yields:
             dict: Normalized record with standard schema:
                 - conversation_id: str (from row or generated UUID)
@@ -188,17 +190,17 @@ class HuggingFaceAdapter:
                 - extra_metadata: dict
         """
         count = 0
-        
+
         for row in self._dataset:
             # Apply limit for streaming mode
             if self.use_streaming and self.limit is not None:
                 if count >= self.limit:
                     break
                 count += 1
-            
+
             # Get or generate conversation_id
             conversation_id = self._get_or_generate_conversation_id(row)
-            
+
             # Extract query text based on schema format
             if self.is_conversation_format:
                 # LMSYS conversation format: parse JSON and extract first user query
@@ -208,17 +210,17 @@ class HuggingFaceAdapter:
                         conversation = _json_loads(conversation)
                     except json.JSONDecodeError:
                         continue
-                
+
                 query_text = extract_first_query(conversation)
                 if query_text is None:
                     continue
-                
+
                 # Build extra metadata for conversation format
                 extra_metadata = {
                     "turn_count": len(conversation) if conversation else 0,
                     "redacted": row.get("redacted", False),
                 }
-                
+
                 # Include openai_moderation if present
                 if "openai_moderation" in row:
                     extra_metadata["openai_moderation"] = row.get("openai_moderation")
@@ -227,24 +229,30 @@ class HuggingFaceAdapter:
                 query_text = row.get(self.query_column)
                 if not query_text or not isinstance(query_text, str):
                     continue
-                
+
                 query_text = query_text.strip()
                 if not query_text:
                     continue
-                
+
                 # Build extra metadata for prompt format
                 extra_metadata = {}
-                
+
                 # Include any additional fields from row as metadata
                 for key, value in row.items():
-                    if key not in [self.query_column, "conversation_id", "model", "language", "timestamp"]:
+                    if key not in [
+                        self.query_column,
+                        "conversation_id",
+                        "model",
+                        "language",
+                        "timestamp",
+                    ]:
                         extra_metadata[key] = value
-            
+
             # Extract common metadata
             model = row.get("model", "unknown")
             language = row.get("language") or None
             timestamp = row.get("timestamp")
-            
+
             # Yield normalized record
             yield {
                 "conversation_id": conversation_id,
@@ -254,37 +262,36 @@ class HuggingFaceAdapter:
                 "timestamp": timestamp,
                 "extra_metadata": extra_metadata,
             }
-    
+
     def __len__(self) -> int | None:
         """Return total record count if known, None for streaming sources.
-        
+
         Returns:
             int | None: Number of records, or None if streaming or unknown
         """
         if self.use_streaming:
             return None
-        
+
         # For non-streaming with limit applied
         return len(self._dataset)
-    
+
     @staticmethod
     def _get_or_generate_conversation_id(row: dict) -> str:
         """Get conversation_id from row or generate a new UUID.
-        
+
         For datasets with conversation_id field, use the existing value.
         For datasets without conversation_id (e.g., simple prompt datasets),
         generate a random UUID to ensure uniqueness.
-        
+
         Args:
             row: Dataset row (dict)
-        
+
         Returns:
             Conversation ID string (from row or newly generated UUID)
         """
         # Check if row has conversation_id field
         if "conversation_id" in row and row["conversation_id"]:
             return str(row["conversation_id"])
-        
+
         # Generate random UUID for datasets without conversation_id
         return str(uuid.uuid4())
-

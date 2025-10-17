@@ -1,13 +1,15 @@
 """Tests for database models."""
 
-import pytest
 from datetime import datetime
+
+import pytest
 from sqlmodel import Session, create_engine, select
+
 from lmsys_query_analysis.db.models import (
-    Query,
     ClusteringRun,
-    QueryCluster,
     ClusterSummary,
+    Query,
+    QueryCluster,
 )
 
 
@@ -149,9 +151,7 @@ def test_query_filtering(session):
     """Test filtering queries by model and language."""
     queries = [
         Query(conversation_id="q1", model="gpt-4", query_text="Query 1", language="en"),
-        Query(
-            conversation_id="q2", model="gpt-3.5", query_text="Query 2", language="en"
-        ),
+        Query(conversation_id="q2", model="gpt-3.5", query_text="Query 2", language="en"),
         Query(conversation_id="q3", model="gpt-4", query_text="Query 3", language="es"),
     ]
     for q in queries:

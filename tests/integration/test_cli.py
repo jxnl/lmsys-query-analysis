@@ -1,7 +1,9 @@
 """Tests for CLI commands."""
 
 from unittest.mock import Mock, patch
+
 from typer.testing import CliRunner
+
 from lmsys_query_analysis.cli.main import app
 from lmsys_query_analysis.db.connection import Database
 from lmsys_query_analysis.db.models import ClusteringRun, ClusterSummary, Query
@@ -91,9 +93,7 @@ def test_list_clusters_sorted_by_num_queries(tmp_path):
         session.commit()
 
         # Invoke CLI
-        result = runner.invoke(
-            app, ["list-clusters", run_id, "--db-path", str(db_path)]
-        )
+        result = runner.invoke(app, ["list-clusters", run_id, "--db-path", str(db_path)])
         assert result.exit_code == 0
 
         out = result.stdout
@@ -103,9 +103,7 @@ def test_list_clusters_sorted_by_num_queries(tmp_path):
         pos_tie10a = out.find("tie10a")
         pos_none = out.find("none")
 
-        assert (
-            pos_second != -1 and pos_first != -1 and pos_tie10a != -1 and pos_none != -1
-        )
+        assert pos_second != -1 and pos_first != -1 and pos_tie10a != -1 and pos_none != -1
         assert pos_second < pos_first  # 25 before 10
         assert pos_first < pos_tie10a  # cluster_id 1 before 4 among ties
         assert pos_tie10a < pos_none  # None last
@@ -174,9 +172,9 @@ def test_list_clusters_show_examples(tmp_path):
 def test_load_command_with_adapter(tmp_path):
     """Test that load command works with adapter refactor."""
     db_path = tmp_path / "adapter-test.db"
-    
+
     # Mock the HuggingFaceAdapter to avoid actual HF download
-    with patch('lmsys_query_analysis.db.loader.HuggingFaceAdapter') as mock_adapter_class:
+    with patch("lmsys_query_analysis.db.loader.HuggingFaceAdapter") as mock_adapter_class:
         mock_data = [
             {
                 "conversation_id": "test1",
@@ -207,20 +205,17 @@ def test_load_command_with_adapter(tmp_path):
         mock_adapter_instance.__iter__ = Mock(return_value=iter(mock_data))
         mock_adapter_instance.__len__ = Mock(return_value=len(mock_data))
         mock_adapter_class.return_value = mock_adapter_instance
-        
-        result = runner.invoke(
-            app,
-            ["load", "--limit", "10", "--db-path", str(db_path)]
-        )
-        
+
+        result = runner.invoke(app, ["load", "--limit", "10", "--db-path", str(db_path)])
+
         assert result.exit_code == 0
         assert "loaded" in result.stdout.lower() or "complete" in result.stdout.lower()
-        
+
         # Verify adapter was called with expected parameters
         mock_adapter_class.assert_called_once()
         call_kwargs = mock_adapter_class.call_args[1]
         assert call_kwargs["limit"] == 10
-        
+
         # Verify data was actually loaded into the database
         db = Database(db_path)
         session = db.get_session()
