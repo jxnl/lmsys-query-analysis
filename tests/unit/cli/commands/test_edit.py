@@ -2,6 +2,9 @@
 
 from unittest.mock import Mock, patch
 
+import pytest
+import typer
+
 
 @patch("lmsys_query_analysis.cli.commands.edit.curation_service")
 @patch("lmsys_query_analysis.cli.commands.edit.get_db")
@@ -28,6 +31,56 @@ def test_view_query_command(mock_get_db, mock_curation_service):
 
 @patch("lmsys_query_analysis.cli.commands.edit.curation_service")
 @patch("lmsys_query_analysis.cli.commands.edit.get_db")
+def test_view_query_not_found(mock_get_db, mock_curation_service):
+    """Test view-query command when query not found."""
+    from lmsys_query_analysis.cli.commands.edit import view_query
+
+    # Setup mocks
+    mock_db = Mock()
+    mock_get_db.return_value = mock_db
+
+    # Mock query not found
+    mock_curation_service.get_query_details.return_value = None
+
+    # Execute command - should raise exit
+    with pytest.raises(typer.Exit) as exc_info:
+        view_query(query_id=999, db_path="/tmp/test.db")
+
+    assert exc_info.value.exit_code == 1
+
+
+@patch("lmsys_query_analysis.cli.commands.edit.curation_service")
+@patch("lmsys_query_analysis.cli.commands.edit.get_db")
+def test_view_query_with_clusters(mock_get_db, mock_curation_service):
+    """Test view-query command with cluster assignments."""
+    from lmsys_query_analysis.cli.commands.edit import view_query
+    from lmsys_query_analysis.db.models import Query
+
+    # Setup mocks
+    mock_db = Mock()
+    mock_get_db.return_value = mock_db
+
+    # Mock query with clusters
+    mock_query = Query(id=1, query_text="test", model="gpt-4", conversation_id="c1")
+    clusters = [
+        {"run_id": "run-1", "cluster_id": 5, "title": "Test Cluster", "confidence_score": 0.95},
+        {"run_id": "run-1", "cluster_id": 10, "title": None, "confidence_score": None},
+    ]
+    mock_curation_service.get_query_details.return_value = {
+        "query": mock_query,
+        "clusters": clusters,
+    }
+
+    # Execute command
+    view_query(query_id=1, db_path="/tmp/test.db")
+
+    # Verify
+    mock_get_db.assert_called_once()
+    mock_curation_service.get_query_details.assert_called_once()
+
+
+@patch("lmsys_query_analysis.cli.commands.edit.curation_service")
+@patch("lmsys_query_analysis.cli.commands.edit.get_db")
 def test_move_query_command(mock_get_db, mock_curation_service):
     """Test move-query command."""
     from lmsys_query_analysis.cli.commands.edit import move_query
@@ -40,7 +93,30 @@ def test_move_query_command(mock_get_db, mock_curation_service):
     mock_curation_service.move_query.return_value = {"from_cluster_id": 1, "to_cluster_id": 2}
 
     # Execute command
-    move_query(run_id="test-run", query_id=1, to_cluster=2, db_path="/tmp/test.db")
+    move_query(run_id="test-run", query_id=1, to_cluster=2, reason=None, db_path="/tmp/test.db")
+
+    # Verify
+    mock_get_db.assert_called_once()
+    mock_curation_service.move_query.assert_called_once()
+
+
+@patch("lmsys_query_analysis.cli.commands.edit.curation_service")
+@patch("lmsys_query_analysis.cli.commands.edit.get_db")
+def test_move_query_command_with_reason(mock_get_db, mock_curation_service):
+    """Test move-query command with reason parameter."""
+    from lmsys_query_analysis.cli.commands.edit import move_query
+
+    # Setup mocks
+    mock_db = Mock()
+    mock_get_db.return_value = mock_db
+
+    # Mock move result
+    mock_curation_service.move_query.return_value = {"from_cluster_id": 1, "to_cluster_id": 2}
+
+    # Execute command with reason
+    move_query(
+        run_id="test-run", query_id=1, to_cluster=2, reason="Test reason", db_path="/tmp/test.db"
+    )
 
     # Verify
     mock_get_db.assert_called_once()
@@ -58,10 +134,43 @@ def test_move_queries_command(mock_get_db, mock_curation_service):
     mock_get_db.return_value = mock_db
 
     # Mock batch move result
-    mock_curation_service.move_queries_batch.return_value = {"moved": 2, "failed": 0, "errors": []}
+    mock_curation_service.move_queries_batch.return_value = {
+        "moved": 2,
+        "failed": 0,
+        "errors": [],
+    }
 
     # Execute command
-    move_queries(run_id="test-run", query_ids="1,2", to_cluster=2, db_path="/tmp/test.db")
+    move_queries(
+        run_id="test-run", query_ids="1,2", to_cluster=2, reason=None, db_path="/tmp/test.db"
+    )
+
+    # Verify
+    mock_get_db.assert_called_once()
+    mock_curation_service.move_queries_batch.assert_called_once()
+
+
+@patch("lmsys_query_analysis.cli.commands.edit.curation_service")
+@patch("lmsys_query_analysis.cli.commands.edit.get_db")
+def test_move_queries_command_with_errors(mock_get_db, mock_curation_service):
+    """Test move-queries command with some errors."""
+    from lmsys_query_analysis.cli.commands.edit import move_queries
+
+    # Setup mocks
+    mock_db = Mock()
+    mock_get_db.return_value = mock_db
+
+    # Mock batch move result with errors
+    mock_curation_service.move_queries_batch.return_value = {
+        "moved": 1,
+        "failed": 1,
+        "errors": [{"query_id": 999, "error": "Query not found"}],
+    }
+
+    # Execute command
+    move_queries(
+        run_id="test-run", query_ids="1,999", to_cluster=2, reason=None, db_path="/tmp/test.db"
+    )
 
     # Verify
     mock_get_db.assert_called_once()
