@@ -319,6 +319,8 @@ def test_hf_adapter_initialization():
         assert adapter.split == "train"
         assert adapter.limit == 100
         assert adapter.use_streaming is False
+        assert adapter.query_column == "conversation"  # Default
+        assert adapter.is_conversation_format is True  # Default
 
 
 def test_hf_adapter_iteration_basic():
@@ -349,6 +351,7 @@ def test_hf_adapter_iteration_basic():
     mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
     mock_dataset.__len__ = Mock(return_value=2)
     mock_dataset.select = Mock(return_value=mock_dataset)
+    mock_dataset.column_names = ["conversation_id", "conversation", "model", "language", "timestamp"]
     
     with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
         adapter = HuggingFaceAdapter(dataset_name="test/dataset", limit=None)
@@ -504,16 +507,16 @@ def test_hf_adapter_handles_missing_fields():
 
 
 def test_hf_adapter_skips_invalid_records():
-    """Test that HuggingFaceAdapter skips records with missing conversation_id or query."""
+    """Test that HuggingFaceAdapter skips records with no valid query."""
     mock_data = [
         {
-            # Missing conversation_id
+            # Missing conversation_id (will generate UUID)
             "conversation": [{"role": "user", "content": "Test"}],
             "model": "gpt-4",
         },
         {
             "conversation_id": "conv2",
-            # No user message in conversation
+            # No user message in conversation - should be skipped
             "conversation": [{"role": "system", "content": "System message"}],
             "model": "gpt-4",
         },
@@ -534,9 +537,15 @@ def test_hf_adapter_skips_invalid_records():
         
         records = list(adapter)
         
-        # Only the valid record should be returned
-        assert len(records) == 1
-        assert records[0]["conversation_id"] == "conv3"
+        # Records 1 and 3 should be returned (record 2 has no user query)
+        assert len(records) == 2
+        # First record should have a generated UUID
+        import uuid
+        assert uuid.UUID(records[0]["conversation_id"])
+        assert records[0]["query_text"] == "Test"
+        # Second record should have conv3
+        assert records[1]["conversation_id"] == "conv3"
+        assert records[1]["query_text"] == "Valid query"
 
 
 def test_hf_adapter_handles_invalid_json():
@@ -613,4 +622,226 @@ def test_hf_adapter_conforms_to_protocol():
         
         # Check that it's recognized as implementing the protocol
         assert isinstance(adapter, DataSourceAdapter)
+
+
+def test_hf_adapter_handles_simple_prompt_column():
+    """Test HuggingFaceAdapter with simple prompt format (e.g., fka/awesome-chatgpt-prompts)."""
+    mock_data = [
+        {
+            "act": "Linux Terminal",
+            "prompt": "I want you to act as a linux terminal",
+        },
+        {
+            "act": "Python Interpreter",
+            "prompt": "Act as a Python interpreter",
+        },
+    ]
+    
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    mock_dataset.__len__ = Mock(return_value=2)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(
+            dataset_name="fka/awesome-chatgpt-prompts",
+            query_column="prompt",
+            is_conversation_format=False,
+        )
+        
+        records = list(adapter)
+        
+        assert len(records) == 2
+        # Verify query text is extracted from prompt column
+        assert records[0]["query_text"] == "I want you to act as a linux terminal"
+        assert records[1]["query_text"] == "Act as a Python interpreter"
+        
+        # Verify UUIDs were generated (should be valid UUIDs)
+        import uuid
+        assert uuid.UUID(records[0]["conversation_id"])  # Will raise if invalid
+        assert uuid.UUID(records[1]["conversation_id"])
+        
+        # Verify extra metadata includes other fields
+        assert records[0]["extra_metadata"]["act"] == "Linux Terminal"
+        assert records[1]["extra_metadata"]["act"] == "Python Interpreter"
+
+
+def test_hf_adapter_uses_defaults():
+    """Test that HuggingFaceAdapter uses correct defaults."""
+    # Test conversation format (default)
+    mock_data_conversation = [
+        {
+            "conversation_id": "conv1",
+            "conversation": [{"role": "user", "content": "Test"}],
+            "model": "gpt-4",
+        }
+    ]
+    
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data_conversation))
+    mock_dataset.__len__ = Mock(return_value=1)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(dataset_name="test/dataset")
+        
+        # Should use default conversation format
+        assert adapter.query_column == "conversation"
+        assert adapter.is_conversation_format is True
+        
+        records = list(adapter)
+        assert len(records) == 1
+    
+    # Test explicit prompt format
+    mock_data_prompt = [
+        {"prompt": "Test prompt"}
+    ]
+    
+    mock_dataset2 = Mock()
+    mock_dataset2.__iter__ = Mock(return_value=iter(mock_data_prompt))
+    mock_dataset2.__len__ = Mock(return_value=1)
+    mock_dataset2.select = Mock(return_value=mock_dataset2)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset2):
+        adapter2 = HuggingFaceAdapter(
+            dataset_name="test/dataset",
+            query_column="prompt",
+            is_conversation_format=False,
+        )
+        
+        # Should use explicit prompt format
+        assert adapter2.query_column == "prompt"
+        assert adapter2.is_conversation_format is False
+
+
+def test_hf_adapter_custom_column_mapping():
+    """Test HuggingFaceAdapter with explicit column mapping."""
+    mock_data = [
+        {
+            "custom_query": "This is my custom query field",
+            "other_field": "ignored",
+        }
+    ]
+    
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    mock_dataset.__len__ = Mock(return_value=1)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    mock_dataset.column_names = ["custom_query", "other_field"]
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(
+            dataset_name="test/dataset",
+            query_column="custom_query",
+            is_conversation_format=False,
+        )
+        
+        # Verify explicit configuration is used
+        assert adapter.query_column == "custom_query"
+        assert adapter.is_conversation_format is False
+        
+        records = list(adapter)
+        
+        assert len(records) == 1
+        assert records[0]["query_text"] == "This is my custom query field"
+        assert records[0]["extra_metadata"]["other_field"] == "ignored"
+
+
+def test_hf_adapter_generates_uuid_for_missing_ids():
+    """Test that adapter generates UUIDs when conversation_id is not in dataset."""
+    mock_data = [
+        {
+            "prompt": "Query 1",
+        },
+        {
+            "prompt": "Query 2",
+        },
+    ]
+    
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    mock_dataset.__len__ = Mock(return_value=2)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(
+            dataset_name="test/dataset",
+            query_column="prompt",
+            is_conversation_format=False,
+        )
+        
+        records = list(adapter)
+        
+        assert len(records) == 2
+        
+        # Verify UUIDs were generated and are valid
+        import uuid
+        conv_id_1 = records[0]["conversation_id"]
+        conv_id_2 = records[1]["conversation_id"]
+        
+        # Should be valid UUIDs
+        assert uuid.UUID(conv_id_1)
+        assert uuid.UUID(conv_id_2)
+        
+        # Should be different UUIDs
+        assert conv_id_1 != conv_id_2
+
+
+def test_hf_adapter_preserves_existing_conversation_ids():
+    """Test that adapter preserves conversation_id when present in dataset."""
+    mock_data = [
+        {
+            "conversation_id": "existing-id-123",
+            "prompt": "Test query",
+        },
+        {
+            "conversation_id": "another-id-456",
+            "prompt": "Another query",
+        },
+    ]
+    
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    mock_dataset.__len__ = Mock(return_value=2)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(
+            dataset_name="test/dataset",
+            query_column="prompt",
+            is_conversation_format=False,
+        )
+        
+        records = list(adapter)
+        
+        assert len(records) == 2
+        
+        # Verify existing conversation_ids are preserved (not UUIDs)
+        assert records[0]["conversation_id"] == "existing-id-123"
+        assert records[1]["conversation_id"] == "another-id-456"
+
+
+def test_hf_adapter_with_text_column():
+    """Test adapter with generic 'text' column."""
+    mock_data = [{"text": "Generic text content"}]
+    
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    mock_dataset.__len__ = Mock(return_value=1)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(
+            dataset_name="test/dataset",
+            query_column="text",
+            is_conversation_format=False,
+        )
+        
+        # Should use explicit text column
+        assert adapter.query_column == "text"
+        assert adapter.is_conversation_format is False
+        
+        records = list(adapter)
+        assert len(records) == 1
+        assert records[0]["query_text"] == "Generic text content"
 
