@@ -72,7 +72,7 @@ def test_database_auto_create_tables_false(tmp_path):
 
     # Tables should not exist yet
     # Trying to query will raise an error
-    from sqlmodel import OperationalError
+    from sqlalchemy.exc import OperationalError
 
     with db.get_session() as session:
         with pytest.raises(OperationalError):  # SQLite operational error
@@ -157,7 +157,7 @@ def test_database_drop_tables(tmp_path):
     db.drop_tables()
 
     # Tables should not exist
-    from sqlmodel import OperationalError
+    from sqlalchemy.exc import OperationalError
 
     with db.get_session() as session:
         with pytest.raises(OperationalError):  # SQLite operational error
