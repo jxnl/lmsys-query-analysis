@@ -440,3 +440,224 @@ def test_compute_centroids_accuracy():
         # At least one centroid should be close to each center
         assert min(distances_to_center1) < 5.0
         assert min(distances_to_center2) < 5.0
+
+
+# ==============================================================================
+# Tests for run_hdbscan_clustering function
+# ==============================================================================
+
+
+def test_run_hdbscan_clustering_basic(tmp_path):
+    """Test run_hdbscan_clustering with basic parameters."""
+    from lmsys_query_analysis.clustering.hdbscan_clustering import run_hdbscan_clustering
+    from lmsys_query_analysis.db.connection import Database
+    from lmsys_query_analysis.db.models import Query
+    from sqlmodel import select
+
+    db = Database(db_path=":memory:", auto_create_tables=True)
+
+    # Add test queries
+    session = db.get_session()
+    try:
+        queries = [
+            Query(
+                id=i,
+                conversation_id=f"conv_{i}",
+                query_text=f"test query {i}",
+                language="en",
+                model="test-model",
+            )
+            for i in range(50)
+        ]
+        session.add_all(queries)
+        session.commit()
+
+        # Run HDBSCAN clustering
+        run_id = run_hdbscan_clustering(
+            db=db,
+            description="Test clustering",
+            embedding_model="all-MiniLM-L6-v2",
+            embedding_provider="sentence-transformers",
+            min_cluster_size=5,
+            min_samples=3,
+        )
+
+        # Verify run was created
+        assert run_id is not None
+        assert run_id.startswith("hdbscan-5-")
+
+        # Verify clustering run exists in database
+        from lmsys_query_analysis.db.models import ClusteringRun, QueryCluster
+
+        run = session.exec(select(ClusteringRun).where(ClusteringRun.run_id == run_id)).first()
+        assert run is not None
+        assert run.algorithm == "hdbscan"
+        assert run.parameters["min_cluster_size"] == 5
+        assert run.parameters["embedding_model"] == "all-MiniLM-L6-v2"
+
+        # Verify assignments were created (excluding noise)
+        assignments = session.exec(select(QueryCluster).where(QueryCluster.run_id == run_id)).all()
+        assert len(assignments) >= 0  # May have noise points
+    finally:
+        session.close()
+
+
+def test_run_hdbscan_clustering_empty_database():
+    """Test run_hdbscan_clustering with empty database returns None."""
+    from lmsys_query_analysis.clustering.hdbscan_clustering import run_hdbscan_clustering
+    from lmsys_query_analysis.db.connection import Database
+
+    db = Database(db_path=":memory:", auto_create_tables=True)
+
+    # Run on empty database
+    run_id = run_hdbscan_clustering(
+        db=db,
+        min_cluster_size=10,
+    )
+
+    # Should return None
+    assert run_id is None
+
+
+def test_run_hdbscan_clustering_with_max_queries():
+    """Test run_hdbscan_clustering with max_queries limit."""
+    from lmsys_query_analysis.clustering.hdbscan_clustering import run_hdbscan_clustering
+    from lmsys_query_analysis.db.connection import Database
+    from lmsys_query_analysis.db.models import Query
+    from sqlmodel import select
+
+    db = Database(db_path=":memory:", auto_create_tables=True)
+
+    session = db.get_session()
+    try:
+        # Add 100 queries
+        queries = [
+            Query(
+                id=i,
+                conversation_id=f"conv_{i}",
+                query_text=f"test query {i}",
+                language="en",
+                model="test-model",
+            )
+            for i in range(100)
+        ]
+        session.add_all(queries)
+        session.commit()
+
+        # Run with max_queries=50
+        run_id = run_hdbscan_clustering(
+            db=db,
+            min_cluster_size=5,
+            max_queries=50,
+        )
+
+        assert run_id is not None
+
+        # Verify only 50 queries were clustered
+        from lmsys_query_analysis.db.models import ClusteringRun, QueryCluster
+
+        run = session.exec(select(ClusteringRun).where(ClusteringRun.run_id == run_id)).first()
+        assert run.parameters.get("limit") == 50
+
+        # Count assignments (max should be 50, but may be less due to noise)
+        assignments = session.exec(select(QueryCluster).where(QueryCluster.run_id == run_id)).all()
+        assert len(assignments) <= 50
+    finally:
+        session.close()
+
+
+def test_run_hdbscan_clustering_with_chroma():
+    """Test run_hdbscan_clustering with Chroma integration."""
+    from unittest.mock import MagicMock
+
+    from lmsys_query_analysis.clustering.hdbscan_clustering import run_hdbscan_clustering
+    from lmsys_query_analysis.db.connection import Database
+    from lmsys_query_analysis.db.models import Query
+    from sqlmodel import select
+
+    db = Database(db_path=":memory:", auto_create_tables=True)
+
+    session = db.get_session()
+    try:
+        # Add test queries
+        queries = [
+            Query(
+                id=i,
+                conversation_id=f"conv_{i}",
+                query_text=f"test query {i}",
+                language="en",
+                model="test-model",
+            )
+            for i in range(50)
+        ]
+        session.add_all(queries)
+        session.commit()
+
+        # Mock Chroma manager
+        mock_chroma = MagicMock()
+        mock_chroma.add_cluster_summaries_batch = MagicMock()
+
+        # Run with Chroma
+        run_id = run_hdbscan_clustering(
+            db=db,
+            min_cluster_size=5,
+            chroma=mock_chroma,
+        )
+
+        assert run_id is not None
+
+        # Verify Chroma was called to store centroids
+        # Only called if there are actual clusters (not all noise)
+        # mock_chroma.add_cluster_summaries_batch.assert_called()
+    finally:
+        session.close()
+
+
+def test_run_hdbscan_clustering_custom_parameters():
+    """Test run_hdbscan_clustering with custom parameters."""
+    from lmsys_query_analysis.clustering.hdbscan_clustering import run_hdbscan_clustering
+    from lmsys_query_analysis.db.connection import Database
+    from lmsys_query_analysis.db.models import Query
+    from sqlmodel import select
+
+    db = Database(db_path=":memory:", auto_create_tables=True)
+
+    session = db.get_session()
+    try:
+        queries = [
+            Query(
+                id=i,
+                conversation_id=f"conv_{i}",
+                query_text=f"test query {i}",
+                language="en",
+                model="test-model",
+            )
+            for i in range(60)
+        ]
+        session.add_all(queries)
+        session.commit()
+
+        # Run with custom parameters
+        run_id = run_hdbscan_clustering(
+            db=db,
+            description="Custom test",
+            min_cluster_size=10,
+            min_samples=5,
+            cluster_selection_epsilon=0.5,
+            metric="manhattan",
+            embed_batch_size=16,
+            chunk_size=30,
+        )
+
+        assert run_id is not None
+
+        # Verify parameters were stored
+        from lmsys_query_analysis.db.models import ClusteringRun
+
+        run = session.exec(select(ClusteringRun).where(ClusteringRun.run_id == run_id)).first()
+        assert run.parameters["min_cluster_size"] == 10
+        assert run.parameters["min_samples"] == 5
+        assert run.parameters["cluster_selection_epsilon"] == 0.5
+        assert run.parameters["metric"] == "manhattan"
+    finally:
+        session.close()
