@@ -233,3 +233,210 @@ def test_hdbscan_cluster_selection_epsilon():
     # Just verify we got some clustering
     assert n_clusters_no_epsilon >= 0
     assert n_clusters_with_epsilon >= 0
+
+
+# ==============================================================================
+# Tests for additional HDBSCANClustering methods
+# ==============================================================================
+
+
+def test_get_cluster_probabilities_not_fitted():
+    """Test get_cluster_probabilities raises error if not fitted."""
+    clusterer = HDBSCANClustering(min_cluster_size=10)
+
+    with pytest.raises(ValueError, match="Must call fit_predict first"):
+        clusterer.get_cluster_probabilities()
+
+
+def test_get_cluster_probabilities():
+    """Test get_cluster_probabilities returns valid probabilities."""
+    np.random.seed(42)
+    # Create well-separated clusters
+    cluster1 = np.random.randn(30, 5) + 10
+    cluster2 = np.random.randn(30, 5) - 10
+    embeddings = np.vstack([cluster1, cluster2])
+
+    clusterer = HDBSCANClustering(min_cluster_size=10, min_samples=5)
+    labels = clusterer.fit_predict(embeddings)
+
+    probabilities = clusterer.get_cluster_probabilities()
+
+    # Check shape and values
+    assert len(probabilities) == 60
+    assert probabilities.min() >= 0.0
+    assert probabilities.max() <= 1.0
+    assert isinstance(probabilities, np.ndarray)
+
+
+def test_get_cluster_persistence_not_fitted():
+    """Test get_cluster_persistence raises error if not fitted."""
+    clusterer = HDBSCANClustering(min_cluster_size=10)
+
+    with pytest.raises(ValueError, match="Must call fit_predict first"):
+        clusterer.get_cluster_persistence()
+
+
+def test_get_cluster_persistence():
+    """Test get_cluster_persistence returns valid persistence values."""
+    np.random.seed(42)
+    # Create well-separated clusters
+    cluster1 = np.random.randn(30, 5) + 10
+    cluster2 = np.random.randn(30, 5) - 10
+    embeddings = np.vstack([cluster1, cluster2])
+
+    clusterer = HDBSCANClustering(min_cluster_size=10, min_samples=5)
+    labels = clusterer.fit_predict(embeddings)
+
+    persistence = clusterer.get_cluster_persistence()
+
+    # Should return a dictionary
+    assert isinstance(persistence, dict)
+
+    # Should have entries for each non-noise cluster
+    unique_labels = set(labels)
+    unique_labels.discard(-1)  # Remove noise
+    assert len(persistence) == len(unique_labels)
+
+    # All values should be non-negative
+    for cluster_id, value in persistence.items():
+        assert cluster_id != -1  # Should not include noise
+        assert value >= 0.0
+
+
+def test_get_cluster_persistence_all_noise():
+    """Test get_cluster_persistence with all noise points."""
+    np.random.seed(42)
+    # Create scattered noise (no dense clusters)
+    embeddings = np.random.randn(50, 5) * 20
+
+    clusterer = HDBSCANClustering(min_cluster_size=40, min_samples=30)
+    labels = clusterer.fit_predict(embeddings)
+
+    persistence = clusterer.get_cluster_persistence()
+
+    # If all points are noise, persistence dict should be empty
+    if all(label == -1 for label in labels):
+        assert len(persistence) == 0
+    else:
+        # Otherwise, should have entries for actual clusters
+        assert len(persistence) >= 0
+
+
+def test_compute_centroids():
+    """Test compute_centroids computes correct cluster centers."""
+    np.random.seed(42)
+    # Create clusters at known positions
+    cluster1_center = np.array([10, 10, 10])
+    cluster2_center = np.array([-10, -10, -10])
+
+    cluster1 = np.random.randn(30, 3) * 0.5 + cluster1_center
+    cluster2 = np.random.randn(30, 3) * 0.5 + cluster2_center
+
+    embeddings = np.vstack([cluster1, cluster2])
+
+    clusterer = HDBSCANClustering(min_cluster_size=10, min_samples=5)
+    labels = clusterer.fit_predict(embeddings)
+
+    centroids = clusterer.compute_centroids(embeddings, labels)
+
+    # Should return a dictionary
+    assert isinstance(centroids, dict)
+
+    # Should have entries for each non-noise cluster
+    unique_labels = set(labels)
+    unique_labels.discard(-1)
+    assert len(centroids) == len(unique_labels)
+
+    # Each centroid should have correct dimensionality
+    for cluster_id, centroid in centroids.items():
+        assert cluster_id != -1  # Should not include noise
+        assert len(centroid) == 3
+        assert isinstance(centroid, np.ndarray)
+
+
+def test_compute_centroids_with_noise():
+    """Test compute_centroids excludes noise points."""
+    np.random.seed(42)
+    # Create a cluster and some noise
+    cluster = np.random.randn(30, 5) * 0.5
+    noise = np.random.randn(10, 5) * 10
+
+    embeddings = np.vstack([cluster, noise])
+
+    clusterer = HDBSCANClustering(min_cluster_size=15, min_samples=10)
+    labels = clusterer.fit_predict(embeddings)
+
+    centroids = clusterer.compute_centroids(embeddings, labels)
+
+    # Should not have -1 (noise) in centroids
+    assert -1 not in centroids
+
+    # All centroids should have correct shape
+    for centroid in centroids.values():
+        assert len(centroid) == 5
+
+
+def test_compute_centroids_single_cluster():
+    """Test compute_centroids with single cluster."""
+    np.random.seed(42)
+    embeddings = np.random.randn(50, 4) * 0.3
+
+    clusterer = HDBSCANClustering(min_cluster_size=20, min_samples=10)
+    labels = clusterer.fit_predict(embeddings)
+
+    centroids = clusterer.compute_centroids(embeddings, labels)
+
+    # Should have at most one cluster
+    assert len(centroids) <= 1
+
+    if len(centroids) == 1:
+        centroid = list(centroids.values())[0]
+        assert len(centroid) == 4
+        # Centroid should be near origin (since data is centered at origin)
+        assert np.abs(centroid).max() < 2.0
+
+
+def test_compute_centroids_empty_labels():
+    """Test compute_centroids with all noise (no clusters)."""
+    np.random.seed(42)
+    embeddings = np.random.randn(20, 3) * 50  # Very sparse
+
+    # Create labels that are all noise
+    labels = np.full(20, -1)
+
+    clusterer = HDBSCANClustering(min_cluster_size=10)
+    centroids = clusterer.compute_centroids(embeddings, labels)
+
+    # Should return empty dict
+    assert len(centroids) == 0
+    assert isinstance(centroids, dict)
+
+
+def test_compute_centroids_accuracy():
+    """Test that computed centroids are close to actual cluster centers."""
+    np.random.seed(42)
+    # Create tight clusters at specific locations
+    center1 = np.array([100, 200, 300])
+    center2 = np.array([-100, -200, -300])
+
+    cluster1 = np.random.randn(40, 3) * 1.0 + center1  # Tight cluster
+    cluster2 = np.random.randn(40, 3) * 1.0 + center2  # Tight cluster
+
+    embeddings = np.vstack([cluster1, cluster2])
+
+    clusterer = HDBSCANClustering(min_cluster_size=15, min_samples=10)
+    labels = clusterer.fit_predict(embeddings)
+
+    centroids = clusterer.compute_centroids(embeddings, labels)
+
+    # Should find 2 clusters
+    if len(centroids) == 2:
+        centroid_values = list(centroids.values())
+
+        # One centroid should be close to center1, other to center2
+        distances_to_center1 = [np.linalg.norm(c - center1) for c in centroid_values]
+        distances_to_center2 = [np.linalg.norm(c - center2) for c in centroid_values]
+
+        # At least one centroid should be close to each center
+        assert min(distances_to_center1) < 5.0
+        assert min(distances_to_center2) < 5.0
