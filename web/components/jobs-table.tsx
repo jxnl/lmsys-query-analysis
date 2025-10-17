@@ -41,13 +41,13 @@ export function JobsTable({ runs }: JobsTableProps) {
             </TableRow>
           ) : (
             runs.map((run) => {
-              // Extract embedding info from parameters
+
               const params = run.parameters as Record<string, unknown> | null | undefined;
               const embeddingProvider = params?.embedding_provider as string | undefined;
               const embeddingModel = params?.embedding_model as string | undefined;
               const embeddingDimension = params?.embedding_dimension as number | undefined;
 
-              // Filter out embedding-related and redundant parameters
+
               const excludeKeys = new Set([
                 "embedding_provider",
                 "embedding_model",

@@ -45,7 +45,6 @@ def test_chroma_manager_collection_naming():
             embedding_dimension=1536,
         )
 
-        # Check collection names
         queries_name = manager.queries_collection.name
         summaries_name = manager.summaries_collection.name
 
@@ -67,7 +66,6 @@ def test_chroma_manager_cohere_with_dimension():
             embedding_dimension=512,
         )
 
-        # Cohere should include dimension in collection name
         queries_name = manager.queries_collection.name
         assert "512" in queries_name or "cohere" in queries_name
 
@@ -99,7 +97,6 @@ def test_chroma_manager_count_queries():
             persist_directory=tmpdir, embedding_model="test-model", embedding_provider="test"
         )
 
-        # Initially should be empty
         count = manager.count_queries()
         assert count == 0
 
@@ -111,7 +108,6 @@ def test_chroma_manager_count_summaries():
             persist_directory=tmpdir, embedding_model="test-model", embedding_provider="test"
         )
 
-        # Initially should be empty
         count = manager.count_summaries()
         assert count == 0
 
@@ -123,7 +119,6 @@ def test_chroma_manager_list_runs():
             persist_directory=tmpdir, embedding_model="test-model", embedding_provider="test"
         )
 
-        # Initially should be empty
         runs = manager.list_runs_in_summaries()
         assert runs == []
 
@@ -140,10 +135,8 @@ def test_chroma_manager_list_all_collections():
 
         collections = manager.list_all_collections()
 
-        # Should have at least 2 collections (queries and summaries)
         assert len(collections) >= 2
 
-        # Each collection should have required fields
         for coll in collections:
             assert "name" in coll
             assert "count" in coll
@@ -153,19 +146,16 @@ def test_chroma_manager_list_all_collections():
 def test_chroma_manager_persistence():
     """Test that collections persist across manager instances."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create manager and collections
         manager1 = ChromaManager(
             persist_directory=tmpdir, embedding_model="test-model", embedding_provider="test"
         )
         queries_name1 = manager1.queries_collection.name
 
-        # Create new manager with same settings
         manager2 = ChromaManager(
             persist_directory=tmpdir, embedding_model="test-model", embedding_provider="test"
         )
         queries_name2 = manager2.queries_collection.name
 
-        # Should reuse same collection
         assert queries_name1 == queries_name2
 
 
@@ -180,7 +170,6 @@ def test_chroma_manager_different_models():
             persist_directory=tmpdir, embedding_model="model-b", embedding_provider="test"
         )
 
-        # Different models should have different collection names
         assert manager1.queries_collection.name != manager2.queries_collection.name
 
 
@@ -193,5 +182,4 @@ def test_chroma_manager_get_query_embeddings_map_empty():
 
         embeddings_map = manager.get_query_embeddings_map([1, 2, 3])
 
-        # Should return empty dict when no queries exist
         assert embeddings_map == {}

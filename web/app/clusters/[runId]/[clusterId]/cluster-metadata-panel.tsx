@@ -31,22 +31,25 @@ export function ClusterMetadataPanel({ metadata, runId, clusterId }: ClusterMeta
     );
   }
 
-  // Render quality badge with appropriate color
+
   const getQualityColor = (quality: string | null) => {
     if (!quality) return "secondary";
     switch (quality) {
       case "high":
-        return "default"; // green
+        return "default";
+
       case "medium":
-        return "secondary"; // yellow
+        return "secondary";
+
       case "low":
-        return "destructive"; // red
+        return "destructive";
+
       default:
         return "secondary";
     }
   };
 
-  // Render coherence stars
+
   const renderCoherenceScore = (score: number | null) => {
     if (!score) return null;
     return (

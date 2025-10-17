@@ -19,7 +19,6 @@ def extended_populated_db(populated_db, db_session):
     """Database with additional data for curation testing."""
     run_id = "test-run-001"
 
-    # Add some cluster metadata
     metadata1 = ClusterMetadata(
         run_id=run_id,
         cluster_id=0,
@@ -39,7 +38,6 @@ def extended_populated_db(populated_db, db_session):
     db_session.add(metadata1)
     db_session.add(metadata2)
 
-    # Add some cluster edits
     edit1 = ClusterEdit(
         run_id=run_id,
         cluster_id=0,
@@ -51,14 +49,12 @@ def extended_populated_db(populated_db, db_session):
     )
     db_session.add(edit1)
 
-    # Get the first query from the database to use for orphaning
     first_query = db_session.exec(select(Query).limit(1)).first()
 
-    # Add an orphaned query using a real query ID
     orphan = OrphanedQuery(
         run_id=run_id,
-        query_id=first_query.id,  # Use real query ID
-        original_cluster_id=2,  # Use a different cluster to avoid conflicts
+        query_id=first_query.id,
+        original_cluster_id=2,
         reason="Quality control removal",
     )
     db_session.add(orphan)
@@ -67,14 +63,10 @@ def extended_populated_db(populated_db, db_session):
     return populated_db
 
 
-# ============================================================================
-# Query Operations Tests
-# ============================================================================
 
 
 def test_get_query_details_found(extended_populated_db):
     """Test getting query details when query exists."""
-    # Get first query from populated data
     with extended_populated_db.get_session() as session:
         query = session.exec(select(Query).limit(1)).first()
         query_id = query.id
@@ -100,7 +92,6 @@ def test_move_query_success(extended_populated_db):
     """Test successfully moving a query between clusters."""
     run_id = "test-run-001"
 
-    # Get a query from cluster 0
     with extended_populated_db.get_session() as session:
         qc = session.exec(
             select(QueryCluster)
@@ -124,7 +115,6 @@ def test_move_query_success(extended_populated_db):
     assert result["to_cluster_id"] == 1
     assert result["reason"] == "Better fit in ML cluster"
 
-    # Verify the query was actually moved
     with extended_populated_db.get_session() as session:
         moved_qc = session.exec(
             select(QueryCluster).where(
@@ -149,7 +139,6 @@ def test_move_query_same_cluster(extended_populated_db):
     """Test moving a query to the same cluster it's already in."""
     run_id = "test-run-001"
 
-    # Get a query from cluster 0
     with extended_populated_db.get_session() as session:
         qc = session.exec(
             select(QueryCluster)
@@ -171,7 +160,6 @@ def test_move_queries_batch_success(extended_populated_db):
     """Test moving multiple queries in batch."""
     run_id = "test-run-001"
 
-    # Get all queries from cluster 0
     with extended_populated_db.get_session() as session:
         query_clusters = session.exec(
             select(QueryCluster).where(
@@ -183,7 +171,7 @@ def test_move_queries_batch_success(extended_populated_db):
     result = curation_service.move_queries_batch(
         extended_populated_db,
         run_id=run_id,
-        query_ids=query_ids[:2],  # Move first 2 queries
+        query_ids=query_ids[:2],
         to_cluster_id=1,
         editor="batch-editor",
         reason="Batch reorganization",
@@ -200,8 +188,7 @@ def test_move_queries_batch_partial_failure(extended_populated_db):
     """Test batch move with some failures."""
     run_id = "test-run-001"
 
-    # Mix valid and invalid query IDs
-    query_ids = [1, 99999, 2]  # 99999 doesn't exist
+    query_ids = [1, 99999, 2]
 
     result = curation_service.move_queries_batch(
         extended_populated_db,
@@ -211,14 +198,11 @@ def test_move_queries_batch_partial_failure(extended_populated_db):
     )
 
     assert result["success"] is False
-    assert result["moved"] >= 1  # At least some valid ones moved
-    assert result["failed"] >= 1  # At least the invalid one failed
+    assert result["moved"] >= 1
+    assert result["failed"] >= 1
     assert len(result["errors"]) >= 1
 
 
-# ============================================================================
-# Cluster Operations Tests
-# ============================================================================
 
 
 def test_rename_cluster_success(extended_populated_db):
@@ -240,7 +224,6 @@ def test_rename_cluster_success(extended_populated_db):
     assert result["new_title"] == "New Python Title"
     assert result["old_title"] == "Python Programming Questions"
 
-    # Verify the change was persisted
     with extended_populated_db.get_session() as session:
         summary = session.exec(
             select(ClusterSummary).where(
@@ -268,7 +251,6 @@ def test_merge_clusters_success(extended_populated_db):
     """Test successfully merging clusters."""
     run_id = "test-run-001"
 
-    # Count queries in each cluster before merge
     with extended_populated_db.get_session() as session:
         cluster0_queries = session.exec(
             select(QueryCluster).where(
@@ -298,7 +280,6 @@ def test_merge_clusters_success(extended_populated_db):
     assert result["queries_moved"] == cluster0_count
     assert result["new_title"] == "Merged Programming Cluster"
 
-    # Verify all queries are now in target cluster
     with extended_populated_db.get_session() as session:
         remaining_in_0 = len(
             session.exec(
@@ -335,7 +316,6 @@ def test_split_cluster_success(extended_populated_db):
     run_id = "test-run-001"
     cluster_id = 0
 
-    # Get some queries from cluster 0 to split
     with extended_populated_db.get_session() as session:
         cluster_queries = session.exec(
             select(QueryCluster)
@@ -361,7 +341,6 @@ def test_split_cluster_success(extended_populated_db):
 
     new_cluster_id = result["new_cluster_id"]
 
-    # Verify queries moved to new cluster
     with extended_populated_db.get_session() as session:
         new_cluster_queries = session.exec(
             select(QueryCluster).where(
@@ -370,7 +349,6 @@ def test_split_cluster_success(extended_populated_db):
         ).all()
         assert len(new_cluster_queries) == len(queries_to_split)
 
-        # Verify summary was created
         new_summary = session.exec(
             select(ClusterSummary).where(
                 and_(
@@ -386,9 +364,8 @@ def test_split_cluster_success(extended_populated_db):
 def test_delete_cluster_with_orphaning(extended_populated_db):
     """Test deleting a cluster and orphaning its queries."""
     run_id = "test-run-001"
-    cluster_id = 1  # Use cluster 1 instead of 0 to avoid the fixture orphan conflict
+    cluster_id = 1
 
-    # Count queries before deletion
     with extended_populated_db.get_session() as session:
         cluster_queries = session.exec(
             select(QueryCluster).where(
@@ -412,7 +389,6 @@ def test_delete_cluster_with_orphaning(extended_populated_db):
     assert result["orphaned"] is True
     assert result["reason"] == "Quality control"
 
-    # Verify queries were orphaned
     with extended_populated_db.get_session() as session:
         orphaned_queries = session.exec(
             select(OrphanedQuery).where(
@@ -431,7 +407,6 @@ def test_delete_cluster_with_reassignment(extended_populated_db):
     source_cluster_id = 0
     target_cluster_id = 1
 
-    # Count queries before deletion
     with extended_populated_db.get_session() as session:
         source_queries = session.exec(
             select(QueryCluster).where(
@@ -459,7 +434,6 @@ def test_delete_cluster_with_reassignment(extended_populated_db):
     assert result["moved_to"] == target_cluster_id
     assert result["orphaned"] is False
 
-    # Verify queries were moved
     with extended_populated_db.get_session() as session:
         target_queries_after = session.exec(
             select(QueryCluster).where(
@@ -483,19 +457,15 @@ def test_delete_cluster_invalid_options(extended_populated_db):
             extended_populated_db,
             run_id="test-run-001",
             cluster_id=0,
-            # Neither orphan=True nor move_to_cluster_id specified
         )
 
 
-# ============================================================================
-# Metadata Operations Tests
-# ============================================================================
 
 
 def test_tag_cluster_new_metadata(extended_populated_db):
     """Test tagging a cluster that has no existing metadata."""
     run_id = "test-run-001"
-    cluster_id = 2  # Cluster without existing metadata
+    cluster_id = 2
 
     result = curation_service.tag_cluster(
         extended_populated_db,
@@ -519,20 +489,20 @@ def test_tag_cluster_new_metadata(extended_populated_db):
 def test_tag_cluster_update_existing(extended_populated_db):
     """Test updating metadata for a cluster that already has it."""
     run_id = "test-run-001"
-    cluster_id = 0  # This cluster has existing metadata
+    cluster_id = 0
 
     result = curation_service.tag_cluster(
         extended_populated_db,
         run_id=run_id,
         cluster_id=cluster_id,
-        coherence_score=5,  # Update from 4 to 5
+        coherence_score=5,
         notes="Updated notes",
         editor="update-editor",
     )
 
     assert result["success"] is True
     assert result["metadata"]["coherence_score"] == 5
-    assert result["metadata"]["quality"] == "high"  # Should remain unchanged
+    assert result["metadata"]["quality"] == "high"
     assert result["metadata"]["notes"] == "Updated notes"
 
 
@@ -560,9 +530,6 @@ def test_get_cluster_metadata_not_found(extended_populated_db):
     assert metadata is None
 
 
-# ============================================================================
-# Audit Operations Tests
-# ============================================================================
 
 
 def test_get_cluster_edit_history_all(extended_populated_db):
@@ -571,10 +538,9 @@ def test_get_cluster_edit_history_all(extended_populated_db):
 
     history = curation_service.get_cluster_edit_history(extended_populated_db, run_id)
 
-    assert len(history) >= 1  # At least the fixture edit
+    assert len(history) >= 1
     assert all(edit.run_id == run_id for edit in history)
 
-    # Check that they're ordered by timestamp descending (most recent first)
     timestamps = [edit.timestamp for edit in history]
     assert timestamps == sorted(timestamps, reverse=True)
 
@@ -588,7 +554,7 @@ def test_get_cluster_edit_history_for_cluster(extended_populated_db):
 
     assert len(history) >= 1
     assert all(edit.cluster_id == cluster_id for edit in history)
-    assert history[0].edit_type == "rename"  # From fixture
+    assert history[0].edit_type == "rename"
 
 
 def test_get_orphaned_queries(extended_populated_db):
@@ -597,11 +563,11 @@ def test_get_orphaned_queries(extended_populated_db):
 
     orphaned = curation_service.get_orphaned_queries(extended_populated_db, run_id)
 
-    assert len(orphaned) >= 1  # At least the fixture orphan
+    assert len(orphaned) >= 1
 
     orphan_record, query = orphaned[0]
     assert orphan_record.run_id == run_id
-    assert orphan_record.original_cluster_id == 2  # Updated to match fixture
+    assert orphan_record.original_cluster_id == 2
     assert orphan_record.reason == "Quality control removal"
 
 
@@ -612,9 +578,6 @@ def test_get_orphaned_queries_empty(temp_db):
     assert len(orphaned) == 0
 
 
-# ============================================================================
-# Batch Operations Tests
-# ============================================================================
 
 
 def test_find_problematic_clusters_by_quality(extended_populated_db):
@@ -640,14 +603,12 @@ def test_find_problematic_clusters_by_size(extended_populated_db):
     """Test finding clusters by size constraints."""
     run_id = "test-run-001"
 
-    # Find large clusters (more than 2 queries)
     large_clusters = curation_service.find_problematic_clusters(
         extended_populated_db, run_id, min_size=3
     )
 
     assert all(cluster["num_queries"] >= 3 for cluster in large_clusters)
 
-    # Find small clusters (less than 3 queries)
     small_clusters = curation_service.find_problematic_clusters(
         extended_populated_db, run_id, max_size=2
     )
@@ -659,7 +620,6 @@ def test_find_problematic_clusters_empty_results(extended_populated_db):
     """Test finding clusters with criteria that match nothing."""
     run_id = "test-run-001"
 
-    # Look for impossibly large clusters
     results = curation_service.find_problematic_clusters(
         extended_populated_db, run_id, min_size=1000
     )

@@ -94,14 +94,13 @@ def extract_first_query(conversation: list[dict] | None) -> str | None:
     return None
 
 
-# Optional fast JSON parsing
-try:  # pragma: no cover - speed optimization only
-    import orjson as _fastjson  # type: ignore
+try:
+    import orjson as _fastjson
 
     def _json_loads(s: str) -> Any:
         return _fastjson.loads(s)
 
-except Exception:  # pragma: no cover
+except Exception:
 
     def _json_loads(s: str) -> Any:
         return json.loads(s)
@@ -125,12 +124,12 @@ class HuggingFaceAdapter:
         is_conversation_format: Whether to parse as conversation JSON (default: True)
 
     Example:
-        >>> # Default LMSYS format
+        >>>
         >>> adapter = HuggingFaceAdapter("lmsys/lmsys-chat-1m", limit=100)
         >>> for record in adapter:
         ...     print(record["query_text"])
 
-        >>> # Simple prompt format
+        >>>
         >>> adapter = HuggingFaceAdapter(
         ...     "fka/awesome-chatgpt-prompts",
         ...     query_column="prompt",
@@ -164,7 +163,6 @@ class HuggingFaceAdapter:
         self.query_column = query_column
         self.is_conversation_format = is_conversation_format
 
-        # Load the dataset
         if use_streaming:
             self._dataset: Dataset | IterableDataset = load_dataset(
                 dataset_name, split=split, streaming=True
@@ -172,7 +170,6 @@ class HuggingFaceAdapter:
         else:
             self._dataset = load_dataset(dataset_name, split=split)
 
-            # Apply limit if specified (only for non-streaming)
             if limit is not None:
                 dataset_len = len(self._dataset)
                 self._dataset = self._dataset.select(range(min(limit, dataset_len)))
@@ -192,18 +189,14 @@ class HuggingFaceAdapter:
         count = 0
 
         for row in self._dataset:
-            # Apply limit for streaming mode
             if self.use_streaming and self.limit is not None:
                 if count >= self.limit:
                     break
                 count += 1
 
-            # Get or generate conversation_id
             conversation_id = self._get_or_generate_conversation_id(row)
 
-            # Extract query text based on schema format
             if self.is_conversation_format:
-                # LMSYS conversation format: parse JSON and extract first user query
                 conversation = row.get(self.query_column)
                 if isinstance(conversation, str):
                     try:
@@ -215,17 +208,14 @@ class HuggingFaceAdapter:
                 if query_text is None:
                     continue
 
-                # Build extra metadata for conversation format
                 extra_metadata = {
                     "turn_count": len(conversation) if conversation else 0,
                     "redacted": row.get("redacted", False),
                 }
 
-                # Include openai_moderation if present
                 if "openai_moderation" in row:
                     extra_metadata["openai_moderation"] = row.get("openai_moderation")
             else:
-                # Simple prompt format: read directly from column
                 query_text = row.get(self.query_column)
                 if not query_text or not isinstance(query_text, str):
                     continue
@@ -234,10 +224,8 @@ class HuggingFaceAdapter:
                 if not query_text:
                     continue
 
-                # Build extra metadata for prompt format
                 extra_metadata = {}
 
-                # Include any additional fields from row as metadata
                 for key, value in row.items():
                     if key not in [
                         self.query_column,
@@ -248,12 +236,10 @@ class HuggingFaceAdapter:
                     ]:
                         extra_metadata[key] = value
 
-            # Extract common metadata
             model = row.get("model", "unknown")
             language = row.get("language") or None
             timestamp = row.get("timestamp")
 
-            # Yield normalized record
             yield {
                 "conversation_id": conversation_id,
                 "query_text": query_text,
@@ -272,7 +258,6 @@ class HuggingFaceAdapter:
         if self.use_streaming:
             return None
 
-        # For non-streaming with limit applied
         return len(self._dataset)
 
     @staticmethod
@@ -289,9 +274,7 @@ class HuggingFaceAdapter:
         Returns:
             Conversation ID string (from row or newly generated UUID)
         """
-        # Check if row has conversation_id field
         if "conversation_id" in row and row["conversation_id"]:
             return str(row["conversation_id"])
 
-        # Generate random UUID for datasets without conversation_id
         return str(uuid.uuid4())

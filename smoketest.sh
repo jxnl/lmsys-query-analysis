@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Smoke test for lmsys-query-analysis
-# Runs a small, end-to-end check using a temp SQLite DB and Chroma dir.
-# Usage:
-#   bash smoketest.sh                # full run (requires network + HF access)
-#   SMOKE_LIMIT=500 bash smoketest.sh
-#   SMOKE_OFFLINE=1 bash smoketest.sh  # seed minimal data if load fails
 
 UV_CMD=${UV_CMD:-uv}
 LIMIT=${SMOKE_LIMIT:-500}
@@ -55,7 +49,7 @@ from lmsys_query_analysis.db.connection import Database
 from lmsys_query_analysis.db.models import Query
 import os
 
-db = Database(os.environ["DB_PATH"])  # pragma: no cover
+db = Database(os.environ["DB_PATH"])
 db.create_tables()
 texts = [
     "How do I install Python?",
@@ -155,7 +149,6 @@ log "Test hierarchical merge"
 if $UV_CMD run lmsys merge-clusters "$RUN_ID" --db-path "$DB_PATH" --num-levels 2 >/dev/null 2>&1; then
   ok "Hierarchical merge completed"
   
-  # Check hierarchy was created
   HIER_COUNT=$($UV_CMD run python - <<'PY'
 from sqlmodel import select, func
 from lmsys_query_analysis.db.connection import Database

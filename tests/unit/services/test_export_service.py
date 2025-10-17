@@ -10,8 +10,7 @@ def test_get_export_data(populated_db):
     """Test getting export data for a run."""
     data = export_service.get_export_data(populated_db, "test-run-001")
 
-    assert len(data) == 5  # 5 queries in test-run-001
-    # Each tuple is (Query, QueryCluster, ClusterSummary)
+    assert len(data) == 5
     query, qc, summary = data[0]
     assert query.id is not None
     assert qc.run_id == "test-run-001"
@@ -35,7 +34,6 @@ def test_export_to_csv(populated_db, temp_dir):
     assert count == 5
     assert output_path.exists()
 
-    # Verify CSV content
     with open(output_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
@@ -57,7 +55,6 @@ def test_export_to_json(populated_db, temp_dir):
     assert count == 5
     assert output_path.exists()
 
-    # Verify JSON content
     with open(output_path, encoding="utf-8") as f:
         json_data = json.load(f)
 
@@ -78,11 +75,10 @@ def test_export_to_csv_empty(temp_db, temp_dir):
     assert count == 0
     assert output_path.exists()
 
-    # Should still have header
     with open(output_path, encoding="utf-8") as f:
         reader = csv.reader(f)
         rows = list(reader)
-        assert len(rows) == 1  # Just header
+        assert len(rows) == 1
 
 
 def test_export_to_json_preserves_unicode(populated_db, temp_dir):
@@ -92,10 +88,8 @@ def test_export_to_json_preserves_unicode(populated_db, temp_dir):
 
     export_service.export_to_json(str(output_path), data)
 
-    # Read and verify unicode is preserved
     with open(output_path, encoding="utf-8") as f:
         content = f.read()
         json_data = json.loads(content)
 
-        # Should not have escaped unicode
         assert "\\u" not in content or len(json_data) > 0

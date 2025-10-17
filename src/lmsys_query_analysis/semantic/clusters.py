@@ -56,7 +56,6 @@ class ClustersClient:
             params = run.parameters or {}
             embedding_model = params.get("embedding_model", "text-embedding-3-small")
             embedding_provider = params.get("embedding_provider", "openai")
-            # Cohere Matryoshka default to 256 if not specified
             embedding_dimension = params.get("embedding_dimension")
             if embedding_provider == "cohere" and embedding_dimension is None:
                 embedding_dimension = 256
@@ -91,13 +90,10 @@ class ClustersClient:
             alias: Optional summary alias filter
             summary_run_id: Optional summary run filter
         """
-        # Resolve filters
         effective_run = run_id or self._run_id
 
-        # Embed search text in the configured vector space
         vec = self.embedder.generate_embeddings([text], batch_size=1, show_progress=False)[0]
 
-        # Search summaries in Chroma (filter by run when provided)
         results = self.chroma.search_cluster_summaries(
             query_text=text,
             run_id=effective_run,
@@ -113,7 +109,6 @@ class ClustersClient:
             dists = results.get("distances", [[]])[0]
 
             for cid, _doc, meta, dist in zip(ids, docs, metas, dists, strict=False):
-                # Optional post-filter by alias/summary_run_id
                 if alias and meta.get("alias") != alias:
                     continue
                 if summary_run_id and meta.get("summary_run_id") != summary_run_id:
@@ -124,7 +119,6 @@ class ClustersClient:
                     else None
                 )
                 if cluster_id is None:
-                    # Try to parse from id like "cluster_{run}_{id}"
                     try:
                         if isinstance(cid, str) and "_" in cid:
                             cluster_id = int(cid.split("_")[-1])
@@ -143,7 +137,6 @@ class ClustersClient:
                     )
                 )
 
-        # Already ordered by distance from Chroma; truncate to top_k
         return hits[:top_k]
 
     def count(
@@ -154,20 +147,15 @@ class ClustersClient:
         summary_run_id: str | None = None,
     ) -> int:
         """Return count of matching clusters (after filters)."""
-        # Simple implementation: call find() with a high top_k and count
         top_k = 1000
         if text is None:
-            # If no text, estimate by counting summaries in Chroma for run
-            # and optionally post-filter in a lightweight way
             _results = self.chroma.search_cluster_summaries(
-                query_text="*",  # Chroma requires a string; wildcard won't match, so fall back to get
+                query_text="*",
                 run_id=run_id or self._run_id,
                 n_results=1,
                 query_embedding=None,
             )
-            # Fallback to summaries count API
             total = self.chroma.count_summaries(run_id or self._run_id)
-            # alias/summary_run_id filtering would require scanning; skip for now
             return int(total)
         return len(
             self.find(
@@ -179,7 +167,6 @@ class ClustersClient:
             )
         )
 
-    # --- Utilities ---
     def resolve_space(self) -> RunSpace:
         """Return the active run/vector-space configuration."""
         return RunSpace(

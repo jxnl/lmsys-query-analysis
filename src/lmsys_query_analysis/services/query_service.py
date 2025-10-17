@@ -26,9 +26,7 @@ def list_queries(
         List of Query objects
     """
     with db.get_session() as session:
-        # Build query with filters
         if run_id and cluster_id:
-            # Filter by run and cluster
             statement = (
                 select(Query)
                 .join(QueryCluster, Query.id == QueryCluster.query_id)
@@ -37,7 +35,6 @@ def list_queries(
                 .limit(limit)
             )
         elif run_id:
-            # Filter by run only
             statement = (
                 select(Query)
                 .join(QueryCluster, Query.id == QueryCluster.query_id)
@@ -45,7 +42,6 @@ def list_queries(
                 .limit(limit)
             )
         else:
-            # No run filter, just list queries
             statement = select(Query).limit(limit)
             if model:
                 statement = statement.where(Query.model == model)

@@ -76,7 +76,6 @@ def test_get_embedding_dimension_case_sensitive():
     """Test that provider name is case-sensitive."""
     dim = get_embedding_dimension("Cohere")
 
-    # Should not match "cohere", so returns None
     assert dim is None
 
 
@@ -90,7 +89,7 @@ def test_create_chroma_client_cohere():
         assert client is not None
         assert client.embedding_model == "embed-v4.0"
         assert client.embedding_provider == "cohere"
-        assert client.embedding_dimension == 256  # Cohere default
+        assert client.embedding_dimension == 256
 
 
 def test_create_chroma_client_openai():
@@ -105,7 +104,7 @@ def test_create_chroma_client_openai():
         assert client is not None
         assert client.embedding_model == "text-embedding-3-small"
         assert client.embedding_provider == "openai"
-        assert client.embedding_dimension is None  # OpenAI uses provider default
+        assert client.embedding_dimension is None
 
 
 def test_create_embedding_generator_sentence_transformers():
@@ -126,7 +125,6 @@ def test_create_queries_client_without_run_id():
         db = Database(":memory:")
         db.create_tables()
 
-        # Use sentence-transformers which doesn't require API keys
         client = create_queries_client(
             db=db,
             run_id=None,
@@ -156,7 +154,6 @@ def test_create_clusters_client_without_run_id():
         db = Database(":memory:")
         db.create_tables()
 
-        # Use sentence-transformers which doesn't require API keys
         client = create_clusters_client(
             db=db,
             run_id=None,
@@ -174,7 +171,6 @@ def test_create_clusters_client_with_different_providers():
         db = Database(":memory:")
         db.create_tables()
 
-        # Test with sentence-transformers
         client = create_clusters_client(
             db=db,
             run_id=None,

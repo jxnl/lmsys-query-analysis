@@ -20,7 +20,7 @@ import { apiFetch } from "@/lib/api";
 type ClusterHierarchy = components["schemas"]["HierarchyNode"];
 type Query = components["schemas"]["QueryResponse"];
 
-// Context for managing expand/collapse state
+
 const ExpandContext = createContext<{
   expandAll: boolean;
   toggleExpandAll: () => void;
@@ -41,28 +41,29 @@ export function HierarchyTree({
 }: HierarchyTreeProps) {
   const [expandAll, setExpandAll] = useState(false);
 
-  // Build tree structure - find root nodes (no parent)
+
   const rootNodes = nodes.filter((n) => n.parent_cluster_id === null);
 
-  // Calculate total queries from hierarchy nodes (they now include query_count)
+
   const totalQueries = nodes
-    .filter((n) => n.level === 0) // Only count leaf nodes to avoid double-counting
+    .filter((n) => n.level === 0)
+
     .reduce((sum, n) => sum + (n.query_count || 0), 0);
 
-  // Calculate hierarchy stats
+
   const maxLevel = Math.max(...nodes.map((n) => n.level), 0);
   const leafCount = nodes.filter((n) => !n.children_ids || n.children_ids.length === 0).length;
 
-  // Helper to calculate total query count for any node (including descendants)
+
   const getTotalQueryCount = (nodeId: number): number => {
     const currentNode = nodes.find((n) => n.cluster_id === nodeId);
     if (!currentNode) return 0;
 
-    // Use the query_count from the node directly (API now calculates this)
+
     return currentNode.query_count || 0;
   };
 
-  // Sort root nodes by query count (descending)
+
   const sortedRootNodes = [...rootNodes].sort((a, b) => {
     const countA = getTotalQueryCount(a.cluster_id);
     const countB = getTotalQueryCount(b.cluster_id);
@@ -80,7 +81,7 @@ export function HierarchyTree({
   return (
     <ExpandContext.Provider value={{ expandAll, toggleExpandAll: () => setExpandAll(!expandAll) }}>
       <div className="space-y-4">
-        {/* Header with stats and controls */}
+        {}
         <div className="flex items-center justify-between pb-2 border-b">
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <span>{nodes.length} clusters</span>
@@ -115,7 +116,7 @@ export function HierarchyTree({
           </div>
         </div>
 
-        {/* Tree */}
+        {}
         <div className="space-y-3">
           {sortedRootNodes.map((node) => (
             <TreeNode
@@ -161,19 +162,19 @@ function TreeNode({
   const [showAllQueries, setShowAllQueries] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
 
-  // Respond to expand/collapse all
+
   useEffect(() => {
     if (expandContext) {
       setIsOpen(expandContext.expandAll);
     }
   }, [expandContext]);
 
-  // Find children nodes
+
   const children = node.children_ids
     ? nodes.filter((n) => node.children_ids?.includes(n.cluster_id))
     : [];
 
-  // Sort children by total query count (descending)
+
   const sortedChildren = [...children].sort((a, b) => {
     const countA = getTotalQueryCount(a.cluster_id);
     const countB = getTotalQueryCount(b.cluster_id);
@@ -181,21 +182,21 @@ function TreeNode({
   });
 
   const isLeaf = sortedChildren.length === 0;
-  // Use the query_count from the node directly (API now includes it)
+
   const queryCount = node.query_count || 0;
 
-  // Calculate total query count for this node (including all descendants)
+
   const totalQueryCount = getTotalQueryCount(node.cluster_id);
 
-  // Calculate percentage relative to parent's total
-  // For root nodes, use global totalQueries; for children, calculate parent's total
+
+
   let parentTotal = totalQueries;
   if (node.parent_cluster_id !== null && node.parent_cluster_id !== undefined) {
     parentTotal = getTotalQueryCount(node.parent_cluster_id);
   }
   const percentage = parentTotal > 0 ? (totalQueryCount / parentTotal) * 100 : 0;
 
-  // Determine size category for color coding
+
   const getSizeCategory = (): "large" | "medium" | "small" => {
     if (percentage >= 10) return "large";
     if (percentage >= 3) return "medium";
@@ -203,7 +204,7 @@ function TreeNode({
   };
   const sizeCategory = getSizeCategory();
 
-  // Build hierarchy path (from root to this node)
+
   const buildHierarchyPath = (): string[] => {
     const path: string[] = [];
     let currentId: number | null = node.cluster_id;
@@ -221,11 +222,11 @@ function TreeNode({
     return path;
   };
 
-  // Copy cluster metadata to clipboard
+
   const copyMetadata = async () => {
     const hierarchyPath = buildHierarchyPath();
 
-    // Fetch sample queries if not already loaded
+
     let sampleQueries = queries;
     if (isLeaf && sampleQueries.length === 0) {
       try {
@@ -322,7 +323,7 @@ ${JSON.stringify(
     }
   };
 
-  // Load queries when leaf node is opened
+
   useEffect(() => {
     if (isLeaf && isOpen && queries.length === 0) {
       setIsLoadingQueries(true);
@@ -350,7 +351,7 @@ ${JSON.stringify(
   return (
     <div className="border-l-2 border-border pl-4">
       {isLeaf ? (
-        // Leaf node - collapsible to show queries
+
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
           <div
             className={`rounded-lg border transition-all ${
@@ -395,7 +396,7 @@ ${JSON.stringify(
                     {queryCount.toLocaleString()} queries ({percentage.toFixed(1)}%)
                   </span>
                 </div>
-                {/* Visual progress bar */}
+                {}
                 <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all ${
@@ -493,7 +494,7 @@ ${JSON.stringify(
           </div>
         </Collapsible>
       ) : (
-        // Parent node - collapsible
+
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
           <div
             className={`rounded-lg border transition-all ${
@@ -534,7 +535,7 @@ ${JSON.stringify(
                     • {sortedChildren.length} {sortedChildren.length === 1 ? "child" : "children"}
                   </span>
                 </div>
-                {/* Visual progress bar */}
+                {}
                 <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all ${

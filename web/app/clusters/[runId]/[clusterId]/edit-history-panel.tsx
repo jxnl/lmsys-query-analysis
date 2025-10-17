@@ -72,7 +72,7 @@ export function EditHistoryPanel({ edits }: EditHistoryPanelProps) {
 
               {edit.reason && <p className="text-sm text-muted-foreground mt-1">{edit.reason}</p>}
 
-              {/* Show change details for specific edit types */}
+              {}
               {edit.edit_type === "rename" && edit.old_value && edit.new_value && (
                 <div className="mt-2 text-xs">
                   <div className="text-muted-foreground">

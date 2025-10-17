@@ -7,7 +7,6 @@ from fastapi.responses import JSONResponse
 
 from .routers import analysis, clustering, curation, hierarchy, search, summaries
 
-# Create FastAPI app
 app = FastAPI(
     title="LMSYS Query Analysis API",
     description="REST API for clustering, search, and analysis of conversational queries",
@@ -17,13 +16,11 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
-# Configure CORS to allow Next.js frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",  # Next.js dev server
-        "http://localhost:8000",  # FastAPI dev server (for testing)
-        # Add production origins here when deployed
+        "http://localhost:3000",
+        "http://localhost:8000",
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -31,7 +28,6 @@ app.add_middleware(
 )
 
 
-# ===== Error Handlers =====
 
 
 @app.exception_handler(RequestValidationError)
@@ -76,7 +72,6 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# ===== Health Check =====
 
 
 @app.get("/api/health", tags=["health"])
@@ -85,7 +80,6 @@ async def health_check():
     return {"status": "ok", "service": "lmsys-query-analysis"}
 
 
-# ===== Register Routers =====
 
 app.include_router(clustering.router, prefix="/api/clustering", tags=["clustering"])
 app.include_router(analysis.router, prefix="/api", tags=["analysis"])
@@ -95,7 +89,6 @@ app.include_router(search.router, prefix="/api/search", tags=["search"])
 app.include_router(curation.router, prefix="/api/curation", tags=["curation"])
 
 
-# ===== Root Endpoint =====
 
 
 @app.get("/", tags=["root"])
@@ -109,7 +102,6 @@ async def root():
     }
 
 
-# ===== CLI Entry Point =====
 
 
 def main():

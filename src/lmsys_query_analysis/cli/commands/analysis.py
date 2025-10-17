@@ -22,7 +22,6 @@ def list_queries(
     xml: bool = xml_output_option,
 ):
     """List queries with optional filtering by run_id and cluster_id."""
-    # Validate format options
     if table and xml:
         console.print("[red]Error: Cannot specify both --table and --xml[/red]")
         raise typer.Exit(1)
@@ -34,12 +33,10 @@ def list_queries(
         console.print("[yellow]No queries found for given filters[/yellow]")
         return
 
-    # Output in requested format
     if xml:
         xml_output = json_output.format_queries_xml(queries, f"Queries ({len(queries)} shown)")
         console.print(xml_output)
     else:
-        # Default to table format
         table_output = tables.format_queries_table(queries)
         console.print(table_output)
 
@@ -52,7 +49,6 @@ def runs(
     xml: bool = xml_output_option,
 ):
     """List all clustering runs."""
-    # Validate format options
     if table and xml:
         console.print("[red]Error: Cannot specify both --table and --xml[/red]")
         raise typer.Exit(1)
@@ -64,12 +60,10 @@ def runs(
         console.print("[yellow]No clustering runs found[/yellow]")
         return
 
-    # Output in requested format
     if xml:
         xml_output = json_output.format_runs_xml(runs_list, latest=latest)
         console.print(xml_output)
     else:
-        # Default to table format
         table_output = tables.format_runs_table(runs_list, latest=latest)
         console.print(table_output)
 
@@ -87,7 +81,6 @@ def list_clusters(
     xml: bool = xml_output_option,
 ):
     """List all clusters for a run with their titles and descriptions."""
-    # Validate format options
     if table and xml:
         console.print("[red]Error: Cannot specify both --table and --xml[/red]")
         raise typer.Exit(1)
@@ -100,18 +93,15 @@ def list_clusters(
         console.print(f"[cyan]Run 'lmsys summarize {run_id}' to generate summaries[/cyan]")
         return
 
-    # Output in requested format
     if xml:
         xml_output = json_output.format_cluster_summaries_xml(summaries, run_id)
         console.print(xml_output)
     else:
-        # Default to table format
         table_output = tables.format_cluster_summaries_table(
             summaries, run_id, show_examples, example_width
         )
         console.print(table_output)
 
-        # Display examples in detail if requested (only for table format)
         if show_examples and show_examples > 0:
             console.print("\n[bold cyan]Examples per cluster[/bold cyan]")
             for summary in summaries:
@@ -140,17 +130,14 @@ def inspect(
     """Inspect specific cluster in detail."""
     db = get_db(db_path)
 
-    # Get cluster summary
     summary = cluster_service.get_cluster_summary(db, run_id, cluster_id)
 
-    # Get queries in cluster
     queries = query_service.get_cluster_queries(db, run_id, cluster_id)
 
     if not queries:
         console.print(f"[yellow]No queries found in cluster {cluster_id}[/yellow]")
         return
 
-    # Display cluster info
     console.print(f"\n[cyan]{'=' * 80}[/cyan]")
     console.print(f"[bold cyan]Cluster {cluster_id} from run {run_id}[/bold cyan]")
     console.print(f"[cyan]{'=' * 80}[/cyan]\n")
@@ -162,7 +149,6 @@ def inspect(
 
     console.print(f"[bold green]Total Queries:[/bold green] {len(queries)}\n")
 
-    # Show sample queries
     console.print(
         f"[bold yellow]Sample Queries (showing {min(show_queries, len(queries))}):[/bold yellow]\n"
     )
@@ -191,7 +177,6 @@ def export(
     """Export cluster results to file."""
     db = get_db(db_path)
 
-    # Get export data
     data = export_service.get_export_data(db, run_id)
 
     if not data:
@@ -200,7 +185,6 @@ def export(
 
     console.print(f"[cyan]Exporting {len(data)} queries...[/cyan]")
 
-    # Export based on format
     if format == "csv":
         count = export_service.export_to_csv(output, data)
     elif format == "json":

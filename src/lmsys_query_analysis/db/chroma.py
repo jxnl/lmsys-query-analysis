@@ -22,16 +22,11 @@ def sanitize_collection_name(name: str) -> str:
     - Start and end with alphanumeric
     - Only contain alphanumeric, underscores, or hyphens
     """
-    # Replace dots, slashes, and invalid chars with underscores
     name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
-    # Remove consecutive underscores
     name = re.sub(r"_+", "_", name)
-    # Ensure starts/ends with alphanumeric
     name = name.strip("_-")
-    # Truncate if too long
     if len(name) > 63:
         name = name[:63].rstrip("_-")
-    # Ensure minimum length
     if len(name) < 3:
         name = name + "_default"
     return name
@@ -71,8 +66,6 @@ class ChromaManager:
             settings=Settings(anonymized_telemetry=False),
         )
 
-        # Create model-specific collection names
-        # Optionally include dimension in suffix (useful for Cohere Matryoshka)
         dim_part = (
             f"_{embedding_dimension}"
             if (embedding_provider == "cohere" and embedding_dimension)
@@ -82,7 +75,6 @@ class ChromaManager:
         queries_name = f"queries_{model_suffix}"
         summaries_name = f"summaries_{model_suffix}"
 
-        # Collection for all queries (model-specific)
         q_meta = {
             "description": f"User queries with {embedding_provider}/{embedding_model} embeddings",
             "embedding_model": embedding_model,
@@ -95,7 +87,6 @@ class ChromaManager:
             metadata=q_meta,
         )
 
-        # Collection for cluster summaries (model-specific, filtered by run_id in metadata)
         s_meta = {
             "description": f"Cluster summaries with {embedding_provider}/{embedding_model} embeddings",
             "embedding_model": embedding_model,
@@ -123,10 +114,8 @@ class ChromaManager:
             embeddings: Numpy array of embeddings
             metadata: List of metadata dicts (model, language, etc.)
         """
-        # Convert IDs to ChromaDB format
         chroma_ids = [f"query_{qid}" for qid in query_ids]
 
-        # Add SQLite ID to metadata for reference
         enriched_metadata = [
             {**meta, "query_id": qid} for meta, qid in zip(metadata, query_ids, strict=False)
         ]
@@ -161,7 +150,6 @@ class ChromaManager:
         """
         chroma_id = f"cluster_{run_id}_{cluster_id}"
 
-        # Use title + description if available, otherwise fall back to summary
         if title and description:
             document_text = f"{title}\n\n{description}"
             enriched_metadata = {
@@ -209,14 +197,13 @@ class ChromaManager:
         """
         chroma_ids = [f"cluster_{run_id}_{cid}" for cid in cluster_ids]
 
-        # Use titles + descriptions if available
         if titles and descriptions:
             documents = [
                 f"{title}\n\n{desc}" for title, desc in zip(titles, descriptions, strict=False)
             ]
             enriched_metadata = [
                 {
-                    **{k: v for k, v in meta.items() if v is not None},  # Filter out None values
+                    **{k: v for k, v in meta.items() if v is not None},
                     "run_id": run_id,
                     "cluster_id": int(cid),
                     "title": title,
@@ -230,14 +217,13 @@ class ChromaManager:
             documents = summaries
             enriched_metadata = [
                 {
-                    **{k: v for k, v in meta.items() if v is not None},  # Filter out None values
+                    **{k: v for k, v in meta.items() if v is not None},
                     "run_id": run_id,
                     "cluster_id": int(cid),
                 }
                 for meta, cid in zip(metadata_list, cluster_ids, strict=False)
             ]
 
-        # Use upsert to update existing entries or create new ones
         self.summaries_collection.upsert(
             ids=chroma_ids,
             embeddings=embeddings.tolist(),
@@ -340,7 +326,6 @@ class ChromaManager:
                 results.get("ids", []), results.get("embeddings", []), strict=False
             ):
                 if cid and emb is not None and len(emb) > 0:
-                    # Extract integer query_id from "query_{id}"
                     try:
                         qid = int(str(cid).split("_")[1]) if "_" in str(cid) else int(cid)
                         id_to_embedding[qid] = np.array(emb, dtype=float)
@@ -367,7 +352,6 @@ class ChromaManager:
         Returns:
             List of run_ids
         """
-        # Get all summaries and extract unique run_ids
         all_summaries = self.summaries_collection.get()
         run_ids = set()
         if all_summaries and all_summaries["metadatas"]:

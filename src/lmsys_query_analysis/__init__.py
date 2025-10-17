@@ -8,11 +8,9 @@ from .config import RunnerConfig, load_config_from_yaml, save_config_to_yaml
 from .runner import AnalysisRunner, BaseCluster, run_analysis
 
 __all__ = [
-    # Runner API
     "AnalysisRunner",
     "run_analysis",
     "BaseCluster",
-    # Configuration
     "RunnerConfig",
     "load_config_from_yaml",
     "save_config_to_yaml",

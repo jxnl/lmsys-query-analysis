@@ -16,13 +16,13 @@ interface AuditLogPageProps {
 export default async function AuditLogPage({ params }: AuditLogPageProps) {
   const { runId } = await params;
 
-  // Fetch run metadata
+
   const run = await apiFetch<ClusteringRun>(`/api/clustering/runs/${runId}`);
   if (!run) {
     notFound();
   }
 
-  // Fetch all edits for this run
+
   const editsResponse = await apiFetch<{
     items: ClusterEdit[];
     total: number;
@@ -113,7 +113,7 @@ export default async function AuditLogPage({ params }: AuditLogPageProps) {
                     <p className="text-sm text-muted-foreground mb-2">{edit.reason}</p>
                   )}
 
-                  {/* Show detailed changes */}
+                  {}
                   {edit.edit_type === "rename" && edit.old_value && edit.new_value && (
                     <div className="mt-2 p-2 bg-muted rounded text-xs">
                       <div className="font-medium mb-1">Title Change:</div>

@@ -33,10 +33,8 @@ async def list_queries(
 
     Returns paginated list of queries with metadata.
     """
-    # Get queries from service (uses existing service layer)
     all_queries = query_service.list_queries(db, run_id, cluster_id, model, limit=10000)
 
-    # Calculate pagination
     total = len(all_queries)
     pages = (total + limit - 1) // limit
     start = (page - 1) * limit
@@ -73,7 +71,6 @@ async def get_cluster_detail(
     - Paginated list of queries in the cluster
     - Query count and percentage of run
     """
-    # Get cluster summary
     summary = cluster_service.get_cluster_summary(db, run_id, cluster_id)
     if not summary:
         raise HTTPException(
@@ -86,10 +83,8 @@ async def get_cluster_detail(
             },
         )
 
-    # Get queries in cluster
     all_queries = query_service.get_cluster_queries(db, run_id, cluster_id)
 
-    # Calculate pagination
     total = len(all_queries)
     pages = (total + limit - 1) // limit
     start = (page - 1) * limit
@@ -97,7 +92,6 @@ async def get_cluster_detail(
 
     query_items = [QueryResponse.model_validate(q) for q in all_queries[start:end]]
 
-    # Calculate percentage
     from sqlmodel import func, select
 
     from ...db.models import QueryCluster

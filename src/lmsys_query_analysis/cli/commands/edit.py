@@ -12,9 +12,6 @@ app = typer.Typer(help="Edit and curate clusters")
 console = Console()
 
 
-# ============================================================================
-# Query Operations
-# ============================================================================
 
 
 @app.command()
@@ -34,14 +31,12 @@ def view_query(
     query = details["query"]
     clusters = details["clusters"]
 
-    # Display query info
     console.print(f"\n[bold cyan]Query {query_id}[/bold cyan]")
     console.print(f"[yellow]Text:[/yellow] {query.query_text}")
     console.print(f"[yellow]Model:[/yellow] {query.model}")
     console.print(f"[yellow]Language:[/yellow] {query.language or 'unknown'}")
     console.print(f"[yellow]Conversation:[/yellow] {query.conversation_id}")
 
-    # Display cluster assignments
     if clusters:
         console.print(f"\n[bold yellow]Cluster Assignments ({len(clusters)}):[/bold yellow]")
         table = Table(show_header=True)
@@ -104,9 +99,6 @@ def move_queries(
             console.print(f"  [red]Query {error['query_id']}: {error['error']}[/red]")
 
 
-# ============================================================================
-# Cluster Operations
-# ============================================================================
 
 
 @app.command()
@@ -215,9 +207,6 @@ def delete_cluster(
         console.print(f"  [yellow]Reason:[/yellow] {reason}")
 
 
-# ============================================================================
-# Metadata Operations
-# ============================================================================
 
 
 @app.command()
@@ -265,11 +254,9 @@ def flag_cluster(
     """Flag a cluster for review."""
     db = get_db(db_path)
 
-    # Get existing metadata
     metadata = curation_service.get_cluster_metadata(db, run_id, cluster_id)
     existing_flags = metadata.flags if metadata and metadata.flags else []
 
-    # Add new flag if not already present
     if flag not in existing_flags:
         existing_flags.append(flag)
 
@@ -279,9 +266,6 @@ def flag_cluster(
     console.print(f"  [yellow]Flags:[/yellow] {', '.join(result['metadata']['flags'])}")
 
 
-# ============================================================================
-# Audit Operations
-# ============================================================================
 
 
 @app.command()
@@ -333,7 +317,6 @@ def audit(
     db_path: str = db_path_option,
 ):
     """Show full audit log for a run."""
-    # Alias for history command
     db = get_db(db_path)
     edits = curation_service.get_cluster_edit_history(db, run_id)
 
@@ -341,7 +324,6 @@ def audit(
         console.print("[yellow]No audit log found[/yellow]")
         return
 
-    # Filter by date if provided
     if since:
         from datetime import datetime
 
@@ -411,9 +393,6 @@ def orphaned(
     console.print(f"\n[cyan]Total: {len(orphans)} orphaned queries[/cyan]")
 
 
-# ============================================================================
-# Batch Operations
-# ============================================================================
 
 
 @app.command(name="select-bad-clusters")

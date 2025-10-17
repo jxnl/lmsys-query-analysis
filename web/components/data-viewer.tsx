@@ -35,7 +35,8 @@ interface DataViewerProps {
   data: DataViewerData;
   onPageChange: (page: number) => void;
   showClusters?: boolean;
-  filterRunId?: string; // Filter clusters to only show those from this run
+  filterRunId?: string;
+
 }
 
 export function DataViewer({
@@ -104,7 +105,7 @@ export function DataViewer({
               <Card key={query.id}>
                 <CardContent className="pt-4">
                   <div className="space-y-3">
-                    {/* Query Text */}
+                    {}
                     <div className="space-y-2">
                       <p className="text-sm whitespace-pre-wrap">{displayText}</p>
                       {needsTruncation && (
@@ -129,7 +130,7 @@ export function DataViewer({
                       )}
                     </div>
 
-                    {/* Metadata Row */}
+                    {}
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <div className="flex gap-2 items-center flex-wrap">
                         {query.model && (
@@ -145,12 +146,12 @@ export function DataViewer({
                       </div>
                     </div>
 
-                    {/* Cluster Associations */}
+                    {}
                     {showClusters &&
                       query.clusters &&
                       query.clusters.length > 0 &&
                       (() => {
-                        // Filter clusters by run if filterRunId is provided
+
                         const displayClusters = filterRunId
                           ? query.clusters.filter((c) => c.run_id === filterRunId)
                           : query.clusters;
@@ -182,7 +183,7 @@ export function DataViewer({
                         );
                       })()}
 
-                    {/* Query Metadata */}
+                    {}
                     <div className="flex gap-4 text-xs text-muted-foreground pt-2 border-t">
                       <span>ID: {query.id}</span>
                       <span>Conversation: {query.conversation_id.substring(0, 8)}...</span>

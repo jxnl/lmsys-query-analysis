@@ -11,13 +11,11 @@ def test_kmeans_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_
     """Test basic kmeans clustering command."""
     from lmsys_query_analysis.cli.commands.clustering import cluster_kmeans
 
-    # Setup mocks
     mock_parse.return_value = ("all-MiniLM-L6-v2", "sentence-transformers")
     mock_db = Mock()
     mock_get_db.return_value = mock_db
     mock_run_kmeans.return_value = "test-run-id"
 
-    # Execute command
     cluster_kmeans(
         n_clusters=200,
         db_path="/tmp/test.db",
@@ -27,7 +25,6 @@ def test_kmeans_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_
         chroma_path="/tmp/chroma",
     )
 
-    # Verify
     mock_get_db.assert_called_once()
     mock_run_kmeans.assert_called_once()
 
@@ -39,13 +36,11 @@ def test_hdbscan_command_basic(mock_parse, mock_get_db, mock_run_hdbscan):
     """Test basic HDBSCAN clustering command."""
     from lmsys_query_analysis.cli.commands.clustering import cluster_hdbscan
 
-    # Setup mocks
     mock_parse.return_value = ("all-MiniLM-L6-v2", "sentence-transformers")
     mock_db = Mock()
     mock_get_db.return_value = mock_db
     mock_run_hdbscan.return_value = "test-run-id"
 
-    # Execute command
     cluster_hdbscan(
         min_cluster_size=15,
         db_path="/tmp/test.db",
@@ -56,6 +51,5 @@ def test_hdbscan_command_basic(mock_parse, mock_get_db, mock_run_hdbscan):
         chroma_path="/tmp/chroma",
     )
 
-    # Verify
     mock_get_db.assert_called_once()
     mock_run_hdbscan.assert_called_once()

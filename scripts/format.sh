@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Format both Python and TypeScript code
 
 set -e
 

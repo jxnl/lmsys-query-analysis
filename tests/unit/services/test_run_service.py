@@ -6,7 +6,6 @@ from lmsys_query_analysis.services import run_service
 
 def test_list_runs_all(populated_db, db_session):
     """Test listing all clustering runs."""
-    # Add another run
     run2 = ClusteringRun(
         run_id="test-run-002",
         algorithm="hdbscan",
@@ -25,7 +24,6 @@ def test_list_runs_all(populated_db, db_session):
 
 def test_list_runs_latest_only(populated_db, db_session):
     """Test listing only the latest run."""
-    # Add another run
     run2 = ClusteringRun(
         run_id="test-run-002",
         algorithm="hdbscan",

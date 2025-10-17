@@ -18,18 +18,15 @@ from typing import Any
 
 from pydantic import BaseModel
 
-# Rich for progress and console output
 from rich.console import Console
 from rich.logging import RichHandler
 
 from .clustering.hierarchy import merge_clusters_hierarchical
 from .clustering.kmeans import run_kmeans_clustering
 
-# Configuration
 from .config import RunnerConfig
 from .db.chroma import ChromaManager
 
-# LMSYS SDK imports
 from .db.connection import Database
 from .db.loader import load_dataset
 from .services import cluster_service
@@ -86,7 +83,6 @@ def setup_logging(log_level: str) -> None:
         handlers=[RichHandler(console=console, show_path=False)],
     )
 
-    # Set specific logger levels for different components
     logging.getLogger("lmsys").setLevel(getattr(logging, log_level.upper()))
     logging.getLogger("src.lmsys_query_analysis").setLevel(getattr(logging, log_level.upper()))
 
@@ -126,7 +122,6 @@ def initialize_database(temp_dir: Path, persistent_path: str | None = None) -> D
         db_path = temp_dir / "queries.db"
         logger.info(f"Using temporary database: {db_path}")
 
-    # Create parent directory if needed
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     db = Database(str(db_path))
@@ -151,19 +146,14 @@ def setup_environment(config: RunnerConfig) -> tuple[Path, Database, ChromaManag
     """Set up temporary database and ChromaDB."""
     logger.info("Setting up analysis environment...")
 
-    # Set up logging first
     setup_logging(config.log_level)
 
-    # Validate API keys
     validate_api_keys()
 
-    # Create temporary directory
     temp_dir = create_temp_directory()
 
-    # Initialize database
     db = initialize_database(temp_dir, config.db_path)
 
-    # Initialize ChromaDB
     chroma = initialize_chroma(temp_dir)
 
     logger.info("✓ Environment setup complete")
@@ -235,7 +225,6 @@ def run_clustering(db: Database, chroma: ChromaManager, config: RunnerConfig) ->
         logger.info(f"✓ Clustering complete in {elapsed:.2f}s")
         logger.info(f"  Run ID: {run_id}")
 
-        # Log cluster statistics
         cluster_ids = cluster_service.get_cluster_ids_for_run(db, run_id)
         logger.info(f"  Created {len(cluster_ids)} non-empty clusters")
 
@@ -264,7 +253,6 @@ def extract_base_clusters(db: Database, run_id: str, min_clusters: int = 10) -> 
 
         if not summaries:
             logger.warning(f"No cluster summaries found for run {run_id}")
-            # Try to get cluster IDs directly
             cluster_ids = cluster_service.get_cluster_ids_for_run(db, run_id)
             logger.info(f"Found {len(cluster_ids)} cluster IDs, creating basic summaries")
 
@@ -288,14 +276,12 @@ def extract_base_clusters(db: Database, run_id: str, min_clusters: int = 10) -> 
 
         logger.info(f"✓ Extracted {len(base_clusters)} base clusters")
 
-        # Warn if below minimum threshold
         if len(base_clusters) < min_clusters:
             logger.warning(
                 f"Only {len(base_clusters)} base clusters found - hierarchy may not be meaningful "
                 f"(expected at least {min_clusters})"
             )
 
-        # Log sample cluster info
         for cluster in base_clusters[:3]:
             logger.debug(f"  Cluster {cluster.cluster_id}: {cluster.title[:50]}...")
 
@@ -319,13 +305,10 @@ async def create_hierarchy(db: Database, run_id: str, config: RunnerConfig) -> s
     start_time = time.time()
 
     try:
-        # Extract base clusters
         base_clusters = extract_base_clusters(db, run_id, min_clusters=10)
 
-        # Convert BaseCluster models to dicts for merge_clusters_hierarchical
         base_clusters_dicts = [cluster.model_dump() for cluster in base_clusters]
 
-        # Run hierarchical merging
         hierarchy_run_id, hierarchy_data = await merge_clusters_hierarchical(
             base_clusters=base_clusters_dicts,
             run_id=run_id,
@@ -350,7 +333,6 @@ async def create_hierarchy(db: Database, run_id: str, config: RunnerConfig) -> s
         logger.info(f"  Hierarchy Run ID: {hierarchy_run_id}")
         logger.info(f"  Created {len(hierarchy_data)} total hierarchy nodes")
 
-        # Log hierarchy structure
         levels = {}
         for node in hierarchy_data:
             level = node["level"]
@@ -378,11 +360,8 @@ def cleanup_resources(
     """
     logger.info("Starting resource cleanup...")
 
-    # ChromaDB and Database don't need explicit closing
-    # They use persistent clients that auto-cleanup
     logger.info("✓ Database and ChromaDB connections released")
 
-    # Remove temporary directory
     if should_cleanup and temp_dir and temp_dir.exists():
         try:
             shutil.rmtree(temp_dir)
@@ -400,23 +379,19 @@ async def run_analysis(config: RunnerConfig) -> dict[str, Any]:
 
     overall_start_time = time.time()
 
-    # Setup
     temp_dir, db, chroma = setup_environment(config)
 
     try:
-        # Step 1: Load data
         logger.info("=" * 60)
         logger.info("PHASE 1: DATA LOADING")
         logger.info("=" * 60)
         load_stats = load_data(db, chroma, config)
 
-        # Step 2: Run clustering
         logger.info("=" * 60)
         logger.info("PHASE 2: CLUSTERING")
         logger.info("=" * 60)
         run_id = run_clustering(db, chroma, config)
 
-        # Step 3: Create hierarchy (optional)
         hierarchy_run_id = None
         if config.enable_hierarchy:
             logger.info("=" * 60)
@@ -426,10 +401,8 @@ async def run_analysis(config: RunnerConfig) -> dict[str, Any]:
         else:
             logger.info("Hierarchy creation skipped (disabled in configuration)")
 
-        # Calculate total execution time
         total_elapsed = time.time() - overall_start_time
 
-        # Build results
         results = {
             "run_id": run_id,
             "hierarchy_run_id": hierarchy_run_id,
@@ -466,7 +439,6 @@ async def run_analysis(config: RunnerConfig) -> dict[str, Any]:
 
 def main():
     """Simple main entry point for direct script execution."""
-    # Default configuration for quick runs
     config = RunnerConfig(
         query_limit=1000,
         n_clusters=50,
@@ -483,10 +455,8 @@ def main():
     console.print(f"  Database: {config.db_path}")
 
     try:
-        # Run workflow
         results = asyncio.run(run_analysis(config))
 
-        # Print final results
         console.print("\n[bold green]✓ Analysis Complete![/bold green]")
         console.print(f"[cyan]Run ID:[/cyan] {results['run_id']}")
         if results["hierarchy_run_id"]:

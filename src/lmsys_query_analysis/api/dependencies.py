@@ -7,11 +7,9 @@ from pathlib import Path
 from ..db.chroma import ChromaManager
 from ..db.connection import DEFAULT_DB_PATH, Database
 
-# Read configuration from environment variables (same as CLI)
 DB_PATH = os.getenv("DB_PATH") or str(DEFAULT_DB_PATH)
 CHROMA_PATH = os.getenv("CHROMA_PATH") or str(Path.home() / ".lmsys-query-analysis" / "chroma")
 
-# API keys are read from environment (server-side only)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -27,7 +25,6 @@ def get_db() -> Generator[Database, None, None]:
     try:
         yield db
     finally:
-        # Database cleanup happens automatically via context manager
         pass
 
 
@@ -75,7 +72,6 @@ def create_chroma_manager(
         embedding_provider = params.get("embedding_provider", "openai")
         embedding_dimension = params.get("embedding_dimension")
 
-        # Cohere Matryoshka default to 256 if not specified
         if embedding_provider == "cohere" and embedding_dimension is None:
             embedding_dimension = 256
 

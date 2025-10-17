@@ -15,9 +15,6 @@ from ..db.models import (
     QueryCluster,
 )
 
-# ============================================================================
-# Query Operations
-# ============================================================================
 
 
 def get_query_details(db: Database, query_id: int) -> dict[str, Any] | None:
@@ -35,7 +32,6 @@ def get_query_details(db: Database, query_id: int) -> dict[str, Any] | None:
         if not query:
             return None
 
-        # Get all cluster assignments
         assignments = session.exec(
             select(QueryCluster, ClusterSummary)
             .outerjoin(
@@ -87,7 +83,6 @@ def move_query(
         Dictionary with operation results
     """
     with db.get_session() as session:
-        # Get current assignment
         current = session.exec(
             select(QueryCluster).where(
                 and_(
@@ -105,10 +100,8 @@ def move_query(
         if from_cluster_id == to_cluster_id:
             raise ValueError(f"Query {query_id} is already in cluster {to_cluster_id}")
 
-        # Update assignment
         current.cluster_id = to_cluster_id
 
-        # Create audit log
         edit = ClusterEdit(
             run_id=run_id,
             cluster_id=from_cluster_id,
@@ -172,9 +165,6 @@ def move_queries_batch(
     }
 
 
-# ============================================================================
-# Cluster Operations
-# ============================================================================
 
 
 def rename_cluster(
@@ -199,7 +189,6 @@ def rename_cluster(
         Dictionary with operation results
     """
     with db.get_session() as session:
-        # Get current summary (latest one)
         summary = session.exec(
             select(ClusterSummary)
             .where(
@@ -216,7 +205,6 @@ def rename_cluster(
 
         old_values = {"title": summary.title, "description": summary.description}
 
-        # Update fields if provided
         if title is not None:
             summary.title = title
         if description is not None:
@@ -224,7 +212,6 @@ def rename_cluster(
 
         new_values = {"title": summary.title, "description": summary.description}
 
-        # Create audit log
         edit = ClusterEdit(
             run_id=run_id,
             cluster_id=cluster_id,
@@ -272,7 +259,6 @@ def merge_clusters(
         Dictionary with operation results
     """
     with db.get_session() as session:
-        # Validate target cluster exists
         target_summary = session.exec(
             select(ClusterSummary).where(
                 and_(
@@ -285,13 +271,11 @@ def merge_clusters(
         if not target_summary:
             raise ValueError(f"Target cluster {target_cluster_id} not found in run {run_id}")
 
-        # Move all queries from source clusters to target
         moved_count = 0
         for source_id in source_cluster_ids:
             if source_id == target_cluster_id:
                 continue
 
-            # Get all queries in source cluster
             queries = session.exec(
                 select(QueryCluster).where(
                     and_(
@@ -301,18 +285,15 @@ def merge_clusters(
                 )
             ).all()
 
-            # Move them to target
             for qc in queries:
                 qc.cluster_id = target_cluster_id
                 moved_count += 1
 
-        # Update target cluster summary if new title/description provided
         if new_title:
             target_summary.title = new_title
         if new_description:
             target_summary.description = new_description
 
-        # Create audit log
         edit = ClusterEdit(
             run_id=run_id,
             cluster_id=target_cluster_id,
@@ -362,7 +343,6 @@ def split_cluster(
         Dictionary with operation results
     """
     with db.get_session() as session:
-        # Find the next available cluster ID
         max_cluster = session.exec(
             select(QueryCluster.cluster_id)
             .where(QueryCluster.run_id == run_id)
@@ -370,7 +350,6 @@ def split_cluster(
         ).first()
         new_cluster_id = (max_cluster or 0) + 1
 
-        # Move queries to new cluster
         moved = 0
         for query_id in query_ids:
             qc = session.exec(
@@ -387,7 +366,6 @@ def split_cluster(
                 qc.cluster_id = new_cluster_id
                 moved += 1
 
-        # Create summary for new cluster
         new_summary = ClusterSummary(
             run_id=run_id,
             cluster_id=new_cluster_id,
@@ -398,7 +376,6 @@ def split_cluster(
         )
         session.add(new_summary)
 
-        # Create audit log
         edit = ClusterEdit(
             run_id=run_id,
             cluster_id=cluster_id,
@@ -445,7 +422,6 @@ def delete_cluster(
         Dictionary with operation results
     """
     with db.get_session() as session:
-        # Get all queries in cluster
         queries = session.exec(
             select(QueryCluster).where(
                 and_(
@@ -458,7 +434,6 @@ def delete_cluster(
         query_count = len(queries)
 
         if orphan:
-            # Orphan the queries
             for qc in queries:
                 orphaned = OrphanedQuery(
                     run_id=run_id,
@@ -469,13 +444,11 @@ def delete_cluster(
                 session.add(orphaned)
                 session.delete(qc)
         elif move_to_cluster_id is not None:
-            # Move queries to target cluster
             for qc in queries:
                 qc.cluster_id = move_to_cluster_id
         else:
             raise ValueError("Must specify either move_to_cluster_id or orphan=True")
 
-        # Delete cluster summaries
         session.exec(
             delete(ClusterSummary).where(
                 and_(
@@ -485,7 +458,6 @@ def delete_cluster(
             )
         )
 
-        # Create audit log
         edit = ClusterEdit(
             run_id=run_id,
             cluster_id=cluster_id,
@@ -512,9 +484,6 @@ def delete_cluster(
         }
 
 
-# ============================================================================
-# Metadata Operations
-# ============================================================================
 
 
 def tag_cluster(
@@ -543,7 +512,6 @@ def tag_cluster(
         Dictionary with operation results
     """
     with db.get_session() as session:
-        # Check if metadata exists
         metadata = session.exec(
             select(ClusterMetadata).where(
                 and_(
@@ -565,7 +533,6 @@ def tag_cluster(
             metadata = ClusterMetadata(run_id=run_id, cluster_id=cluster_id)
             session.add(metadata)
 
-        # Update fields
         if coherence_score is not None:
             metadata.coherence_score = coherence_score
         if quality is not None:
@@ -584,7 +551,6 @@ def tag_cluster(
             "notes": metadata.notes,
         }
 
-        # Create audit log
         edit = ClusterEdit(
             run_id=run_id,
             cluster_id=cluster_id,
@@ -627,9 +593,6 @@ def get_cluster_metadata(db: Database, run_id: str, cluster_id: int) -> ClusterM
         ).first()
 
 
-# ============================================================================
-# Audit Operations
-# ============================================================================
 
 
 def get_cluster_edit_history(
@@ -677,9 +640,6 @@ def get_orphaned_queries(db: Database, run_id: str) -> list[tuple[OrphanedQuery,
         return list(results)
 
 
-# ============================================================================
-# Batch Operations
-# ============================================================================
 
 
 def find_problematic_clusters(
@@ -704,7 +664,6 @@ def find_problematic_clusters(
         List of cluster info dictionaries
     """
     with db.get_session() as session:
-        # Get cluster summaries with metadata
         stmt = (
             select(ClusterSummary, ClusterMetadata)
             .outerjoin(
@@ -724,13 +683,11 @@ def find_problematic_clusters(
 
         problematic = []
         for summary, metadata in results:
-            # Apply size filters
             if max_size and summary.num_queries and summary.num_queries > max_size:
                 continue
             if min_size and summary.num_queries and summary.num_queries < min_size:
                 continue
 
-            # Count languages if needed
             if min_languages:
                 langs = session.exec(
                     select(Query.language)

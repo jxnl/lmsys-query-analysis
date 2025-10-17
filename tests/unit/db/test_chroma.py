@@ -8,7 +8,6 @@ from lmsys_query_analysis.db.chroma import (
 )
 
 
-# These tests don't need mocking - they're pure functions
 def test_sanitize_collection_name_basic():
     """Test basic collection name sanitization."""
     assert sanitize_collection_name("my_collection") == "my_collection"
@@ -51,8 +50,8 @@ def test_sanitize_collection_name_truncates_long_names():
 
 def test_sanitize_collection_name_ensures_minimum_length():
     """Test that short names are padded to minimum length."""
-    assert len(sanitize_collection_name("a")) == 9  # "a_default"
-    assert len(sanitize_collection_name("ab")) == 10  # "ab_default"
+    assert len(sanitize_collection_name("a")) == 9
+    assert len(sanitize_collection_name("ab")) == 10
     assert sanitize_collection_name("a") == "a_default"
 
 
@@ -65,14 +64,11 @@ def test_sanitize_collection_name_special_characters():
 
 def test_sanitize_collection_name_complex():
     """Test complex real-world collection names."""
-    # OpenAI model name
     assert sanitize_collection_name("text-embedding-3-small") == "text-embedding-3-small"
 
-    # Cohere model with provider
     result = sanitize_collection_name("cohere/embed-english-v3.0")
     assert result == "cohere_embed-english-v3_0"
 
-    # Sentence transformers
     result = sanitize_collection_name("sentence-transformers/all-MiniLM-L6-v2")
     assert result == "sentence-transformers_all-MiniLM-L6-v2"
 
@@ -85,27 +81,22 @@ def test_sanitize_collection_name_preserves_hyphens():
 
 def test_sanitize_collection_name_mixed_cases():
     """Test various edge cases together."""
-    # Multiple issues at once
     result = sanitize_collection_name("__My.Model/v2.0__")
     assert result == "My_Model_v2_0"
 
-    # Very short with special chars
     result = sanitize_collection_name("a.")
     assert len(result) >= 3
 
 
-# These tests should mock ChromaDB
 @patch("lmsys_query_analysis.db.chroma.chromadb.PersistentClient")
 def test_chroma_manager_initialization_mocked(mock_client_class):
     """Test ChromaManager initialization with mocked client."""
-    # Setup mock
     mock_client = Mock()
     mock_collection = Mock()
     mock_collection.name = "queries_test_model"
     mock_client.get_or_create_collection.return_value = mock_collection
     mock_client_class.return_value = mock_client
 
-    # Create manager
     manager = ChromaManager(
         persist_directory="/tmp/test",
         embedding_model="test-model",
@@ -113,22 +104,18 @@ def test_chroma_manager_initialization_mocked(mock_client_class):
         embedding_dimension=256,
     )
 
-    # Verify initialization
     assert manager.embedding_model == "test-model"
     assert manager.embedding_provider == "test"
     assert manager.embedding_dimension == 256
 
-    # Verify client was created
     mock_client_class.assert_called_once()
 
-    # Verify collections were created
-    assert mock_client.get_or_create_collection.call_count == 2  # queries and summaries
+    assert mock_client.get_or_create_collection.call_count == 2
 
 
 @patch("lmsys_query_analysis.db.chroma.chromadb.PersistentClient")
 def test_chroma_manager_count_queries_mocked(mock_client_class):
     """Test counting queries with mocked collection."""
-    # Setup mock
     mock_client = Mock()
     mock_collection = Mock()
     mock_collection.count.return_value = 42
@@ -139,7 +126,6 @@ def test_chroma_manager_count_queries_mocked(mock_client_class):
         persist_directory="/tmp/test", embedding_model="test-model", embedding_provider="test"
     )
 
-    # Test count
     count = manager.count_queries()
 
     assert count == 42
@@ -149,7 +135,6 @@ def test_chroma_manager_count_queries_mocked(mock_client_class):
 @patch("lmsys_query_analysis.db.chroma.chromadb.PersistentClient")
 def test_chroma_manager_list_all_collections_mocked(mock_client_class):
     """Test listing all collections with mocked client."""
-    # Setup mock
     mock_client = Mock()
     mock_collection1 = Mock()
     mock_collection1.name = "queries_test"
@@ -185,30 +170,23 @@ def test_chroma_manager_different_providers_create_different_collections(mock_cl
     mock_client.get_or_create_collection.return_value = mock_collection
     mock_client_class.return_value = mock_client
 
-    # Create with provider A
     ChromaManager(
         persist_directory="/tmp/test", embedding_model="model-a", embedding_provider="provider-a"
     )
 
-    # Create with provider B
     ChromaManager(
         persist_directory="/tmp/test", embedding_model="model-b", embedding_provider="provider-b"
     )
 
-    # Collections should be created with different names
     calls = mock_client.get_or_create_collection.call_args_list
 
-    # Extract collection names from calls
     names = [call.kwargs.get("name") or call.args[0] for call in calls]
 
-    # Should have 4 calls (2 queries + 2 summaries)
     assert len(names) == 4
 
-    # First two should be for provider-a
     assert "provider-a" in names[0] or "provider_a" in names[0]
     assert "provider-a" in names[1] or "provider_a" in names[1]
 
-    # Last two should be for provider-b
     assert "provider-b" in names[2] or "provider_b" in names[2]
     assert "provider-b" in names[3] or "provider_b" in names[3]
 
@@ -229,10 +207,8 @@ def test_chroma_manager_cohere_includes_dimension(mock_client_class):
         embedding_dimension=512,
     )
 
-    # Check that dimension was included in metadata
     calls = mock_client.get_or_create_collection.call_args_list
 
-    # At least one call should have dimension in name
     names = [call.kwargs.get("name", "") for call in calls]
     assert any("512" in name for name in names)
 
@@ -269,7 +245,6 @@ def test_chroma_manager_add_queries_batch(mock_client_class):
         persist_directory="/tmp/test", embedding_model="test-model", embedding_provider="test"
     )
 
-    # Add batch of queries
     query_ids = [1, 2, 3]
     texts = ["Query 1", "Query 2", "Query 3"]
     embeddings = np.array([[0.1] * 10, [0.2] * 10, [0.3] * 10])
@@ -277,7 +252,6 @@ def test_chroma_manager_add_queries_batch(mock_client_class):
 
     manager.add_queries_batch(query_ids, texts, embeddings, metadata)
 
-    # Verify add was called with correct format
     mock_collection.add.assert_called_once()
     call_args = mock_collection.add.call_args
     assert "ids" in call_args.kwargs
@@ -306,7 +280,6 @@ def test_chroma_manager_add_cluster_summary(mock_client_class):
         persist_directory="/tmp/test", embedding_model="test-model", embedding_provider="test"
     )
 
-    # Add cluster summary
     embedding = np.array([0.1] * 10)
     manager.add_cluster_summary(
         run_id="test-run",
@@ -316,7 +289,6 @@ def test_chroma_manager_add_cluster_summary(mock_client_class):
         metadata={"num_queries": 10},
     )
 
-    # Verify add was called on summaries collection
     mock_summaries_collection.add.assert_called_once()
     call_args = mock_summaries_collection.add.call_args
     assert call_args.kwargs["ids"] == ["cluster_test-run_5"]
@@ -343,7 +315,6 @@ def test_chroma_manager_add_cluster_summary_with_title(mock_client_class):
         persist_directory="/tmp/test", embedding_model="test-model", embedding_provider="test"
     )
 
-    # Add cluster summary with title/description
     embedding = np.array([0.1] * 10)
     manager.add_cluster_summary(
         run_id="test-run",
@@ -355,7 +326,6 @@ def test_chroma_manager_add_cluster_summary_with_title(mock_client_class):
         description="Test Description",
     )
 
-    # Verify document contains title and description
     call_args = mock_summaries_collection.add.call_args
     assert "Test Title" in call_args.kwargs["documents"][0]
     assert "Test Description" in call_args.kwargs["documents"][0]
@@ -382,7 +352,6 @@ def test_chroma_manager_add_cluster_summaries_batch(mock_client_class):
         persist_directory="/tmp/test", embedding_model="test-model", embedding_provider="test"
     )
 
-    # Add batch of summaries
     cluster_ids = [1, 2, 3]
     summaries = ["Summary 1", "Summary 2", "Summary 3"]
     embeddings = np.array([[0.1] * 10, [0.2] * 10, [0.3] * 10])
@@ -396,7 +365,6 @@ def test_chroma_manager_add_cluster_summaries_batch(mock_client_class):
         metadata_list=metadata_list,
     )
 
-    # Verify upsert was called
     mock_summaries_collection.upsert.assert_called_once()
     call_args = mock_summaries_collection.upsert.call_args
     assert len(call_args.kwargs["ids"]) == 3
@@ -421,10 +389,8 @@ def test_chroma_manager_search_queries(mock_client_class):
         persist_directory="/tmp/test", embedding_model="test-model", embedding_provider="test"
     )
 
-    # Search with text
     results = manager.search_queries("test query", n_results=10)
 
-    # Verify query was called
     mock_collection.query.assert_called_once()
     assert results["ids"] == [["query_1", "query_2"]]
 
@@ -454,10 +420,8 @@ def test_chroma_manager_search_cluster_summaries(mock_client_class):
         persist_directory="/tmp/test", embedding_model="test-model", embedding_provider="test"
     )
 
-    # Search summaries
     manager.search_cluster_summaries("test query", run_id="test", n_results=5)
 
-    # Verify query was called with filters
     mock_summaries_collection.query.assert_called_once()
     call_args = mock_summaries_collection.query.call_args
     assert "where" in call_args.kwargs or "where" in str(call_args)
@@ -469,7 +433,6 @@ def test_chroma_manager_count_summaries(mock_client_class):
     mock_client = Mock()
     mock_queries_collection = Mock()
     mock_summaries_collection = Mock()
-    # Mock get() to return results with 3 IDs
     mock_summaries_collection.get.return_value = {
         "ids": ["id1", "id2", "id3"],
         "documents": ["Doc1", "Doc2", "Doc3"],
@@ -487,8 +450,6 @@ def test_chroma_manager_count_summaries(mock_client_class):
         persist_directory="/tmp/test", embedding_model="test-model", embedding_provider="test"
     )
 
-    # Count summaries for a run
     count = manager.count_summaries("test-run")
 
-    # Should return the count of IDs
     assert count == 3

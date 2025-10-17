@@ -27,13 +27,11 @@ def temp_db():
     engine = create_engine("sqlite:///:memory:")
     SQLModel.metadata.create_all(engine)
 
-    # Create a Database instance with the test engine
     db = Database(":memory:")
     db.engine = engine
 
     yield db
 
-    # Cleanup
     SQLModel.metadata.drop_all(engine)
     engine.dispose()
 
@@ -105,11 +103,11 @@ def sample_query_clusters():
     Note: query_ids will be set in populated_db after queries are committed.
     """
     return [
-        {"cluster_id": 0},  # First query
-        {"cluster_id": 0},  # Second query
-        {"cluster_id": 1},  # Third query
-        {"cluster_id": 0},  # Fourth query
-        {"cluster_id": 1},  # Fifth query
+        {"cluster_id": 0},
+        {"cluster_id": 0},
+        {"cluster_id": 1},
+        {"cluster_id": 0},
+        {"cluster_id": 1},
     ]
 
 
@@ -163,19 +161,15 @@ def populated_db(
     sample_cluster_summaries,
 ):
     """Database populated with sample data for integration tests."""
-    # Add queries first and commit to get IDs
     for query in sample_queries:
         db_session.add(query)
 
-    # Add clustering run
     db_session.add(sample_clustering_run)
     db_session.commit()
 
-    # Refresh to get auto-generated IDs
     for query in sample_queries:
         db_session.refresh(query)
 
-    # Now create query-cluster assignments with real query IDs
     run_id = sample_clustering_run.run_id
     for i, qc_data in enumerate(sample_query_clusters):
         qc = QueryCluster(
@@ -185,7 +179,6 @@ def populated_db(
         )
         db_session.add(qc)
 
-    # Add cluster summaries
     for summary in sample_cluster_summaries:
         db_session.add(summary)
 

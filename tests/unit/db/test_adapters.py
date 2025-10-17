@@ -10,15 +10,12 @@ from lmsys_query_analysis.db.adapters import (
     extract_first_query,
 )
 
-# ============================================================================
-# Mock Adapter for Testing
-# ============================================================================
 
 
 class MockDataSourceAdapter:
     """Mock adapter implementation for testing the protocol interface."""
 
-    _NOT_PROVIDED = object()  # Sentinel value
+    _NOT_PROVIDED = object()
 
     def __init__(self, data: list[dict] | None = None, length=_NOT_PROVIDED):
         """Initialize mock adapter with test data.
@@ -43,9 +40,6 @@ class MockDataSourceAdapter:
         return self._length
 
 
-# ============================================================================
-# Tests for extract_first_query Helper
-# ============================================================================
 
 
 def test_extract_first_query_basic():
@@ -95,7 +89,7 @@ def test_extract_first_query_empty_content():
     ]
 
     result = extract_first_query(conversation)
-    assert result == ""  # First user message even if empty
+    assert result == ""
 
 
 def test_extract_first_query_missing_content():
@@ -106,7 +100,7 @@ def test_extract_first_query_missing_content():
     ]
 
     result = extract_first_query(conversation)
-    assert result == ""  # get() returns empty string
+    assert result == ""
 
 
 def test_extract_first_query_multiple_users():
@@ -122,16 +116,12 @@ def test_extract_first_query_multiple_users():
     assert result == "First user query"
 
 
-# ============================================================================
-# Tests for DataSourceAdapter Protocol
-# ============================================================================
 
 
 def test_adapter_protocol_interface():
     """Test that MockDataSourceAdapter conforms to DataSourceAdapter protocol."""
     adapter = MockDataSourceAdapter()
 
-    # Check that it's recognized as implementing the protocol
     assert isinstance(adapter, DataSourceAdapter)
 
 
@@ -158,7 +148,6 @@ def test_mock_adapter_iteration():
 
     adapter = MockDataSourceAdapter(data=test_data)
 
-    # Collect all records
     records = list(adapter)
 
     assert len(records) == 2
@@ -200,7 +189,6 @@ def test_mock_adapter_length_none():
     ]
 
     adapter = MockDataSourceAdapter(data=test_data, length=None)
-    # Call __len__ directly since Python's len() requires an int
     assert adapter.__len__() is None
 
 
@@ -233,7 +221,6 @@ def test_adapter_normalized_output_schema():
     adapter = MockDataSourceAdapter(data=test_data)
     record = next(iter(adapter))
 
-    # Verify all required fields are present
     assert "conversation_id" in record
     assert "query_text" in record
     assert "model" in record
@@ -241,7 +228,6 @@ def test_adapter_normalized_output_schema():
     assert "timestamp" in record
     assert "extra_metadata" in record
 
-    # Verify types
     assert isinstance(record["conversation_id"], str)
     assert isinstance(record["query_text"], str)
     assert isinstance(record["model"], str)
@@ -257,8 +243,8 @@ def test_adapter_normalized_output_schema_optional_fields():
             "conversation_id": "test123",
             "query_text": "Test query",
             "model": "gpt-4",
-            "language": None,  # Optional
-            "timestamp": None,  # Optional
+            "language": None,
+            "timestamp": None,
             "extra_metadata": {},
         },
     ]
@@ -266,11 +252,9 @@ def test_adapter_normalized_output_schema_optional_fields():
     adapter = MockDataSourceAdapter(data=test_data)
     record = next(iter(adapter))
 
-    # These should be allowed to be None
     assert record["language"] is None
     assert record["timestamp"] is None
 
-    # These must be present
     assert isinstance(record["conversation_id"], str)
     assert isinstance(record["query_text"], str)
     assert isinstance(record["model"], str)
@@ -292,21 +276,15 @@ def test_adapter_multiple_iterations():
 
     adapter = MockDataSourceAdapter(data=test_data)
 
-    # First iteration
     records1 = list(adapter)
     assert len(records1) == 1
 
-    # Second iteration
     records2 = list(adapter)
     assert len(records2) == 1
 
-    # Both should yield same data
     assert records1[0]["conversation_id"] == records2[0]["conversation_id"]
 
 
-# ============================================================================
-# Tests for HuggingFaceAdapter
-# ============================================================================
 
 
 def test_hf_adapter_initialization():
@@ -327,8 +305,8 @@ def test_hf_adapter_initialization():
         assert adapter.split == "train"
         assert adapter.limit == 100
         assert adapter.use_streaming is False
-        assert adapter.query_column == "conversation"  # Default
-        assert adapter.is_conversation_format is True  # Default
+        assert adapter.query_column == "conversation"
+        assert adapter.is_conversation_format is True
 
 
 def test_hf_adapter_iteration_basic():
@@ -394,7 +372,7 @@ def test_hf_adapter_with_limit():
     ]
 
     mock_dataset = Mock()
-    mock_dataset.__iter__ = Mock(return_value=iter(mock_data[:3]))  # Simulate select
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data[:3]))
     mock_dataset.__len__ = Mock(return_value=3)
     mock_dataset.select = Mock(side_effect=lambda indices: mock_dataset)
 
@@ -403,7 +381,6 @@ def test_hf_adapter_with_limit():
 
         records = list(adapter)
 
-        # Verify select was called with correct range
         mock_dataset.select.assert_called_once()
         assert len(records) == 3
 
@@ -434,7 +411,6 @@ def test_hf_adapter_normalized_output_schema():
 
         record = next(iter(adapter))
 
-        # Verify all required fields are present
         assert "conversation_id" in record
         assert "query_text" in record
         assert "model" in record
@@ -442,14 +418,12 @@ def test_hf_adapter_normalized_output_schema():
         assert "timestamp" in record
         assert "extra_metadata" in record
 
-        # Verify values
         assert record["conversation_id"] == "test123"
         assert record["query_text"] == "What is machine learning?"
         assert record["model"] == "gpt-4"
         assert record["language"] == "en"
         assert record["timestamp"] == "2024-01-01T00:00:00"
 
-        # Verify extra_metadata structure
         assert isinstance(record["extra_metadata"], dict)
         assert "turn_count" in record["extra_metadata"]
         assert "redacted" in record["extra_metadata"]
@@ -470,7 +444,7 @@ def test_hf_adapter_handles_json_conversations():
     mock_data = [
         {
             "conversation_id": "conv1",
-            "conversation": json.dumps(conversation),  # JSON string
+            "conversation": json.dumps(conversation),
             "model": "gpt-4",
             "language": "en",
         },
@@ -497,7 +471,6 @@ def test_hf_adapter_handles_missing_fields():
         {
             "conversation_id": "conv1",
             "conversation": [{"role": "user", "content": "Test query"}],
-            # Missing: model, language, timestamp, redacted
         },
     ]
 
@@ -514,7 +487,7 @@ def test_hf_adapter_handles_missing_fields():
         assert len(records) == 1
         assert records[0]["conversation_id"] == "conv1"
         assert records[0]["query_text"] == "Test query"
-        assert records[0]["model"] == "unknown"  # Default value
+        assert records[0]["model"] == "unknown"
         assert records[0]["language"] is None
         assert records[0]["timestamp"] is None
         assert records[0]["extra_metadata"]["redacted"] is False
@@ -524,13 +497,11 @@ def test_hf_adapter_skips_invalid_records():
     """Test that HuggingFaceAdapter skips records with no valid query."""
     mock_data = [
         {
-            # Missing conversation_id (will generate UUID)
             "conversation": [{"role": "user", "content": "Test"}],
             "model": "gpt-4",
         },
         {
             "conversation_id": "conv2",
-            # No user message in conversation - should be skipped
             "conversation": [{"role": "system", "content": "System message"}],
             "model": "gpt-4",
         },
@@ -551,14 +522,11 @@ def test_hf_adapter_skips_invalid_records():
 
         records = list(adapter)
 
-        # Records 1 and 3 should be returned (record 2 has no user query)
         assert len(records) == 2
-        # First record should have a generated UUID
         import uuid
 
         assert uuid.UUID(records[0]["conversation_id"])
         assert records[0]["query_text"] == "Test"
-        # Second record should have conv3
         assert records[1]["conversation_id"] == "conv3"
         assert records[1]["query_text"] == "Valid query"
 
@@ -588,7 +556,6 @@ def test_hf_adapter_handles_invalid_json():
 
         records = list(adapter)
 
-        # Only the valid record should be returned
         assert len(records) == 1
         assert records[0]["conversation_id"] == "conv2"
 
@@ -616,12 +583,10 @@ def test_hf_adapter_streaming_mode():
 
         records = list(adapter)
 
-        # Should respect limit in streaming mode
         assert len(records) == 3
         assert records[0]["conversation_id"] == "conv0"
         assert records[2]["conversation_id"] == "conv2"
 
-        # Streaming adapter should return None for __len__
         assert adapter.__len__() is None
 
 
@@ -635,7 +600,6 @@ def test_hf_adapter_conforms_to_protocol():
     with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
         adapter = HuggingFaceAdapter(dataset_name="test/dataset")
 
-        # Check that it's recognized as implementing the protocol
         assert isinstance(adapter, DataSourceAdapter)
 
 
@@ -667,24 +631,20 @@ def test_hf_adapter_handles_simple_prompt_column():
         records = list(adapter)
 
         assert len(records) == 2
-        # Verify query text is extracted from prompt column
         assert records[0]["query_text"] == "I want you to act as a linux terminal"
         assert records[1]["query_text"] == "Act as a Python interpreter"
 
-        # Verify UUIDs were generated (should be valid UUIDs)
         import uuid
 
-        assert uuid.UUID(records[0]["conversation_id"])  # Will raise if invalid
+        assert uuid.UUID(records[0]["conversation_id"])
         assert uuid.UUID(records[1]["conversation_id"])
 
-        # Verify extra metadata includes other fields
         assert records[0]["extra_metadata"]["act"] == "Linux Terminal"
         assert records[1]["extra_metadata"]["act"] == "Python Interpreter"
 
 
 def test_hf_adapter_uses_defaults():
     """Test that HuggingFaceAdapter uses correct defaults."""
-    # Test conversation format (default)
     mock_data_conversation = [
         {
             "conversation_id": "conv1",
@@ -701,14 +661,12 @@ def test_hf_adapter_uses_defaults():
     with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
         adapter = HuggingFaceAdapter(dataset_name="test/dataset")
 
-        # Should use default conversation format
         assert adapter.query_column == "conversation"
         assert adapter.is_conversation_format is True
 
         records = list(adapter)
         assert len(records) == 1
 
-    # Test explicit prompt format
     mock_data_prompt = [{"prompt": "Test prompt"}]
 
     mock_dataset2 = Mock()
@@ -723,7 +681,6 @@ def test_hf_adapter_uses_defaults():
             is_conversation_format=False,
         )
 
-        # Should use explicit prompt format
         assert adapter2.query_column == "prompt"
         assert adapter2.is_conversation_format is False
 
@@ -750,7 +707,6 @@ def test_hf_adapter_custom_column_mapping():
             is_conversation_format=False,
         )
 
-        # Verify explicit configuration is used
         assert adapter.query_column == "custom_query"
         assert adapter.is_conversation_format is False
 
@@ -788,17 +744,14 @@ def test_hf_adapter_generates_uuid_for_missing_ids():
 
         assert len(records) == 2
 
-        # Verify UUIDs were generated and are valid
         import uuid
 
         conv_id_1 = records[0]["conversation_id"]
         conv_id_2 = records[1]["conversation_id"]
 
-        # Should be valid UUIDs
         assert uuid.UUID(conv_id_1)
         assert uuid.UUID(conv_id_2)
 
-        # Should be different UUIDs
         assert conv_id_1 != conv_id_2
 
 
@@ -831,7 +784,6 @@ def test_hf_adapter_preserves_existing_conversation_ids():
 
         assert len(records) == 2
 
-        # Verify existing conversation_ids are preserved (not UUIDs)
         assert records[0]["conversation_id"] == "existing-id-123"
         assert records[1]["conversation_id"] == "another-id-456"
 
@@ -852,7 +804,6 @@ def test_hf_adapter_with_text_column():
             is_conversation_format=False,
         )
 
-        # Should use explicit text column
         assert adapter.query_column == "text"
         assert adapter.is_conversation_format is False
 

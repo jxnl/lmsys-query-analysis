@@ -10,7 +10,6 @@ from rich.console import Console
 console = Console()
 logger = logging.getLogger("lmsys")
 
-# Reusable option definitions
 db_path_option = typer.Option(
     None, help="Database path (default: ~/.lmsys-query-analysis/queries.db)"
 )
@@ -22,7 +21,6 @@ embedding_model_option = typer.Option(
 )
 json_output_option = typer.Option(False, "--json", help="Emit JSON output")
 
-# Output format options
 table_output_option = typer.Option(
     False, "--table", help="Force table output (default when no format specified)"
 )
@@ -39,7 +37,6 @@ def with_error_handling(func: Callable) -> Callable:
         except Exception as e:
             logger.exception(f"{func.__name__} failed: %s", e)
 
-            # For ExceptionGroup, show all sub-exceptions
             if hasattr(e, "exceptions"):
                 console.print("[red]Multiple errors occurred:[/red]")
                 for sub_exc in e.exceptions:

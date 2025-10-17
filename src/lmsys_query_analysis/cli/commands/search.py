@@ -47,13 +47,11 @@ def search(
     For queries: supports provenance via --run-id, semantic conditioning via
     --within-clusters, and grouped counts/facets. Use --json for machine output.
     """
-    # Validate format options
     format_count = sum([json_out, table, xml])
     if format_count > 1:
         console.print("[red]Error: Cannot specify more than one output format[/red]")
         raise typer.Exit(1)
 
-    # Parse cluster_ids list
     cluster_ids_list = None
     if cluster_ids:
         try:
@@ -65,11 +63,9 @@ def search(
     db = get_db(None)
 
     if search_type == "queries":
-        # Create clients
         qclient = create_queries_client(db, run_id, embedding_model, chroma_path)
         cclient = create_clusters_client(db, run_id, embedding_model, chroma_path)
 
-        # Optionally compute applied clusters for JSON when using within-clusters
         applied_clusters = []
         if within_clusters:
             applied_clusters = [
@@ -87,7 +83,6 @@ def search(
                 )
             ]
 
-        # Fetch query hits
         hits = qclient.find(
             text=text,
             run_id=run_id,
@@ -98,14 +93,12 @@ def search(
             n_candidates=n_candidates,
         )
 
-        # Aggregations
         facets_spec = []
         if facets:
             facets_spec = [f.strip() for f in facets.split(",") if f.strip()]
 
         facets_out = {}
         if by:
-            # Map grouped counts to facets JSON shape under key 'clusters' when by=cluster
             grouped = qclient.count(
                 text=text,
                 run_id=run_id,
@@ -130,7 +123,6 @@ def search(
                 top_clusters=top_clusters,
                 facet_by=facets_spec,
             )
-            # Convert Pydantic objects to plain dicts
             for facet_key, buckets in fac.items():
                 if facet_key == "cluster":
                     facets_out["clusters"] = [
@@ -160,7 +152,6 @@ def search(
             xml_output = json_output.format_search_results_queries_xml(text, hits)
             console.print(xml_output)
         else:
-            # Default to table format
             if not hits:
                 console.print("[yellow]No results found[/yellow]")
                 return
@@ -169,7 +160,6 @@ def search(
             console.print(table_output)
 
     elif search_type == "clusters":
-        # Use SDK for cluster summaries search
         cclient = create_clusters_client(db, run_id, embedding_model, chroma_path)
 
         chits = cclient.find(text=text, run_id=run_id, top_k=n_results)
@@ -184,7 +174,6 @@ def search(
             xml_output = json_output.format_search_results_clusters_xml(text, chits)
             console.print(xml_output)
         else:
-            # Default to table format
             if not chits:
                 console.print("[yellow]No results found[/yellow]")
                 return
@@ -210,7 +199,6 @@ def search_cluster(
     embedding_model: str = embedding_model_option,
 ):
     """Search cluster titles+descriptions (summaries)."""
-    # Validate format options
     format_count = sum([json_out, table, xml])
     if format_count > 1:
         console.print("[red]Error: Cannot specify more than one output format[/red]")
@@ -238,7 +226,6 @@ def search_cluster(
         xml_output = json_output.format_search_results_clusters_xml(text, hits)
         console.print(xml_output)
     else:
-        # Default to table format
         if not hits:
             console.print("[yellow]No results found[/yellow]")
             return

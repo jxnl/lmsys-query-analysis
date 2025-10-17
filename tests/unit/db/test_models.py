@@ -71,7 +71,7 @@ def test_unique_conversation_id(session):
 
     from sqlalchemy.exc import IntegrityError
 
-    with pytest.raises(IntegrityError):  # Should raise integrity error
+    with pytest.raises(IntegrityError):
         session.commit()
 
 
@@ -95,7 +95,6 @@ def test_create_clustering_run(session):
 
 def test_query_cluster_relationship(session):
     """Test relationships between Query, ClusteringRun, and QueryCluster."""
-    # Create query
     query = Query(
         conversation_id="test-456",
         model="gpt-4",
@@ -105,12 +104,10 @@ def test_query_cluster_relationship(session):
     session.commit()
     session.refresh(query)
 
-    # Create clustering run
     run = ClusteringRun(run_id="run-002", algorithm="kmeans", num_clusters=5)
     session.add(run)
     session.commit()
 
-    # Create cluster assignment
     cluster = QueryCluster(
         run_id=run.run_id, query_id=query.id, cluster_id=2, confidence_score=0.95
     )
@@ -118,7 +115,6 @@ def test_query_cluster_relationship(session):
     session.commit()
     session.refresh(cluster)
 
-    # Test relationships
     assert cluster.query.conversation_id == "test-456"
     assert cluster.run.algorithm == "kmeans"
     assert cluster.cluster_id == 2
@@ -160,12 +156,10 @@ def test_query_filtering(session):
         session.add(q)
     session.commit()
 
-    # Filter by model
     statement = select(Query).where(Query.model == "gpt-4")
     gpt4_queries = session.exec(statement).all()
     assert len(gpt4_queries) == 2
 
-    # Filter by language
     statement = select(Query).where(Query.language == "en")
     en_queries = session.exec(statement).all()
     assert len(en_queries) == 2

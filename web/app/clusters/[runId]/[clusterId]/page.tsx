@@ -26,7 +26,7 @@ export default async function ClusterPage({ params, searchParams }: ClusterPageP
   const clusterId = parseInt(clusterIdStr);
   const page = parseInt(pageStr || "1");
 
-  // Single API call for cluster detail (summary + queries)
+
   const clusterDetail = await apiFetch<{
     cluster: ClusterSummary;
     queries: {
@@ -45,7 +45,7 @@ export default async function ClusterPage({ params, searchParams }: ClusterPageP
   const summary = clusterDetail.cluster;
   const queriesData = clusterDetail.queries;
 
-  // Fetch cluster metadata and edit history
+
   const metadata = await apiFetch<ClusterMetadata>(
     `/api/curation/clusters/${clusterId}/metadata?run_id=${runId}`
   );

@@ -16,13 +16,13 @@ interface OrphanedQueriesPageProps {
 export default async function OrphanedQueriesPage({ params }: OrphanedQueriesPageProps) {
   const { runId } = await params;
 
-  // Fetch run metadata
+
   const run = await apiFetch<ClusteringRun>(`/api/clustering/runs/${runId}`);
   if (!run) {
     notFound();
   }
 
-  // Fetch orphaned queries
+
   const orphanedResponse = await apiFetch<{
     items: Array<{
       orphan: Record<string, unknown>;

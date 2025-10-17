@@ -15,12 +15,10 @@ from pydantic import BaseModel, Field, field_validator
 class RunnerConfig(BaseModel):
     """Configuration for the complete analysis workflow."""
 
-    # Data loading
     query_limit: int = Field(default=1000, gt=0, description="Number of queries to load")
     skip_existing: bool = Field(default=True, description="Skip queries already in database")
     use_streaming: bool = Field(default=False, description="Use streaming for large datasets")
 
-    # Embedding configuration
     embedding_model: str = Field(
         default="text-embedding-3-small", description="Embedding model name"
     )
@@ -34,13 +32,11 @@ class RunnerConfig(BaseModel):
         default=50, gt=0, description="Batch size for clustering embeddings"
     )
 
-    # Clustering configuration
     n_clusters: int = Field(default=50, gt=0, description="Number of clusters for KMeans")
     chunk_size: int = Field(default=5000, gt=0, description="Chunk size for MiniBatch KMeans")
     mb_batch_size: int = Field(default=4096, gt=0, description="MiniBatch size for KMeans")
     random_state: int = Field(default=42, description="Random state for reproducibility")
 
-    # Hierarchy configuration
     enable_hierarchy: bool = Field(default=True, description="Enable hierarchical clustering")
     hierarchy_levels: int = Field(default=3, gt=0, description="Number of hierarchy levels")
     merge_ratio: float = Field(default=0.3, gt=0, lt=1, description="Merge ratio for hierarchy")
@@ -48,17 +44,14 @@ class RunnerConfig(BaseModel):
     concurrency: int = Field(default=50, gt=0, description="Concurrent LLM calls for hierarchy")
     rpm: int = Field(default=500, gt=0, description="Rate limit (requests per minute)")
 
-    # LLM configuration
     llm_provider: Literal["anthropic", "openai", "groq"] = Field(
         default="openai", description="LLM provider for summarization and hierarchy"
     )
     llm_model: str = Field(default="gpt-4o-mini", description="LLM model name")
 
-    # Database configuration
     db_path: str | None = Field(default=None, description="Persistent database path")
     chroma_path: str | None = Field(default=None, description="Persistent ChromaDB path")
 
-    # Runtime configuration
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
         default="INFO", description="Logging level"
     )

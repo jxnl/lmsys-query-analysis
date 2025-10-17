@@ -21,7 +21,7 @@ def test_openai_embeddings():
     embeddings = gen.generate_embeddings(texts, batch_size=2, show_progress=False)
 
     assert len(embeddings) == 2
-    assert len(embeddings[0]) > 0  # Has dimensions
+    assert len(embeddings[0]) > 0
     assert isinstance(embeddings[0][0], float)
 
 
@@ -47,7 +47,7 @@ def test_cohere_embeddings():
     embeddings = gen.generate_embeddings(texts, batch_size=2, show_progress=False)
 
     assert len(embeddings) == 2
-    assert len(embeddings[0]) == 256  # Cohere with dimension specified
+    assert len(embeddings[0]) == 256
 
 
 @pytest.mark.smoke
@@ -58,14 +58,12 @@ def test_embedding_batch_processing():
         provider="openai",
     )
 
-    # Generate embeddings for larger batch
     texts = [f"Test query number {i}" for i in range(10)]
     embeddings = gen.generate_embeddings(texts, batch_size=5, show_progress=False)
 
     assert len(embeddings) == 10
-    # All embeddings should have same dimension
     dims = [len(e) for e in embeddings]
-    assert len(set(dims)) == 1  # All same dimension
+    assert len(set(dims)) == 1
 
 
 @pytest.mark.smoke
@@ -78,12 +76,10 @@ def test_embedding_consistency():
 
     text = "What is machine learning?"
 
-    # Generate embedding twice
     emb1 = gen.generate_embeddings([text], batch_size=1, show_progress=False)[0]
     emb2 = gen.generate_embeddings([text], batch_size=1, show_progress=False)[0]
 
-    # Should be identical
     import numpy as np
 
     similarity = np.dot(emb1, emb2)
-    assert similarity > 0.99  # Very high similarity for identical text
+    assert similarity > 0.99

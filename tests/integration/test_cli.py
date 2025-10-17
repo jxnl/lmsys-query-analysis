@@ -52,7 +52,6 @@ def test_list_clusters_sorted_by_num_queries(tmp_path):
     db.create_tables()
     session = db.get_session()
     try:
-        # Seed a run and several cluster summaries with varying counts
         run_id = "run-sort-test"
         run = ClusteringRun(run_id=run_id, algorithm="kmeans", num_clusters=3)
         session.add(run)
@@ -92,21 +91,19 @@ def test_list_clusters_sorted_by_num_queries(tmp_path):
             session.add(s)
         session.commit()
 
-        # Invoke CLI
         result = runner.invoke(app, ["list-clusters", run_id, "--db-path", str(db_path)])
         assert result.exit_code == 0
 
         out = result.stdout
-        # Expect order: 25 ("second"), then 10s (cluster_id ascending among ties), then None ("none")
         pos_second = out.find("second")
         pos_first = out.find("first")
         pos_tie10a = out.find("tie10a")
         pos_none = out.find("none")
 
         assert pos_second != -1 and pos_first != -1 and pos_tie10a != -1 and pos_none != -1
-        assert pos_second < pos_first  # 25 before 10
-        assert pos_first < pos_tie10a  # cluster_id 1 before 4 among ties
-        assert pos_tie10a < pos_none  # None last
+        assert pos_second < pos_first
+        assert pos_first < pos_tie10a
+        assert pos_tie10a < pos_none
     finally:
         session.close()
 
@@ -155,14 +152,12 @@ def test_list_clusters_show_examples(tmp_path):
         assert result.exit_code == 0
         out = result.stdout
         assert "Clusters for Run: run-examples" in out
-        # First two examples should appear, truncated width respected (with ellipsis)
         expected1 = "First example query about pandas DataFrame indexing"
         expected2 = "Second example query regarding Docker build cache"
         printed1 = expected1 if len(expected1) <= 50 else expected1[: 50 - 3] + "..."
         printed2 = expected2 if len(expected2) <= 50 else expected2[: 50 - 3] + "..."
         assert printed1 in out
         assert printed2 in out
-        # Third example should not be shown due to limit=2
         assert "Third example mentioning SQL window functions" not in out
         assert "Total: 1 clusters" in out
     finally:
@@ -173,7 +168,6 @@ def test_load_command_with_adapter(tmp_path):
     """Test that load command works with adapter refactor."""
     db_path = tmp_path / "adapter-test.db"
 
-    # Mock the HuggingFaceAdapter to avoid actual HF download
     with patch("lmsys_query_analysis.db.loader.HuggingFaceAdapter") as mock_adapter_class:
         mock_data = [
             {
@@ -211,12 +205,10 @@ def test_load_command_with_adapter(tmp_path):
         assert result.exit_code == 0
         assert "loaded" in result.stdout.lower() or "complete" in result.stdout.lower()
 
-        # Verify adapter was called with expected parameters
         mock_adapter_class.assert_called_once()
         call_kwargs = mock_adapter_class.call_args[1]
         assert call_kwargs["limit"] == 10
 
-        # Verify data was actually loaded into the database
         db = Database(db_path)
         session = db.get_session()
         try:

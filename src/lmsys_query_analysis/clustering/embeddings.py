@@ -23,10 +23,8 @@ from rich.progress import (
 )
 from sentence_transformers import SentenceTransformer
 
-# Type definitions for Cohere models
 CohereModel = Literal["embed-v4.0"]
 
-# Matryoshka embedding dimensions for Cohere v4
 CohereOutputDimension = Literal[256, 512, 1024, 1536]
 
 
@@ -68,14 +66,12 @@ class EmbeddingGenerator:
         elif provider == "cohere":
             import cohere
 
-            # Validate Cohere v4 model and dimensions
             if model_name not in ["embed-v4.0"]:
                 raise ValueError("Only Cohere v4 supported: model='embed-v4.0'")
             if output_dimension and output_dimension not in [256, 512, 1024, 1536]:
                 raise ValueError(
                     f"Cohere v4 output_dimension must be one of 256, 512, 1024, 1536. Got: {output_dimension}"
                 )
-            # Default to 256 if not specified (Matryoshka)
             if not output_dimension:
                 self.output_dimension = 256
 
@@ -104,7 +100,6 @@ class EmbeddingGenerator:
         Returns:
             numpy array of embeddings (n_texts, embedding_dim)
         """
-        # Filter out empty/invalid texts and track original indices
         filtered_texts = []
         original_indices = []
         for i, text in enumerate(texts):
@@ -118,7 +113,6 @@ class EmbeddingGenerator:
             dim = self.get_embedding_dim()
             return np.zeros((len(texts), dim))
 
-        # Generate embeddings for valid texts
         logger = logging.getLogger("lmsys")
         start = time.perf_counter()
 
@@ -155,16 +149,13 @@ class EmbeddingGenerator:
                     self.concurrency,
                 )
         else:
-            # For sentence transformers, use sync version
             valid_embeddings = self._generate_st_embeddings(
                 filtered_texts, batch_size, show_progress
             )
 
-        # If all texts were valid, return as-is
         if len(filtered_texts) == len(texts):
             return valid_embeddings
 
-        # Otherwise, create full array with zero embeddings for invalid texts
         logger.warning(f"Filtered out {len(texts) - len(filtered_texts)} empty/invalid texts")
 
         full_embeddings = np.zeros((len(texts), valid_embeddings.shape[1]))
@@ -238,7 +229,6 @@ class EmbeddingGenerator:
         Returns:
             numpy array of embeddings (n_texts, embedding_dim)
         """
-        # Filter out empty/invalid texts and track original indices
         filtered_texts = []
         original_indices = []
         for i, text in enumerate(texts):
@@ -252,7 +242,6 @@ class EmbeddingGenerator:
             dim = self.get_embedding_dim()
             return np.zeros((len(texts), dim))
 
-        # Generate embeddings for valid texts
         logger = logging.getLogger("lmsys")
         start = time.perf_counter()
 
@@ -289,16 +278,13 @@ class EmbeddingGenerator:
                     self.concurrency,
                 )
         else:
-            # For sentence transformers, use sync version
             valid_embeddings = self._generate_st_embeddings(
                 filtered_texts, batch_size, show_progress
             )
 
-        # If all texts were valid, return as-is
         if len(filtered_texts) == len(texts):
             return valid_embeddings
 
-        # Otherwise, create full array with zero embeddings for invalid texts
         logger.warning(f"Filtered out {len(texts) - len(filtered_texts)} empty/invalid texts")
 
         full_embeddings = np.zeros((len(texts), valid_embeddings.shape[1]))
@@ -313,7 +299,6 @@ class EmbeddingGenerator:
         """Run OpenAI embedding requests concurrently preserving order."""
         assert self._async_client is not None
 
-        # Split into batches with original indices
         batches: list[tuple[int, list[str]]] = []
         for i in range(0, len(texts), batch_size):
             batches.append((i, texts[i : i + batch_size]))
@@ -338,10 +323,8 @@ class EmbeddingGenerator:
                     return
                 except Exception as e:
                     last_exception = e
-                    # Simple exponential backoff
                     await anyio.sleep(backoff)
                     backoff = min(backoff * 2, 8.0)
-            # If all retries fail, raise the last exception
             if last_exception:
                 raise last_exception
             else:
@@ -351,7 +334,6 @@ class EmbeddingGenerator:
             for j, (_start, payload) in enumerate(batches):
                 tg.start_soon(worker, j, payload)
 
-        # Flatten preserving original order
         flat: list[list[float]] = []
         for r in results:
             if r is not None:
@@ -364,7 +346,6 @@ class EmbeddingGenerator:
         """Run Cohere embedding requests concurrently preserving order."""
         assert self._async_client is not None
 
-        # Split into batches with original indices
         batches: list[tuple[int, list[str]]] = []
         for i in range(0, len(texts), batch_size):
             batches.append((i, texts[i : i + batch_size]))
@@ -381,7 +362,7 @@ class EmbeddingGenerator:
                         resp = await self._async_client.embed(
                             texts=payload,
                             model=self.model_name,
-                            input_type="clustering",  # Optimize for clustering
+                            input_type="clustering",
                             embedding_types=["float"],
                             output_dimension=self.output_dimension,
                         )
@@ -392,10 +373,8 @@ class EmbeddingGenerator:
                     return
                 except Exception as e:
                     last_exception = e
-                    # Simple exponential backoff
                     await anyio.sleep(backoff)
                     backoff = min(backoff * 2, 8.0)
-            # If all retries fail, raise the last exception
             if last_exception:
                 raise last_exception
             else:
@@ -405,7 +384,6 @@ class EmbeddingGenerator:
             for j, (_start, payload) in enumerate(batches):
                 tg.start_soon(worker, j, payload)
 
-        # Flatten preserving original order
         flat: list[list[float]] = []
         for r in results:
             if r is not None:
@@ -415,7 +393,6 @@ class EmbeddingGenerator:
     def get_embedding_dim(self) -> int:
         """Get the dimension of embeddings from this model."""
         if self.provider == "openai":
-            # OpenAI embedding dimensions
             if "text-embedding-3-small" in self.model_name:
                 return 1536
             elif "text-embedding-3-large" in self.model_name:
@@ -423,9 +400,8 @@ class EmbeddingGenerator:
             elif "text-embedding-ada-002" in self.model_name:
                 return 1536
             else:
-                return 1536  # Default
+                return 1536
         elif self.provider == "cohere":
-            # Return the configured output dimension for Cohere v4
             return self.output_dimension if self.output_dimension else 256
         else:
             self.load_model()

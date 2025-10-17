@@ -17,7 +17,6 @@ from lmsys_query_analysis.semantic import ClustersClient, QueriesClient
 def test_query_search_with_chroma():
     """Test semantic query search with real ChromaDB and embeddings."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Setup database
         db_path = Path(tmpdir) / "test.db"
         engine = create_engine(f"sqlite:///{db_path}")
         SQLModel.metadata.create_all(engine)
@@ -25,7 +24,6 @@ def test_query_search_with_chroma():
         db = Database(str(db_path))
         db.engine = engine
 
-        # Add test queries
         test_queries = [
             ("q1", "What is machine learning?"),
             ("q2", "Explain neural networks"),
@@ -45,7 +43,6 @@ def test_query_search_with_chroma():
                 )
             session.commit()
 
-        # Setup ChromaDB and embedder
         chroma_path = Path(tmpdir) / "chroma"
         chroma = ChromaManager(
             persist_directory=str(chroma_path),
@@ -58,7 +55,6 @@ def test_query_search_with_chroma():
             provider="openai",
         )
 
-        # Add queries to ChromaDB
         with db.get_session() as session:
             from sqlmodel import select
 
@@ -71,10 +67,8 @@ def test_query_search_with_chroma():
 
             chroma.add_queries_batch(ids, texts, embeddings, metadata)
 
-        # Create client and search
         client = QueriesClient(db, chroma, embedder)
 
-        # Search for machine learning queries
         hits = client.find(
             text="artificial intelligence and deep learning",
             n_results=2,
@@ -82,7 +76,6 @@ def test_query_search_with_chroma():
 
         assert len(hits) > 0
         assert len(hits) <= 2
-        # Top hit should be ML-related
         assert any(word in hits[0].snippet.lower() for word in ["machine", "learning", "neural"])
 
 
@@ -90,7 +83,6 @@ def test_query_search_with_chroma():
 def test_cluster_search_with_chroma():
     """Test cluster summary search with real ChromaDB."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Setup
         db_path = Path(tmpdir) / "test.db"
         engine = create_engine(f"sqlite:///{db_path}")
         SQLModel.metadata.create_all(engine)
@@ -110,11 +102,9 @@ def test_cluster_search_with_chroma():
             provider="openai",
         )
 
-        # Add cluster summaries
         from lmsys_query_analysis.db.models import ClusteringRun, ClusterSummary
 
         with db.get_session() as session:
-            # Add run
             run = ClusteringRun(
                 run_id="test-run-smoke",
                 algorithm="kmeans",
@@ -122,7 +112,6 @@ def test_cluster_search_with_chroma():
             )
             session.add(run)
 
-            # Add summaries
             summaries = [
                 ClusterSummary(
                     run_id="test-run-smoke",
@@ -148,7 +137,6 @@ def test_cluster_search_with_chroma():
                 session.add(s)
             session.commit()
 
-        # Add to ChromaDB
         texts = [
             "Machine Learning Questions\n\nQuestions about machine learning, AI, and neural networks",
             "Python Programming\n\nQuestions about Python syntax, functions, and async programming",
@@ -171,10 +159,8 @@ def test_cluster_search_with_chroma():
             ],
         )
 
-        # Create client and search
         client = ClustersClient(db, chroma, embedder)
 
-        # Search for ML-related clusters
         hits = client.find(
             text="deep learning and AI models",
             run_id="test-run-smoke",
@@ -182,5 +168,4 @@ def test_cluster_search_with_chroma():
         )
 
         assert len(hits) > 0
-        # Top result should be ML cluster
         assert "machine" in hits[0].title.lower() or "learning" in hits[0].title.lower()

@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 Example: Complete LMSYS Analysis Pipeline
 
@@ -26,7 +25,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-# Add src to path for local development
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from lmsys_query_analysis import (
@@ -56,7 +54,6 @@ def display_cluster_results(results, title: str, max_results: int = 3):
         console.print("[yellow]  No clusters found. Try generating summaries first.[/yellow]")
         return
 
-    # Create table
     table = Table(title=title, show_header=True)
     table.add_column("Rank", style="cyan", width=6)
     table.add_column("Cluster ID", style="yellow", width=12)
@@ -64,16 +61,13 @@ def display_cluster_results(results, title: str, max_results: int = 3):
     table.add_column("Summary ID", style="blue", width=20)
     table.add_column("Score", style="magenta", width=8)
 
-    # Add rows and collect summary stats
     summary_counts = {}
     for i, hit in enumerate(results[:max_results], 1):
         title_text = hit.title[:30] + "..." if len(hit.title) > 30 else hit.title
         summary_id = getattr(hit, 'summary_run_id', 'N/A')
 
-        # Track summary distribution
         summary_counts[summary_id] = summary_counts.get(summary_id, 0) + 1
 
-        # Format summary ID for display
         summary_id_display = summary_id[:17] + "..." if summary_id and len(summary_id) > 20 else summary_id or "N/A"
 
         table.add_row(
@@ -86,7 +80,6 @@ def display_cluster_results(results, title: str, max_results: int = 3):
 
     console.print(table)
 
-    # Show distribution if multiple summaries
     if len(summary_counts) > 1:
         console.print(f"\n[dim]Results from {len(summary_counts)} different summary runs:[/dim]")
         for summary_id, count in summary_counts.items():
@@ -125,11 +118,9 @@ async def demonstrate_searches(run_id: str, hierarchy_run_id: str, db_path: str 
     ChromaManager()
 
     try:
-        # Initialize search clients (run_id defines the vector space)
         clusters_client = ClustersClient.from_run(db, run_id)
         queries_client = QueriesClient.from_run(db, run_id)
 
-        # Cluster Search 1: Programming
         console.print("[cyan]Search 1: Clusters about 'programming languages'[/cyan]")
         try:
             results = clusters_client.find("programming languages", top_k=3)
@@ -139,7 +130,6 @@ async def demonstrate_searches(run_id: str, hierarchy_run_id: str, db_path: str 
 
         console.print()
 
-        # Cluster Search 2: AI/ML
         console.print("[cyan]Search 2: Clusters about 'artificial intelligence'[/cyan]")
         try:
             results = clusters_client.find("artificial intelligence machine learning", top_k=3)
@@ -149,7 +139,6 @@ async def demonstrate_searches(run_id: str, hierarchy_run_id: str, db_path: str 
 
         console.print()
 
-        # Optional: Demonstrate filtering by summary_run_id
         try:
             with db.get_session() as session:
                 from sqlmodel import select
@@ -167,9 +156,8 @@ async def demonstrate_searches(run_id: str, hierarchy_run_id: str, db_path: str 
                     results = clusters_client.find("programming", top_k=2, summary_run_id=summaries[0])
                     console.print(f"  Found {len(results)} clusters from this specific summary\n")
         except Exception:
-            pass  # Optional demo, skip if error
+            pass
 
-        # Query Search: Python Tutorials
         console.print("[cyan]Search 3: Queries about 'python tutorial'[/cyan]")
         try:
             results = queries_client.find("python tutorial for beginners", n_results=5)
@@ -179,7 +167,6 @@ async def demonstrate_searches(run_id: str, hierarchy_run_id: str, db_path: str 
 
         console.print()
 
-        # Display Hierarchy
         console.print("[bold]ID System Summary[/bold]")
         console.print("• [cyan]run_id[/cyan]: Vector space (required for all searches)")
         console.print("• [cyan]summary_run_id[/cyan]: Which LLM descriptions (optional filter)")
@@ -192,7 +179,7 @@ async def demonstrate_searches(run_id: str, hierarchy_run_id: str, db_path: str 
             console.print("[yellow]Hierarchy not available[/yellow]")
 
     finally:
-        pass  # Resources auto-cleanup
+        pass
 
 
 def display_hierarchy(db: Database, hierarchy_run_id: str, max_levels: int = 3):
@@ -211,12 +198,10 @@ def display_hierarchy(db: Database, hierarchy_run_id: str, max_levels: int = 3):
             console.print("[yellow]  No hierarchy data found[/yellow]")
             return
 
-        # Group by level
         by_level = {}
         for h in hierarchies:
             by_level.setdefault(h.level, []).append(h)
 
-        # Hierarchy table
         table = Table(title="Cluster Hierarchy", show_header=True)
         table.add_column("Level", style="cyan", width=8)
         table.add_column("Clusters", style="yellow", width=10)
@@ -234,7 +219,6 @@ def display_hierarchy(db: Database, hierarchy_run_id: str, max_levels: int = 3):
 
         console.print(table)
 
-        # Statistics
         max_level = max(by_level.keys()) if by_level else 0
         console.print(f"\n[dim]Total: {len(hierarchies)} nodes across {len(by_level)} levels[/dim]")
         console.print(f"[dim]Leaves: {len(by_level.get(0, []))} | Roots: {len(by_level.get(max_level, []))}[/dim]")
@@ -251,8 +235,8 @@ async def run_example():
         hierarchy_levels=3,
         llm_provider="anthropic",
         llm_model="claude-3-5-sonnet-20241022",
-        db_path=str(DEFAULT_DB_PATH),  # ~/.lmsys-query-analysis/queries.db
-        chroma_path=str(DEFAULT_CHROMA_PATH),  # ~/.lmsys-query-analysis/chroma
+        db_path=str(DEFAULT_DB_PATH),
+        chroma_path=str(DEFAULT_CHROMA_PATH),
         log_level="INFO",
     )
 
@@ -288,9 +272,6 @@ async def run_example():
             db_path=config.db_path
         )
 
-        # ============================================================
-        # STEP 5: Next Steps
-        # ============================================================
         print_header("STEP 5: Explore Your Results")
 
         next_steps = Panel(
@@ -357,7 +338,6 @@ async def run_from_yaml_example():
     console.print(f"  • Queries: {config.query_limit}")
     console.print(f"  • Clusters: {config.n_clusters}")
 
-    # Run analysis
     runner = AnalysisRunner(config)
     results = await runner.run()
 
@@ -413,19 +393,15 @@ def main():
     """Main entry point."""
     import os
 
-    # Check if running in non-interactive mode
     auto_run = os.getenv("AUTO_RUN", "false").lower() == "true"
 
     try:
-        # Print usage
         print_usage()
 
-        # Prompt to continue (unless auto-run)
         if not auto_run:
             console.print("\n[yellow]Press Enter to continue or Ctrl+C to cancel...[/yellow]")
             input()
 
-        # Run the example
         results = asyncio.run(run_example())
 
         if results:

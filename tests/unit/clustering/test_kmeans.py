@@ -14,7 +14,6 @@ def db_with_clusters():
     db.create_tables()
 
     with db.get_session() as session:
-        # Create test queries
         queries = []
         for i in range(10):
             query = Query(
@@ -26,11 +25,9 @@ def db_with_clusters():
             queries.append(query)
         session.commit()
 
-        # Refresh to get IDs
         for q in queries:
             session.refresh(q)
 
-        # Create clustering run
         run = ClusteringRun(
             run_id="test-run",
             algorithm="kmeans",
@@ -40,10 +37,6 @@ def db_with_clusters():
         session.add(run)
         session.commit()
 
-        # Assign queries to clusters
-        # Cluster 0: queries 0, 1, 2
-        # Cluster 1: queries 3, 4, 5, 6
-        # Cluster 2: queries 7, 8, 9
         for i, query in enumerate(queries):
             if i < 3:
                 cluster_id = 0
@@ -80,7 +73,6 @@ def test_get_cluster_info_queries_content(db_with_clusters):
     queries = result["queries"]
     assert len(queries) == 3
 
-    # Check structure
     for q in queries:
         assert "id" in q
         assert "text" in q
@@ -90,22 +82,18 @@ def test_get_cluster_info_queries_content(db_with_clusters):
 
 def test_get_cluster_info_different_cluster(db_with_clusters):
     """Test getting info for different cluster sizes."""
-    # Cluster 0 has 3 queries
     result0 = get_cluster_info(db_with_clusters, "test-run", 0)
     assert result0["size"] == 3
 
-    # Cluster 1 has 4 queries
     result1 = get_cluster_info(db_with_clusters, "test-run", 1)
     assert result1["size"] == 4
 
-    # Cluster 2 has 3 queries
     result2 = get_cluster_info(db_with_clusters, "test-run", 2)
     assert result2["size"] == 3
 
 
 def test_get_cluster_info_empty_cluster(db_with_clusters):
     """Test getting info for a cluster with no queries."""
-    # Cluster 99 doesn't exist
     result = get_cluster_info(db_with_clusters, "test-run", 99)
 
     assert result["run_id"] == "test-run"
@@ -130,7 +118,6 @@ def test_get_cluster_info_query_text_preserved(db_with_clusters):
 
     texts = [q["text"] for q in result["queries"]]
 
-    # Should have queries 0, 1, 2
     assert "Test query 0" in texts
     assert "Test query 1" in texts
     assert "Test query 2" in texts
@@ -142,7 +129,6 @@ def test_get_cluster_info_with_multiple_runs():
     db.create_tables()
 
     with db.get_session() as session:
-        # Create queries
         q1 = Query(conversation_id="c1", model="gpt-4", query_text="Query 1")
         q2 = Query(conversation_id="c2", model="gpt-4", query_text="Query 2")
         session.add(q1)
@@ -151,26 +137,21 @@ def test_get_cluster_info_with_multiple_runs():
         session.refresh(q1)
         session.refresh(q2)
 
-        # Create two runs
         run1 = ClusteringRun(run_id="run-1", algorithm="kmeans", num_clusters=2)
         run2 = ClusteringRun(run_id="run-2", algorithm="kmeans", num_clusters=2)
         session.add(run1)
         session.add(run2)
         session.commit()
 
-        # Assign q1 to cluster 0 in run-1
         session.add(QueryCluster(run_id="run-1", query_id=q1.id, cluster_id=0))
 
-        # Assign q2 to cluster 0 in run-2
         session.add(QueryCluster(run_id="run-2", query_id=q2.id, cluster_id=0))
         session.commit()
 
-    # Check run-1 cluster 0 (should have q1)
     result1 = get_cluster_info(db, "run-1", 0)
     assert result1["size"] == 1
     assert result1["queries"][0]["text"] == "Query 1"
 
-    # Check run-2 cluster 0 (should have q2)
     result2 = get_cluster_info(db, "run-2", 0)
     assert result2["size"] == 1
     assert result2["queries"][0]["text"] == "Query 2"
@@ -182,7 +163,6 @@ def test_get_cluster_info_with_various_models(db_with_clusters):
     db.create_tables()
 
     with db.get_session() as session:
-        # Create queries with different models
         q1 = Query(conversation_id="c1", model="gpt-4", query_text="Query 1")
         q2 = Query(conversation_id="c2", model="claude-3", query_text="Query 2")
         q3 = Query(conversation_id="c3", model="llama", query_text="Query 3")
@@ -192,7 +172,6 @@ def test_get_cluster_info_with_various_models(db_with_clusters):
         for q in [q1, q2, q3]:
             session.refresh(q)
 
-        # Create run and assign all to cluster 0
         run = ClusteringRun(run_id="test", algorithm="kmeans", num_clusters=1)
         session.add(run)
         session.commit()
@@ -218,7 +197,6 @@ def test_get_cluster_info_returns_dict(db_with_clusters):
     assert "size" in result
     assert "queries" in result
 
-    # Check queries structure
     for query in result["queries"]:
         assert isinstance(query, dict)
         assert "id" in query
@@ -232,7 +210,6 @@ def test_get_cluster_info_large_cluster():
     db.create_tables()
 
     with db.get_session() as session:
-        # Create many queries
         queries = []
         for i in range(100):
             q = Query(
@@ -247,12 +224,10 @@ def test_get_cluster_info_large_cluster():
         for q in queries:
             session.refresh(q)
 
-        # Create run
         run = ClusteringRun(run_id="test", algorithm="kmeans", num_clusters=1)
         session.add(run)
         session.commit()
 
-        # Assign all to cluster 0
         for q in queries:
             session.add(QueryCluster(run_id="test", query_id=q.id, cluster_id=0))
         session.commit()

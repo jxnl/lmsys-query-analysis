@@ -24,20 +24,16 @@ def test_openai_embeddings_with_mocked_responses(mock_openai_env):
     """Test OpenAI embedding generation by mocking the async client's response."""
 
     with patch("openai.AsyncOpenAI") as mock_async_openai:
-        # Create a mock async client
         mock_client = AsyncMock()
         mock_async_openai.return_value = mock_client
 
-        # Mock the embeddings.create coroutine
         async def mock_create(**kwargs):
-            # Return mock response matching OpenAI's structure
             mock_response = Mock()
             mock_response.data = [Mock(embedding=[0.1] * 1536) for _ in kwargs["input"]]
             return mock_response
 
         mock_client.embeddings.create = mock_create
 
-        # Also mock sync client (even though we don't use it)
         with patch("openai.OpenAI"):
             gen = EmbeddingGenerator(
                 provider="openai",
@@ -76,12 +72,10 @@ def test_openai_batch_processing_multiple_batches(mock_openai_env):
             model_name="text-embedding-3-small",
         )
 
-        # 5 texts with batch_size=2 should make 3 batches
         texts = [f"query {i}" for i in range(5)]
         embeddings = gen.generate_embeddings(texts, batch_size=2, show_progress=False)
 
         assert embeddings.shape == (5, 1536)
-        # Verify multiple batches were processed
         assert call_count == 3
 
 
@@ -92,16 +86,12 @@ def test_cohere_embeddings_with_mocked_responses(mock_cohere_env):
         mock_client = Mock()
         mock_async_cohere.return_value = mock_client
 
-        # Create proper async mock
         async def mock_embed(**kwargs):
-            # Create mock response with proper structure
             mock_resp = Mock()
             mock_resp.embeddings = Mock()
-            # Return list of embeddings matching input size (use .float not .float_)
             mock_resp.embeddings.float = [[0.1] * 256 for _ in kwargs["texts"]]
             return mock_resp
 
-        # Assign as a coroutine
         mock_client.embed = AsyncMock(side_effect=mock_embed)
 
         gen = EmbeddingGenerator(
@@ -141,12 +131,10 @@ def test_cohere_batch_processing(mock_cohere_env):
             output_dimension=256,
         )
 
-        # 5 texts with batch_size=2
         texts = [f"query {i}" for i in range(5)]
         embeddings = gen.generate_embeddings(texts, batch_size=2, show_progress=False)
 
         assert embeddings.shape == (5, 256)
-        # Batches might be processed concurrently, so just check total
         assert sum(batch_sizes_seen) == 5
 
 
@@ -172,19 +160,15 @@ def test_embedding_filters_empty_strings(mock_openai_env):
             model_name="text-embedding-3-small",
         )
 
-        # Mix of valid and empty texts
         texts = ["valid 1", "", "  ", "valid 2"]
         embeddings = gen.generate_embeddings(texts, batch_size=10, show_progress=False)
 
-        # Should return embeddings for all 4 inputs
         assert embeddings.shape == (4, 1536)
 
-        # But only 2 texts should be sent to API
         assert len(actual_inputs) == 2
         assert "valid 1" in actual_inputs
         assert "valid 2" in actual_inputs
 
-        # Empty positions should have zero embeddings
         assert np.allclose(embeddings[1], np.zeros(1536))
         assert np.allclose(embeddings[2], np.zeros(1536))
 
@@ -194,7 +178,7 @@ def test_cohere_invalid_model_validation():
     with pytest.raises(ValueError, match="Only Cohere v4 supported"):
         EmbeddingGenerator(
             provider="cohere",
-            model_name="embed-english-v3.0",  # Invalid v3 model
+            model_name="embed-english-v3.0",
         )
 
 
@@ -204,7 +188,7 @@ def test_cohere_invalid_dimension_validation():
         EmbeddingGenerator(
             provider="cohere",
             model_name="embed-v4.0",
-            output_dimension=999,  # Invalid dimension
+            output_dimension=999,
         )
 
 
@@ -215,10 +199,8 @@ def test_cohere_dimension_defaults(mock_cohere_env):
         gen = EmbeddingGenerator(
             provider="cohere",
             model_name="embed-v4.0",
-            # No output_dimension specified
         )
 
-        # Should default to 256
         assert gen.output_dimension == 256
 
 
@@ -277,9 +259,7 @@ def test_openai_async_retry_logic(mock_openai_env):
             nonlocal attempt_count
             attempt_count += 1
             if attempt_count < 2:
-                # Fail first attempt
                 raise Exception("Transient error")
-            # Succeed on retry
             mock_response = Mock()
             mock_response.data = [Mock(embedding=[0.1] * 1536) for _ in kwargs["input"]]
             return mock_response
@@ -294,7 +274,6 @@ def test_openai_async_retry_logic(mock_openai_env):
         texts = ["test"]
         embeddings = gen.generate_embeddings(texts, batch_size=1, show_progress=False)
 
-        # Should succeed after retry
         assert embeddings.shape == (1, 1536)
         assert attempt_count == 2
 
@@ -320,11 +299,9 @@ def test_all_empty_texts_returns_zeros(mock_openai_env):
             model_name="text-embedding-3-small",
         )
 
-        # All empty texts
         texts = ["", "  ", "\t", "\n"]
         embeddings = gen.generate_embeddings(texts, batch_size=10, show_progress=False)
 
-        # Should return zeros without calling API
         assert embeddings.shape == (4, 1536)
         assert np.allclose(embeddings, np.zeros((4, 1536)))
-        assert not api_called  # API should NOT be called
+        assert not api_called

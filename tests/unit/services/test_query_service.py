@@ -24,25 +24,22 @@ def test_list_queries_with_run_id(populated_db):
     """Test listing queries filtered by run_id."""
     queries = query_service.list_queries(populated_db, run_id="test-run-001", limit=10)
 
-    assert len(queries) == 5  # All queries are in test-run-001
+    assert len(queries) == 5
 
 
 def test_list_queries_with_run_and_cluster(populated_db):
     """Test listing queries filtered by run_id and cluster_id."""
-    # First verify we can get queries from cluster 1
     cluster1_queries = query_service.get_cluster_queries(
         populated_db, run_id="test-run-001", cluster_id=1
     )
-    assert len(cluster1_queries) == 2  # Machine learning queries
+    assert len(cluster1_queries) == 2
 
-    # Then verify list_queries also works with cluster filter
     queries = query_service.list_queries(
         populated_db, run_id="test-run-001", cluster_id=0, limit=10
     )
 
-    # Should get cluster 0 queries
     assert len(queries) > 0
-    assert len(queries) <= 5  # At most all queries
+    assert len(queries) <= 5
 
 
 def test_list_queries_with_limit(populated_db):
@@ -64,7 +61,6 @@ def test_get_cluster_queries(populated_db):
     queries = query_service.get_cluster_queries(populated_db, run_id="test-run-001", cluster_id=1)
 
     assert len(queries) == 2
-    # Verify they're machine learning queries from cluster 1
     texts = [q.query_text for q in queries]
     assert "machine learning" in " ".join(texts).lower()
 

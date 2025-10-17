@@ -22,6 +22,5 @@ def setup_logging(verbose: bool = False, level: int | None = None) -> None:
         handlers=[RichHandler(rich_tracebacks=True, markup=True)],
     )
 
-    # Reduce noise from third-party libs by default
     for noisy in ("sqlalchemy.engine", "httpx", "urllib3"):
         logging.getLogger(noisy).setLevel(logging.WARNING)

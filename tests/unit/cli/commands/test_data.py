@@ -12,7 +12,6 @@ def test_load_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_lo
     """Test basic load command without Chroma."""
     from lmsys_query_analysis.cli.commands.data import load
 
-    # Setup mocks
     mock_parse.return_value = ("test-model", "test-provider")
     mock_db = Mock()
     mock_db.db_path = Path("/tmp/test.db")
@@ -24,12 +23,11 @@ def test_load_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_lo
         "errors": 0,
     }
 
-    # Execute command
     load(
         limit=100,
         db_path="/tmp/test.db",
         use_chroma=False,
-        hf="lmsys/lmsys-chat-1m",  # Added default --hf flag value
+        hf="lmsys/lmsys-chat-1m",
         chroma_path="/tmp/chroma",
         embedding_model="test-model",
         db_batch_size=1000,
@@ -38,7 +36,6 @@ def test_load_command_basic(mock_parse, mock_chroma_client, mock_get_db, mock_lo
         force_reload=False,
     )
 
-    # Verify
     mock_get_db.assert_called_once_with("/tmp/test.db")
     mock_load_dataset.assert_called_once()
 
@@ -51,7 +48,6 @@ def test_clear_command_with_yes_flag(mock_get_db, mock_get_chroma, mock_rmtree, 
     """Test clear command with --yes flag."""
     from lmsys_query_analysis.cli.commands.data import clear
 
-    # Setup mocks
     mock_db = Mock()
     mock_db.db_path = "/tmp/test.db"
     mock_get_db.return_value = mock_db
@@ -60,7 +56,6 @@ def test_clear_command_with_yes_flag(mock_get_db, mock_get_chroma, mock_rmtree, 
     mock_chroma.persist_directory = "/tmp/chroma"
     mock_get_chroma.return_value = mock_chroma
 
-    # Mock Path to say files exist
     mock_db_path = Mock()
     mock_db_path.exists.return_value = True
     mock_chroma_path = Mock()
@@ -73,10 +68,8 @@ def test_clear_command_with_yes_flag(mock_get_db, mock_get_chroma, mock_rmtree, 
 
     mock_path_class.side_effect = path_side_effect
 
-    # Execute command with confirm=True (--yes flag)
     clear(db_path="/tmp/test.db", chroma_path="/tmp/chroma", confirm=True)
 
-    # Verify files were deleted
     mock_db_path.unlink.assert_called_once()
     mock_rmtree.assert_called_once()
 
@@ -92,7 +85,6 @@ def test_backfill_chroma_command(mock_parse, mock_get_db, mock_chroma_client, mo
     from lmsys_query_analysis.cli.commands.data import backfill_chroma
     from lmsys_query_analysis.db.models import Query
 
-    # Setup mocks
     mock_parse.return_value = ("test-model", "test-provider")
 
     mock_db = Mock()
@@ -100,33 +92,27 @@ def test_backfill_chroma_command(mock_parse, mock_get_db, mock_chroma_client, mo
     mock_db.get_session.return_value.__enter__ = Mock(return_value=mock_session)
     mock_db.get_session.return_value.__exit__ = Mock(return_value=False)
 
-    # Mock queries and count
     mock_queries = [
         Query(id=1, conversation_id="c1", model="gpt-4", query_text="Test 1", language="en"),
     ]
     mock_result_all = Mock()
     mock_result_all.all.return_value = mock_queries
 
-    # Mock the one() result for count query - returns a single row
     mock_result_one = Mock()
-    mock_result_one.one.return_value = (1,)  # Tuple with count value
+    mock_result_one.one.return_value = (1,)
 
-    # Set up exec to return different results for different queries
     mock_session.exec.side_effect = [mock_result_one, mock_result_all]
 
     mock_get_db.return_value = mock_db
 
-    # Mock Chroma
     mock_chroma = Mock()
     mock_chroma.get_query_embeddings_map.return_value = {}
     mock_chroma_client.return_value = mock_chroma
 
-    # Mock embedder
     mock_embedder = Mock()
     mock_embedder.generate_embeddings.return_value = np.array([[0.1] * 10])
     mock_embed_gen.return_value = mock_embedder
 
-    # Execute command
     backfill_chroma(
         db_path="/tmp/test.db",
         chroma_path="/tmp/chroma",
@@ -135,7 +121,6 @@ def test_backfill_chroma_command(mock_parse, mock_get_db, mock_chroma_client, mo
         embed_batch_size=50,
     )
 
-    # Verify
     mock_get_db.assert_called_once()
     mock_chroma_client.assert_called_once()
 
@@ -150,7 +135,6 @@ def test_load_command_with_custom_hf_dataset(
     """Test load command with custom HuggingFace dataset via --hf flag."""
     from lmsys_query_analysis.cli.commands.data import load
 
-    # Setup mocks
     mock_parse.return_value = ("test-model", "test-provider")
     mock_db = Mock()
     mock_db.db_path = Path("/tmp/test.db")
@@ -162,12 +146,11 @@ def test_load_command_with_custom_hf_dataset(
         "errors": 0,
     }
 
-    # Execute command with custom dataset
     load(
         limit=50,
         db_path="/tmp/test.db",
         use_chroma=False,
-        hf="custom/dataset",  # Custom dataset name
+        hf="custom/dataset",
         chroma_path="/tmp/chroma",
         embedding_model="test-model",
         db_batch_size=1000,
@@ -176,7 +159,6 @@ def test_load_command_with_custom_hf_dataset(
         force_reload=False,
     )
 
-    # Verify load_dataset was called with custom dataset name
     mock_load_dataset.assert_called_once()
     call_kwargs = mock_load_dataset.call_args[1]
     assert call_kwargs["dataset_name"] == "custom/dataset"
@@ -193,7 +175,6 @@ def test_load_command_defaults_to_lmsys_dataset(
     """Test load command defaults to lmsys/lmsys-chat-1m."""
     from lmsys_query_analysis.cli.commands.data import load
 
-    # Setup mocks
     mock_parse.return_value = ("test-model", "test-provider")
     mock_db = Mock()
     mock_db.db_path = Path("/tmp/test.db")
@@ -205,12 +186,11 @@ def test_load_command_defaults_to_lmsys_dataset(
         "errors": 0,
     }
 
-    # Execute command without specifying --hf (use default)
     load(
         limit=100,
         db_path="/tmp/test.db",
         use_chroma=False,
-        hf="lmsys/lmsys-chat-1m",  # Default value
+        hf="lmsys/lmsys-chat-1m",
         chroma_path="/tmp/chroma",
         embedding_model="test-model",
         db_batch_size=1000,
@@ -219,7 +199,6 @@ def test_load_command_defaults_to_lmsys_dataset(
         force_reload=False,
     )
 
-    # Verify load_dataset was called with default dataset name
     mock_load_dataset.assert_called_once()
     call_kwargs = mock_load_dataset.call_args[1]
     assert call_kwargs["dataset_name"] == "lmsys/lmsys-chat-1m"

@@ -26,7 +26,6 @@ def chroma_info(
     xml: bool = xml_output_option,
 ):
     """List all Chroma collections with metadata and counts."""
-    # Validate format options
     format_count = sum([json_out, table, xml])
     if format_count > 1:
         console.print("[red]Error: Cannot specify more than one output format[/red]")
@@ -35,7 +34,6 @@ def chroma_info(
     chroma = get_chroma(chroma_path)
     cols = chroma.list_all_collections()
 
-    # Enrich known metadata keys with defaults
     normalized = []
     for c in cols:
         meta = c.get("metadata") or {}
@@ -58,6 +56,5 @@ def chroma_info(
         xml_output = json_output.format_chroma_collections_xml(normalized)
         console.print(xml_output)
     else:
-        # Default to table format
         table_output = tables.format_chroma_collections_table(normalized)
         console.print(table_output)

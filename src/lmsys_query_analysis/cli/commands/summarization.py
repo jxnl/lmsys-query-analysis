@@ -50,13 +50,11 @@ def summarize(
 
     console.print(f"[cyan]Using LLM: {model}[/cyan]")
 
-    # Get the clustering run
     run = run_service.get_run(db, run_id)
     if not run:
         console.print(f"[red]Run {run_id} not found[/red]")
         raise typer.Exit(1)
 
-    # Generate summary_run_id if not provided
     if not summary_run_id:
         model_short = model.split("/")[-1][:20]
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -66,14 +64,12 @@ def summarize(
     if alias:
         console.print(f"[cyan]Alias: {alias}[/cyan]")
 
-    # Initialize summarizer
     summarizer = ClusterSummarizer(
         model=model,
         concurrency=concurrency,
         rpm=rpm,
     )
 
-    # Get clusters to summarize
     if cluster_id is not None:
         cluster_ids = [cluster_id]
     else:
@@ -81,13 +77,11 @@ def summarize(
 
     console.print(f"[cyan]Summarizing {len(cluster_ids)} clusters for run {run_id}[/cyan]")
 
-    # Prepare clusters data
     clusters_data = []
     for cid in cluster_ids:
         _, query_texts = cluster_service.get_cluster_queries_with_texts(db, run_id, cid)
         clusters_data.append(ClusterData(cluster_id=cid, queries=query_texts))
 
-    # Generate summaries with LLM
     results = summarizer.generate_batch_summaries(
         clusters_data=clusters_data,
         max_queries=max_queries,
@@ -98,7 +92,6 @@ def summarize(
         contrast_mode=contrast_mode,
     )
 
-    # Store in SQLite
     console.print("[cyan]Storing summaries in SQLite...[/cyan]")
     sizes_map = {cid: len(qs) for cid, qs in clusters_data}
 
@@ -113,7 +106,6 @@ def summarize(
 
     with db.get_session() as session:
         for cid, summary_data in results.items():
-            # Check if summary already exists for this summary_run_id
             from sqlmodel import select
 
             statement = select(ClusterSummary).where(
@@ -124,7 +116,6 @@ def summarize(
             existing = session.exec(statement).first()
 
             if existing:
-                # Update existing
                 existing.title = summary_data["title"]
                 existing.description = summary_data["description"]
                 existing.summary = f"{summary_data['title']}\n\n{summary_data['description']}"
@@ -133,7 +124,6 @@ def summarize(
                 existing.parameters = summary_params
                 existing.alias = alias
             else:
-                # Create new
                 new_summary = ClusterSummary(
                     run_id=run_id,
                     cluster_id=cid,
@@ -151,7 +141,6 @@ def summarize(
 
         session.commit()
 
-    # Display generated summaries
     console.print(f"\n[bold green]✓ Generated {len(results)} cluster summaries[/bold green]\n")
 
     for cid in sorted(results.keys()):
@@ -160,11 +149,9 @@ def summarize(
         console.print(f"  {summary_data['description']}")
         console.print(f"  [dim]({sizes_map.get(cid, 0)} queries)[/dim]\n")
 
-    # Store in ChromaDB if requested
     if use_chroma:
         console.print("[cyan]Generating embeddings for summaries...[/cyan]")
 
-        # Use the same embedding space as the clustering run if available
         embed_model = (
             run.parameters.get("embedding_model")
             if (run and run.parameters)
@@ -177,7 +164,6 @@ def summarize(
         chroma = create_chroma_client(chroma_path, embed_model, embed_provider)
         embedding_gen = create_embedding_generator(embed_model, embed_provider)
 
-        # Prepare data for batch storage
         cluster_ids_list = []
         summaries_list = []
         titles_list = []
@@ -199,14 +185,12 @@ def summarize(
                 }
             )
 
-        # Generate embeddings for summaries
         embeddings = embedding_gen.generate_embeddings(
             summaries_list,
             batch_size=32,
             show_progress=True,
         )
 
-        # Store in ChromaDB
         chroma.add_cluster_summaries_batch(
             run_id=run_id,
             cluster_ids=cluster_ids_list,

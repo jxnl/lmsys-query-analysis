@@ -20,7 +20,6 @@ def semantic_queries_db(tmp_path):
     db.create_tables()
 
     with db.get_session() as session:
-        # Create test queries
         queries = []
         for i in range(20):
             query = Query(
@@ -33,11 +32,9 @@ def semantic_queries_db(tmp_path):
             queries.append(query)
         session.commit()
 
-        # Refresh to get IDs
         for q in queries:
             session.refresh(q)
 
-        # Create clustering run
         run = ClusteringRun(
             run_id="test-semantic-run",
             algorithm="kmeans",
@@ -50,7 +47,6 @@ def semantic_queries_db(tmp_path):
         session.add(run)
         session.commit()
 
-        # Assign queries to clusters
         for i, query in enumerate(queries):
             assignment = QueryCluster(
                 run_id="test-semantic-run",
@@ -61,7 +57,6 @@ def semantic_queries_db(tmp_path):
             session.add(assignment)
         session.commit()
 
-        # Add cluster summaries
         for cluster_id in range(5):
             summary = ClusterSummary(
                 run_id="test-semantic-run",
@@ -146,12 +141,10 @@ def test_queries_client_from_run_with_cohere_params(tmp_path):
         session.add(run)
         session.commit()
 
-    # Mock Cohere client to avoid API key requirement
     import os
     from unittest.mock import Mock, patch
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Set a fake API key to pass initialization
         original_key = os.environ.get("CO_API_KEY")
         os.environ["CO_API_KEY"] = "fake-key-for-testing"
 
@@ -160,7 +153,6 @@ def test_queries_client_from_run_with_cohere_params(tmp_path):
                 patch("cohere.ClientV2") as mock_client,
                 patch("cohere.AsyncClientV2") as mock_async_client,
             ):
-                # Create mock Cohere clients
                 mock_client.return_value = Mock()
                 mock_async_client.return_value = Mock()
 
@@ -169,7 +161,6 @@ def test_queries_client_from_run_with_cohere_params(tmp_path):
                 assert client.embedder.provider == "cohere"
                 assert client.chroma.embedding_dimension == 256
         finally:
-            # Restore original key
             if original_key is None:
                 os.environ.pop("CO_API_KEY", None)
             else:
@@ -190,18 +181,15 @@ def test_queries_client_from_run_cohere_default_dimension(tmp_path):
             parameters={
                 "embedding_provider": "cohere",
                 "embedding_model": "embed-v4.0",
-                # No embedding_dimension specified
             },
         )
         session.add(run)
         session.commit()
 
-    # Mock Cohere client to avoid API key requirement
     import os
     from unittest.mock import Mock, patch
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Set a fake API key to pass initialization
         original_key = os.environ.get("CO_API_KEY")
         os.environ["CO_API_KEY"] = "fake-key-for-testing"
 
@@ -210,7 +198,6 @@ def test_queries_client_from_run_cohere_default_dimension(tmp_path):
                 patch("cohere.ClientV2") as mock_client,
                 patch("cohere.AsyncClientV2") as mock_async_client,
             ):
-                # Create mock Cohere clients
                 mock_client.return_value = Mock()
                 mock_async_client.return_value = Mock()
 
@@ -218,10 +205,8 @@ def test_queries_client_from_run_cohere_default_dimension(tmp_path):
                     db=db, run_id="cohere-run-no-dim", persist_dir=tmpdir
                 )
 
-                # Should default to 256 for Cohere
                 assert client.chroma.embedding_dimension == 256
         finally:
-            # Restore original key
             if original_key is None:
                 os.environ.pop("CO_API_KEY", None)
             else:
@@ -276,7 +261,7 @@ def test_queries_client_embed():
     vec = client.embed("test query")
 
     assert isinstance(vec, list)
-    assert len(vec) == 384  # all-MiniLM-L6-v2 dimension
+    assert len(vec) == 384
     assert all(isinstance(x, (float, np.floating)) for x in vec)
 
 
@@ -298,11 +283,9 @@ def test_queries_client_count_by_cluster():
 
     client = QueriesClient(db=db, chroma=chroma, embedder=embedder)
 
-    # Test that unsupported 'by' raises ValueError
     from unittest.mock import patch
 
     with pytest.raises(ValueError, match="by must be one of"):
-        # Mock find to return some hits
         with patch.object(client, "find", return_value=[]):
             client.count("test", by="invalid")
 
@@ -325,7 +308,6 @@ def test_queries_client_count_by_language():
 
     client = QueriesClient(db=db, chroma=chroma, embedder=embedder, run_id="test")
 
-    # Create mock hits with language data
     from unittest.mock import Mock
 
     mock_hits = [
@@ -362,7 +344,6 @@ def test_queries_client_count_by_model():
 
     client = QueriesClient(db=db, chroma=chroma, embedder=embedder)
 
-    # Create mock hits with model data
     from unittest.mock import Mock
 
     mock_hits = [
@@ -399,14 +380,13 @@ def test_queries_client_facets_language():
 
     client = QueriesClient(db=db, chroma=chroma, embedder=embedder)
 
-    # Create mock hits
     from unittest.mock import Mock
 
     mock_hits = [
         Mock(language="English", model="gpt-4", cluster_id=0),
         Mock(language="English", model="gpt-4", cluster_id=1),
         Mock(language="Spanish", model="claude-3", cluster_id=2),
-        Mock(language=None, model="gpt-4", cluster_id=3),  # Test None handling
+        Mock(language=None, model="gpt-4", cluster_id=3),
     ]
 
     from unittest.mock import patch
@@ -417,11 +397,9 @@ def test_queries_client_facets_language():
         assert "language" in facets
         language_buckets = facets["language"]
 
-        # Find English bucket
         english_bucket = next(b for b in language_buckets if b.key == "English")
         assert english_bucket.count == 2
 
-        # Find empty string bucket for None language
         empty_bucket = next((b for b in language_buckets if b.key == ""), None)
         assert empty_bucket is not None
 
@@ -444,13 +422,12 @@ def test_queries_client_facets_model():
 
     client = QueriesClient(db=db, chroma=chroma, embedder=embedder)
 
-    # Create mock hits
     from unittest.mock import Mock
 
     mock_hits = [
         Mock(model="gpt-4", language="English", cluster_id=0),
         Mock(model="gpt-4", language="English", cluster_id=1),
-        Mock(model=None, language="English", cluster_id=2),  # Test None handling
+        Mock(model=None, language="English", cluster_id=2),
     ]
 
     from unittest.mock import patch
@@ -461,7 +438,6 @@ def test_queries_client_facets_model():
         assert "model" in facets
         model_buckets = facets["model"]
 
-        # Buckets should be sorted by count descending
         assert model_buckets[0].count >= model_buckets[-1].count
 
 
@@ -492,8 +468,6 @@ def test_queries_client_facets_unsupported():
 
 def test_queries_client_find_with_threshold():
     """Test find method filters by distance threshold."""
-    # This tests that the threshold parameter works correctly
-    # The actual filtering happens in lines 150-152
     db = Database(":memory:")
     db.create_tables()
 
@@ -510,22 +484,19 @@ def test_queries_client_find_with_threshold():
 
     client = QueriesClient(db=db, chroma=chroma, embedder=embedder)
 
-    # Mock the chroma search to return results with different distances
     from unittest.mock import patch
 
     mock_results = {
         "ids": [["query_1", "query_2", "query_3"]],
         "documents": [["doc1", "doc2", "doc3"]],
         "metadatas": [[{"model": "gpt-4"}, {"model": "gpt-4"}, {"model": "gpt-4"}]],
-        "distances": [[0.1, 0.5, 0.9]],  # Different distances
+        "distances": [[0.1, 0.5, 0.9]],
     }
 
     with patch.object(client.chroma, "search_queries", return_value=mock_results):
         with patch.object(
             client.embedder, "generate_embeddings", return_value=np.array([[0.1] * 384])
         ):
-            # With threshold=0.6, only first two should pass
             hits = client.find("test", threshold=0.6)
 
-            # Should filter out the third result (distance=0.9 > 0.6)
             assert len(hits) <= 2

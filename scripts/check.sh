@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Check both linting and formatting without making changes
 
 set -e
 

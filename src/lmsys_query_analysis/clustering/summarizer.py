@@ -26,7 +26,6 @@ from tenacity import (
 
 console = Console()
 
-# Constants
 MAX_NEIGHBOR_EXAMPLE_LENGTH = 180
 RETRY_MAX_ATTEMPTS = 5
 RETRY_MIN_WAIT = 1
@@ -53,7 +52,6 @@ class ClusterData(BaseModel):
         return (self.cluster_id, self.queries)
 
 
-# Concise cluster prompt
 DEFAULT_CLUSTER_PROMPT = """
 Summarize these queries into a 2-sentence description and a short name (≤10 words, imperative sentence).
 
@@ -119,7 +117,6 @@ class ClusterSummarizer:
         self.rpm = rpm if (rpm is None or rpm > 0) else None
         self.logger = logging.getLogger("lmsys")
 
-        # Initialize async instructor client with full model string
         if api_key:
             self.async_client = instructor.from_provider(model, api_key=api_key, async_client=True)
         else:
@@ -160,7 +157,6 @@ class ClusterSummarizer:
             contrast_mode,
         )
 
-    # -------- Async path below --------
 
     async def _async_generate_batch_summaries(
         self,
@@ -188,14 +184,12 @@ class ClusterSummarizer:
             rpm,
         )
 
-        # Pre-select representative queries for each cluster
         sampled_map: dict[int, list[str]] = {}
         for cluster_data in clusters_data:
             sampled_map[cluster_data.cluster_id] = self._select_representative_queries(
                 cluster_data.queries, max_queries
             )
 
-        # Build neighbor context for contrastive learning
         neighbor_context = self._build_neighbor_context(
             clusters_data,
             sampled_map,
@@ -205,7 +199,6 @@ class ClusterSummarizer:
         )
 
         async def worker(idx: int, cluster_data: ClusterData, progress_task, progress):
-            # Build per-cluster summary (retries handled by tenacity decorator)
             self.logger.debug(
                 "Worker %d starting for cluster %d (%d queries)",
                 idx,
@@ -265,7 +258,6 @@ class ClusterSummarizer:
             max_queries: Max queries to send to LLM
             contrast_neighbors: List of neighbor cluster data for contrastive learning
         """
-        # Select a representative and diverse sample of queries
         self.logger.debug(
             "Selecting representative queries for cluster %d from %d total",
             cluster_id,
@@ -276,7 +268,6 @@ class ClusterSummarizer:
             "Selected %d representative queries for cluster %d", len(sampled), cluster_id
         )
 
-        # Build contrastive examples from neighbors
         contrastive_examples = []
         if contrast_neighbors:
             for neighbor in contrast_neighbors:
@@ -290,7 +281,6 @@ class ClusterSummarizer:
             },
         ]
 
-        # Use Instructor's built-in Jinja templating with context
         response = await self.async_client.chat.completions.create(
             response_model=ClusterSummaryResponse,
             messages=messages,
@@ -306,7 +296,6 @@ class ClusterSummarizer:
             "sample_queries": sampled,
         }
 
-    # -------- Helper methods --------
 
     def _build_neighbor_context(
         self,
@@ -322,7 +311,6 @@ class ClusterSummarizer:
             cluster_data.cluster_id: len(cluster_data.queries) for cluster_data in clusters_data
         }
 
-        # Skip if no neighbors requested or only one cluster
         if contrast_neighbors <= 0 or len(id_list) <= 1:
             return {cid: [] for cid in id_list}
 
@@ -333,8 +321,6 @@ class ClusterSummarizer:
                 neighbor_context[cid] = []
                 continue
 
-            # Improved neighbor selection: prioritize clusters with different sizes
-            # to get better contrastive examples
             other_clusters_with_size = [(oid, sizes_map.get(oid, 0)) for oid in other_ids]
             other_clusters_with_size.sort(
                 key=lambda x: abs(x[1] - sizes_map.get(cid, 0)), reverse=True
@@ -345,7 +331,6 @@ class ClusterSummarizer:
 
             neighbors_data = []
             for nid in neighbor_ids:
-                # Get examples if contrast_examples > 0
                 examples = []
                 if contrast_examples > 0:
                     examples = sampled_map.get(nid, [])[:contrast_examples]
@@ -391,7 +376,6 @@ class ClusterSummarizer:
         if not cluster_queries:
             return []
 
-        # Normalize and deduplicate while preserving original text
         seen = set()
         originals: list[str] = []
         for q in cluster_queries:
@@ -405,5 +389,4 @@ class ClusterSummarizer:
         if k <= 0:
             return []
 
-        # Use random sampling
         return self._random_sample(originals, k)

@@ -20,12 +20,9 @@ class FakeAsyncChat:
         def __init__(self, prompts_ref: list[str]):
             self._prompts = prompts_ref
 
-        async def create(self, response_model=None, messages=None, context=None):  # type: ignore[no-redef]
-            # Capture the system message content (index 0) for assertions
-            # With Instructor's Jinja templating, the template is in the system message
+        async def create(self, response_model=None, messages=None, context=None):
             content = messages[0]["content"] if messages and len(messages) > 0 else ""
             self._prompts.append(content)
-            # Return a minimal object with required fields
             return SimpleNamespace(
                 title="Test Title",
                 description="Test Description",
@@ -33,7 +30,6 @@ class FakeAsyncChat:
 
     @property
     def completions(self):
-        # for parity with .chat.completions
         return self._Completions(self._prompts)
 
 
@@ -51,7 +47,7 @@ def patch_instructor(monkeypatch, prompts: list[str]):
             def __init__(self, prompts_ref: list[str]):
                 self._prompts = prompts_ref
 
-            def create(self, response_model=None, messages=None):  # sync create
+            def create(self, response_model=None, messages=None):
                 content = messages[1]["content"] if messages and len(messages) > 1 else ""
                 self._prompts.append(content)
                 return SimpleNamespace(title="Test Title", description="Test Description")
@@ -64,7 +60,6 @@ def patch_instructor(monkeypatch, prompts: list[str]):
             self.chat = _FakeSyncChat(prompts_ref)
 
     def _fake_from_provider(model: str, api_key=None, async_client: bool = False, **kwargs):
-        # Return async or sync fake client capturing prompts
         if async_client:
             return FakeAsyncClient(prompts)
         return _FakeSyncClient(prompts)
@@ -79,7 +74,6 @@ def fake_embeddings(monkeypatch):
     def _fake_generate_embeddings(
         self, texts: list[str], batch_size: int = 32, show_progress: bool = True
     ):
-        # Return a simple embedding matrix that makes 0~1 near and 2 far
         n = len(texts)
         if n == 3:
             return np.array(
@@ -89,12 +83,9 @@ def fake_embeddings(monkeypatch):
                     [0.0, 0.0, 1.0],
                 ]
             )
-        # Fallback: identity-ish
         eye = np.eye(max(1, n))
         return eye[:n]
 
-    # Patch on the module where it's used
-    # Patch the EmbeddingGenerator used by summarizer internals
     import lmsys_query_analysis.clustering.embeddings as emb
 
     monkeypatch.setattr(
@@ -106,7 +97,6 @@ def fake_embeddings(monkeypatch):
 
 
 def test_summarizer_prompt_includes_contrast_neighbors(fake_embeddings, monkeypatch):
-    # Arrange
     prompts: list[str] = []
     patch_instructor(monkeypatch, prompts)
     s = ClusterSummarizer(model="openai/gpt-5", concurrency=1)
@@ -121,7 +111,6 @@ def test_summarizer_prompt_includes_contrast_neighbors(fake_embeddings, monkeypa
         ClusterData(cluster_id=2, queries=["how to cook pasta", "boil water add salt"]),
     ]
 
-    # Act
     res = s.generate_batch_summaries(
         clusters_data,
         max_queries=5,
@@ -132,12 +121,10 @@ def test_summarizer_prompt_includes_contrast_neighbors(fake_embeddings, monkeypa
         contrast_mode="neighbors",
     )
 
-    # Assert outputs shape
     assert set(res.keys()) == {0, 1, 2}
     for v in res.values():
         assert "title" in v and "description" in v and "sample_queries" in v
 
-        # Assert prompts captured and include XML contrast section with neighbor entries
         assert len(prompts) == 3
         p0 = prompts[0]
         assert "<contrastive_examples>" in p0
@@ -161,7 +148,7 @@ def test_summarizer_prompt_keywords_mode(fake_embeddings, monkeypatch):
         concurrency=1,
         rpm=None,
         contrast_neighbors=1,
-        contrast_examples=0,  # force keywords mode to render keywords only
+        contrast_examples=0,
         contrast_mode="keywords",
     )
 
@@ -191,5 +178,4 @@ def test_summarizer_prompt_no_contrast(fake_embeddings, monkeypatch):
     )
 
     assert set(res.keys()) == {100, 101}
-    # Prompts should not include contrast block
     assert all("<contrastive_neighbors>" not in p for p in prompts)

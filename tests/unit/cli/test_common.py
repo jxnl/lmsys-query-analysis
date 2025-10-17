@@ -52,7 +52,6 @@ def test_with_error_handling_with_args_kwargs():
 def test_with_error_handling_exception_group():
     """Test that decorator handles ExceptionGroup specially."""
 
-    # Create a mock ExceptionGroup-like exception
     class MockExceptionGroup(Exception):
         def __init__(self, msg, exceptions):
             super().__init__(msg)
@@ -66,12 +65,10 @@ def test_with_error_handling_exception_group():
         with pytest.raises(typer.Exit) as exc_info:
             func_with_exception_group()
 
-        # Should have printed the "Multiple errors occurred" message
         assert any(
             "Multiple errors occurred" in str(call) for call in mock_console.print.call_args_list
         )
 
-        # Should exit with code 1
         assert exc_info.value.exit_code == 1
 
 
@@ -86,7 +83,6 @@ def test_with_error_handling_logs_exception():
         with pytest.raises(typer.Exit):
             failing_func()
 
-        # Should have called logger.exception
         mock_logger.exception.assert_called_once()
         call_args = mock_logger.exception.call_args
         assert "failing_func failed" in str(call_args)
@@ -103,7 +99,6 @@ def test_with_error_handling_prints_error_message():
         with pytest.raises(typer.Exit):
             failing_func()
 
-        # Should have printed error message
         printed_messages = [str(call) for call in mock_console.print.call_args_list]
         assert any("specific error message" in msg for msg in printed_messages)
 
@@ -122,7 +117,6 @@ def test_with_error_handling_preserves_function_metadata():
 
 def test_typer_option_defaults():
     """Test that Typer options have expected defaults."""
-    # These are option factories, not actual values
     assert db_path_option is not None
     assert chroma_path_option is not None
     assert embedding_model_option is not None

@@ -19,7 +19,7 @@ interface ClusterQueriesClientProps {
 }
 
 export function ClusterQueriesClient({ runId, clusterId, initialData }: ClusterQueriesClientProps) {
-  // Convert to DataViewer format (minimal transformation)
+
   const toDataViewerFormat = (data: PaginatedQueriesResponse): DataViewerData => ({
     queries: data.items.map((q) => ({
       id: q.id,
@@ -54,7 +54,7 @@ export function ClusterQueriesClient({ runId, clusterId, initialData }: ClusterQ
         }>(
           `/api/search/queries?text=${encodeURIComponent(currentSearchText)}&run_id=${runId}&page=${newPage}&limit=50`
         );
-        // Convert search results to DataViewer format
+
         const convertedData: DataViewerData = {
           queries: searchResults.items.map((item) => ({
             id: item.query.id,
@@ -106,7 +106,7 @@ export function ClusterQueriesClient({ runId, clusterId, initialData }: ClusterQ
       }>(
         `/api/search/queries?text=${encodeURIComponent(searchText)}&run_id=${runId}&page=1&limit=50`
       );
-      // Convert search results to DataViewer format
+
       const convertedData: DataViewerData = {
         queries: searchResults.items.map((item) => ({
           id: item.query.id,
@@ -157,7 +157,7 @@ export function ClusterQueriesClient({ runId, clusterId, initialData }: ClusterQ
 
   return (
     <div className="space-y-4">
-      {/* Search Bar */}
+      {}
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -189,7 +189,7 @@ export function ClusterQueriesClient({ runId, clusterId, initialData }: ClusterQ
         )}
       </div>
 
-      {/* Search Status */}
+      {}
       {isSearchMode && (
         <div className="text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">
           Showing search results for:{" "}
@@ -198,7 +198,7 @@ export function ClusterQueriesClient({ runId, clusterId, initialData }: ClusterQ
         </div>
       )}
 
-      {/* Query List */}
+      {}
       <div className={isPending ? "opacity-50 pointer-events-none" : ""}>
         <DataViewer data={data} onPageChange={handlePageChange} showClusters={false} />
       </div>

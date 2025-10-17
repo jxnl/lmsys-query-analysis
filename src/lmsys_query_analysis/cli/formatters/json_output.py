@@ -113,7 +113,6 @@ def format_verify_sync_json(
     }
 
 
-# XML Templates
 CLUSTER_SUMMARIES_XML_TEMPLATE = Template("""<?xml version="1.0" encoding="UTF-8"?>
 <clusters run_id="{{ run_id }}" count="{{ summaries|length }}">
 {%- for summary in summaries %}

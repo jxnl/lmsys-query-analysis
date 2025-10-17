@@ -39,7 +39,6 @@ def test_list_runs_empty(client: TestClient):
 
 def test_list_runs_with_data(client: TestClient, db: Database):
     """Test listing runs with sample data."""
-    # Create a test clustering run
     with db.get_session() as session:
         run = ClusteringRun(
             run_id="kmeans-50-20251010-120000",
@@ -67,7 +66,6 @@ def test_get_run_not_found(client: TestClient):
 
 def test_get_run_detail(client: TestClient, db: Database):
     """Test getting run details."""
-    # Create a test run
     with db.get_session() as session:
         run = ClusteringRun(
             run_id="kmeans-50-20251010-120000",
@@ -186,22 +184,18 @@ def test_get_cluster_metadata_empty(client: TestClient):
 
 def test_post_endpoints_not_implemented(client: TestClient):
     """Test that POST endpoints return 501 Not Implemented."""
-    # Test clustering POST endpoints
     response = client.post("/api/clustering/kmeans")
     assert response.status_code == 501
 
     response = client.post("/api/clustering/hdbscan")
     assert response.status_code == 501
 
-    # Test hierarchy POST endpoint
     response = client.post("/api/hierarchy/")
     assert response.status_code == 501
 
-    # Test summaries POST endpoint
     response = client.post("/api/summaries/")
     assert response.status_code == 501
 
-    # Test curation POST endpoints
     response = client.post("/api/curation/queries/1/move")
     assert response.status_code == 501
 

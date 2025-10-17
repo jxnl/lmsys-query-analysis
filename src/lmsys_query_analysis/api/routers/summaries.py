@@ -24,7 +24,6 @@ async def list_summaries(
 ):
     """List all summary runs with optional filtering by clustering run_id."""
     with db.get_session() as session:
-        # Get distinct summary runs
         stmt = select(
             ClusterSummary.summary_run_id,
             ClusterSummary.run_id,
@@ -40,7 +39,6 @@ async def list_summaries(
 
         all_summaries = session.exec(stmt).all()
 
-        # Paginate
         total = len(all_summaries)
         pages = (total + limit - 1) // limit
         start = (page - 1) * limit

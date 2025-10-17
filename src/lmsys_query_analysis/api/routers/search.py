@@ -53,7 +53,6 @@ async def search_queries(
     - `cluster_ids`: Hard filter by specific cluster IDs
     """
     if mode == "semantic":
-        # Semantic search via ChromaDB
         if not run_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -65,7 +64,6 @@ async def search_queries(
                 },
             )
 
-        # Parse cluster_ids
         cluster_ids_list = None
         if cluster_ids:
             try:
@@ -78,10 +76,8 @@ async def search_queries(
                     },
                 ) from e
 
-        # Create ChromaManager and semantic clients
         chroma_manager = create_chroma_manager(run_id, db, chroma_path)
 
-        # Create embedding generator
         params = {}
         with db.get_session() as session:
             from sqlmodel import select
@@ -104,21 +100,18 @@ async def search_queries(
             output_dimension=embedding_dimension if embedding_provider == "cohere" else None,
         )
 
-        # Create queries client
         queries_client = QueriesClient(db, chroma_manager, embedder, run_id=run_id)
 
-        # Search
         hits = queries_client.find(
             text=text,
             run_id=run_id,
             cluster_ids=cluster_ids_list,
             within_clusters=within_clusters,
             top_clusters=top_clusters,
-            n_results=limit * 2,  # Fetch more for filtering
+            n_results=limit * 2,
             n_candidates=500,
         )
 
-        # Convert to response format
         items = []
         for hit in hits[:limit]:
             with db.get_session() as session:
@@ -130,7 +123,6 @@ async def search_queries(
                 if not query:
                     continue
 
-                # Get cluster info
                 clusters = []
                 if hit.cluster_id:
                     cluster_stmt = (
@@ -165,19 +157,17 @@ async def search_queries(
             page=page,
             pages=pages,
             limit=limit,
-            facets=None,  # Can add facet support later
+            facets=None,
             applied_clusters=None,
         )
 
     else:
-        # Full-text search via SQL LIKE
         from sqlmodel import and_, select
 
         with db.get_session() as session:
             search_pattern = f"%{text}%"
             stmt = select(QueryModel).where(QueryModel.query_text.like(search_pattern))
 
-            # Filter by run_id if provided
             if run_id:
                 stmt = (
                     select(QueryModel)
@@ -190,7 +180,6 @@ async def search_queries(
                     )
                 )
 
-            # Execute and paginate
             all_queries = session.exec(stmt).all()
             total = len(all_queries)
             pages = (total + limit - 1) // limit
@@ -199,7 +188,6 @@ async def search_queries(
 
             items = []
             for query in all_queries[start:end]:
-                # Get cluster assignments
                 clusters = []
                 if run_id:
                     cluster_stmt = (
@@ -278,7 +266,6 @@ async def search_clusters(
                 },
             )
 
-        # Create ChromaManager and semantic client
         chroma_manager = create_chroma_manager(run_id, db, chroma_path)
 
         params = {}
@@ -305,7 +292,6 @@ async def search_clusters(
 
         clusters_client = ClustersClient(db, chroma_manager, embedder, run_id=run_id)
 
-        # Search
         hits = clusters_client.find(text=text, run_id=run_id, top_k=n_results)
 
         items = [
@@ -330,7 +316,6 @@ async def search_clusters(
         )
 
     else:
-        # Full-text search via SQL LIKE
         from sqlmodel import or_, select
 
         with db.get_session() as session:

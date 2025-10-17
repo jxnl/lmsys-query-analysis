@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Run linting for both Python and TypeScript
 
 set -e
 

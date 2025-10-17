@@ -33,7 +33,6 @@ def test_summarize_single_cluster():
     assert "description" in results[0]
     assert "sample_queries" in results[0]
 
-    # Title should be related to machine learning
     title = results[0]["title"].lower()
     assert any(word in title for word in ["machine", "learning", "ai", "neural", "model"])
 
@@ -73,7 +72,6 @@ def test_summarize_multiple_clusters():
     assert 0 in results
     assert 1 in results
 
-    # Both should have titles and descriptions
     for cluster_id in [0, 1]:
         assert results[cluster_id]["title"]
         assert results[cluster_id]["description"]
@@ -98,7 +96,6 @@ def test_summarize_with_contrast():
         ),
     ]
 
-    # Test with contrast parameters
     results = summarizer.generate_batch_summaries(
         clusters_data=clusters_data,
         max_queries=10,

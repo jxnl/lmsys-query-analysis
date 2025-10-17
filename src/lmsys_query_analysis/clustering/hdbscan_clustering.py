@@ -58,12 +58,11 @@ class HDBSCANClustering:
             cluster_selection_epsilon=self.cluster_selection_epsilon,
             metric=self.metric,
             prediction_data=True,
-            core_dist_n_jobs=-1,  # Use all cores
+            core_dist_n_jobs=-1,
         )
 
         labels = self.clusterer.fit_predict(embeddings)
 
-        # Report statistics
         n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
         n_noise = list(labels).count(-1)
         n_total = len(labels)
@@ -114,7 +113,7 @@ class HDBSCANClustering:
         """
         centroids = {}
         for cluster_id in set(labels):
-            if cluster_id != -1:  # Skip noise
+            if cluster_id != -1:
                 mask = labels == cluster_id
                 cluster_embeddings = embeddings[mask]
                 centroids[cluster_id] = np.mean(cluster_embeddings, axis=0)
@@ -151,7 +150,6 @@ def run_hdbscan_clustering(
             total_queries if max_queries is None else min(total_queries, int(max_queries))
         )
 
-        # Load texts and ids in chunks and embed
         def iter_query_chunks() -> list[Query]:
             offset = 0
             target = effective_total
@@ -188,7 +186,6 @@ def run_hdbscan_clustering(
         )
         labels = clusterer.fit_predict(embeddings)
 
-        # Persist run
         from datetime import datetime
 
         run_id = f"hdbscan-{min_cluster_size}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
@@ -210,7 +207,6 @@ def run_hdbscan_clustering(
         session.add(run)
         session.commit()
 
-        # Store assignments (exclude noise)
         assignments = []
         for qid, label in zip(all_ids, labels, strict=False):
             if label != -1:
@@ -218,7 +214,6 @@ def run_hdbscan_clustering(
         session.add_all(assignments)
         session.commit()
 
-        # Chroma: store centroids
         if chroma:
             centroids = clusterer.compute_centroids(embeddings, labels)
             used_ids = sorted(centroids.keys())

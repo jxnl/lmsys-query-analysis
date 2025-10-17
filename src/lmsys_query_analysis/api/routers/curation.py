@@ -40,7 +40,6 @@ async def get_cluster_metadata(
         metadata = session.exec(stmt).first()
 
         if not metadata:
-            # Return empty metadata if not found
             return ClusterMetadata(
                 coherence_score=None,
                 quality=None,
@@ -80,7 +79,6 @@ async def get_cluster_history(
 
         all_edits = session.exec(stmt).all()
 
-        # Paginate
         total = len(all_edits)
         pages = (total + limit - 1) // limit
         start = (page - 1) * limit
@@ -129,7 +127,6 @@ async def get_run_audit(
 
         all_edits = session.exec(stmt).all()
 
-        # Paginate
         total = len(all_edits)
         pages = (total + limit - 1) // limit
         start = (page - 1) * limit
@@ -179,7 +176,6 @@ async def get_orphaned_queries(
 
         all_orphans = session.exec(stmt).all()
 
-        # Paginate
         total = len(all_orphans)
         pages = (total + limit - 1) // limit
         start = (page - 1) * limit
@@ -207,7 +203,6 @@ async def get_orphaned_queries(
     )
 
 
-# ===== POST Endpoint Stubs (501 Not Implemented) =====
 
 
 @router.post(

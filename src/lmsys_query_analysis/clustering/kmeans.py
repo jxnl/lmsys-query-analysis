@@ -65,7 +65,6 @@ def run_kmeans_clustering(
         if max_queries is not None and effective_total < total_queries:
             console.print(f"[yellow]Limiting to first {effective_total} queries[/yellow]")
 
-        # Create clustering run record (saved early to link assignments)
         run_id = f"kmeans-{n_clusters}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
         clustering_run = ClusteringRun(
             run_id=run_id,
@@ -86,10 +85,8 @@ def run_kmeans_clustering(
         session.add(clustering_run)
         session.commit()
 
-        # Initialize embedding generator lazily (only if needed)
         embedding_gen = None
 
-        # Initialize MiniBatchKMeans
         mbk = MiniBatchKMeans(
             n_clusters=n_clusters,
             random_state=random_state,
@@ -99,7 +96,6 @@ def run_kmeans_clustering(
             verbose=0,
         )
 
-        # Helper: iterate queries in chunks to limit memory
         def iter_query_chunks(chunk_size: int = chunk_size):
             offset = 0
             target = effective_total
@@ -112,7 +108,6 @@ def run_kmeans_clustering(
                 yield rows
                 offset += len(rows)
 
-        # First pass: partial_fit on streaming embeddings
         console.print(f"[yellow]Training MiniBatchKMeans with {n_clusters} clusters...[/yellow]")
         fit_start = time.perf_counter()
         total_fit = 0
@@ -124,14 +119,12 @@ def run_kmeans_clustering(
                 texts = [q.query_text for q in chunk]
                 ids = [q.id for q in chunk]
 
-                # Try to reuse embeddings from Chroma if available
                 chunk_embeddings = None
                 if chroma is not None:
                     emb_map = chroma.get_query_embeddings_map(ids)
                     if len(emb_map) == len(ids):
                         chunk_embeddings = np.stack([emb_map[qid] for qid in ids])
                     else:
-                        # Compute missing and optionally backfill
                         missing_ids = [qid for qid in ids if qid not in emb_map]
                         if missing_ids:
                             if embedding_gen is None:
@@ -139,17 +132,14 @@ def run_kmeans_clustering(
                                     model_name=embedding_model,
                                     provider=embedding_provider,
                                 )
-                            # Compute all embeddings then compose full array
                             all_emb = embedding_gen.generate_embeddings(
                                 texts,
                                 batch_size=embed_batch_size,
                                 show_progress=False,
                             )
-                            # Backfill map and Chroma for missing
                             for qid, emb in zip(ids, all_emb, strict=False):
                                 if qid not in emb_map:
                                     emb_map[qid] = emb
-                            # Optionally write missing to Chroma (with metadata)
                             try:
                                 if chroma is not None and len(missing_ids) > 0:
                                     missing_idx = [ids.index(mid) for mid in missing_ids]
@@ -171,7 +161,6 @@ def run_kmeans_clustering(
                                 pass
                             chunk_embeddings = np.stack([emb_map[qid] for qid in ids])
                 else:
-                    # No Chroma: compute embeddings
                     if embedding_gen is None:
                         embedding_gen = EmbeddingGenerator(
                             model_name=embedding_model, provider=embedding_provider
@@ -182,7 +171,6 @@ def run_kmeans_clustering(
                         show_progress=False,
                     )
 
-                # Ensure sklearn receives float64 arrays
                 if chunk_embeddings.dtype != np.float64:
                     chunk_embeddings = chunk_embeddings.astype(np.float64, copy=False)
                 mbk.partial_fit(chunk_embeddings)
@@ -199,7 +187,6 @@ def run_kmeans_clustering(
                 (total_fit / fit_elapsed if fit_elapsed else float("inf")),
             )
 
-        # Second pass: predict labels and write assignments incrementally
         console.print("[yellow]Assigning clusters and writing to DB...[/yellow]")
         cluster_counts: dict[int, int] = dict.fromkeys(range(n_clusters), 0)
         sample_texts: dict[int, list[str]] = {i: [] for i in range(n_clusters)}
@@ -217,7 +204,6 @@ def run_kmeans_clustering(
                 texts = [q.query_text for q in chunk]
                 ids = [q.id for q in chunk]
 
-                # Reuse embeddings from Chroma if possible; otherwise compute
                 if chroma is not None:
                     emb_map = chroma.get_query_embeddings_map(ids)
                     if len(emb_map) == len(ids):
@@ -267,7 +253,6 @@ def run_kmeans_clustering(
                         show_progress=False,
                     )
 
-                # Ensure sklearn receives float64 arrays
                 if chunk_embeddings.dtype != np.float64:
                     chunk_embeddings = chunk_embeddings.astype(np.float64, copy=False)
                 labels = mbk.predict(chunk_embeddings)
@@ -278,7 +263,6 @@ def run_kmeans_clustering(
                     batch_assignments.append(
                         QueryCluster(run_id=run_id, query_id=qid, cluster_id=cid)
                     )
-                    # stats and samples
                     cluster_counts[cid] += 1
                     if len(sample_texts[cid]) < 5:
                         sample_texts[cid].append(qtext[:100])
@@ -287,7 +271,6 @@ def run_kmeans_clustering(
                     session.add_all(batch_assignments)
                     session.commit()
                     batch_assignments.clear()
-            # final commit
             if batch_assignments:
                 session.add_all(batch_assignments)
                 session.commit()
@@ -301,7 +284,6 @@ def run_kmeans_clustering(
                 (total_pred / pred_elapsed if pred_elapsed else float("inf")),
             )
 
-        # Cluster statistics
         non_empty = [c for c, n in cluster_counts.items() if n > 0]
         sizes = [cluster_counts[c] for c in non_empty] if non_empty else []
 
@@ -313,7 +295,6 @@ def run_kmeans_clustering(
             console.print(f"  Avg cluster size: {np.mean(sizes):.1f}")
             console.print(f"  Median cluster size: {np.median(sizes):.1f}")
 
-        # If ChromaDB enabled, store cluster centroids and summaries
         if chroma:
             console.print("[yellow]Writing cluster centroids to ChromaDB...[/yellow]")
 
@@ -366,7 +347,6 @@ def get_cluster_info(db: Database, run_id: str, cluster_id: int) -> dict:
     session = db.get_session()
 
     try:
-        # Get all queries in this cluster
         statement = (
             select(Query, QueryCluster)
             .join(QueryCluster, Query.id == QueryCluster.query_id)

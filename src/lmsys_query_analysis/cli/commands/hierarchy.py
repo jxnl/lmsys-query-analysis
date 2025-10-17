@@ -58,7 +58,6 @@ def merge_clusters_cmd(
     db = get_db(db_path)
 
     with db.get_session() as session:
-        # If summary_run_id not provided, find the latest one
         if not summary_run_id:
             summary_run_id = cluster_service.get_latest_summary_run_id(db, run_id)
 
@@ -69,7 +68,6 @@ def merge_clusters_cmd(
 
             console.print(f"[cyan]Using latest summary run: {summary_run_id}[/cyan]")
 
-        # Load base cluster summaries
         console.print(
             f"[cyan]Loading cluster summaries for run: {run_id}, summary: {summary_run_id}[/cyan]"
         )
@@ -99,7 +97,6 @@ def merge_clusters_cmd(
 
         console.print(f"[green]Found {len(base_clusters)} base clusters[/green]")
 
-        # Run hierarchical merging
         console.print(f"[cyan]Starting hierarchical merging with {target_levels} levels[/cyan]")
 
         async def run_merge():
@@ -119,7 +116,6 @@ def merge_clusters_cmd(
 
         hierarchy_run_id, hierarchy_data = anyio.run(run_merge)
 
-        # Save hierarchy to database
         console.print("[cyan]Saving hierarchy to database...[/cyan]")
 
         for h in hierarchy_data:
@@ -128,7 +124,6 @@ def merge_clusters_cmd(
 
         session.commit()
 
-        # Display summary
         levels = {}
         for h in hierarchy_data:
             level = h["level"]
@@ -151,7 +146,6 @@ def show_hierarchy_cmd(
     db = get_db(db_path)
 
     with db.get_session() as session:
-        # Get all hierarchy nodes
         hierarchy_nodes = session.exec(
             select(ClusterHierarchy)
             .where(ClusterHierarchy.hierarchy_run_id == hierarchy_run_id)
@@ -162,7 +156,6 @@ def show_hierarchy_cmd(
             console.print(f"[red]No hierarchy found with ID: {hierarchy_run_id}[/red]")
             raise typer.Exit(1)
 
-        # Build tree structure
         children_by_parent = defaultdict(list)
         root_nodes = []
 
@@ -177,7 +170,6 @@ def show_hierarchy_cmd(
             connector = "└── " if is_last else "├── "
             title = node.title or f"Cluster {node.cluster_id}"
 
-            # Color coding by level
             if node.level == 0:
                 color = "cyan"
             elif node.level == 1:
@@ -189,7 +181,6 @@ def show_hierarchy_cmd(
                 f"{prefix}{connector}[{color}]{title}[/{color}] [dim](ID: {node.cluster_id}, Level: {node.level})[/dim]"
             )
 
-            # Get children
             children = children_by_parent.get(node.cluster_id, [])
             for i, child in enumerate(sorted(children, key=lambda x: x.cluster_id)):
                 extension = "    " if is_last else "│   "
@@ -197,7 +188,6 @@ def show_hierarchy_cmd(
 
         console.print(f"\n[bold]Hierarchy: {hierarchy_run_id}[/bold]\n")
 
-        # Print each root and its subtree
         for i, root in enumerate(sorted(root_nodes, key=lambda x: x.cluster_id)):
             print_tree(root, "", i == len(root_nodes) - 1)
 

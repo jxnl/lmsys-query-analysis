@@ -15,23 +15,19 @@ async def test_embeddings_async_in_event_loop():
     an async context without raising "asyncio.run() cannot be called from a running event loop"
     """
 
-    # Test that asyncio.get_running_loop() works inside async context
     try:
         loop = asyncio.get_running_loop()
         assert loop is not None
     except RuntimeError:
         pytest.fail("Should be able to get running loop in async test")
 
-    # Test the actual pattern from the fix (embeddings.py lines 279-287)
     async def _mock_async_operation():
         """Simulates the async embedding operation."""
         await asyncio.sleep(0.001)
         return [0.1] * 10
 
-    # Simulate what happens in embeddings.py when called from async context
     try:
         asyncio.get_running_loop()
-        # We're in an async context - should use ThreadPoolExecutor
         import concurrent.futures
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -49,7 +45,6 @@ def test_embedding_generator_handles_empty_texts():
     Tests the filtering logic in embeddings.py lines 110-149.
     """
 
-    # Test the filtering logic that's in the actual code
     texts = ["valid query", "  ", "", "another valid"]
     filtered_texts = []
     original_indices = []
@@ -59,27 +54,21 @@ def test_embedding_generator_handles_empty_texts():
             filtered_texts.append(text.strip())
             original_indices.append(i)
 
-    # Should filter out empty texts
     assert len(filtered_texts) == 2
     assert filtered_texts == ["valid query", "another valid"]
     assert original_indices == [0, 3]
 
-    # Verify the reconstruction logic would work
     full_embeddings_shape = (len(texts), 1536)
     valid_embeddings_shape = (len(filtered_texts), 1536)
 
-    # Create mock embeddings for valid texts
     valid_embeddings = np.random.rand(*valid_embeddings_shape)
 
-    # Reconstruct full array with zeros for empty texts
     full_embeddings = np.zeros(full_embeddings_shape)
     for i, orig_idx in enumerate(original_indices):
         full_embeddings[orig_idx] = valid_embeddings[i]
 
-    # Empty text embeddings should be zero vectors
     assert np.allclose(full_embeddings[1], np.zeros(1536))
     assert np.allclose(full_embeddings[2], np.zeros(1536))
-    # Valid embeddings should be preserved
     assert not np.allclose(full_embeddings[0], np.zeros(1536))
     assert not np.allclose(full_embeddings[3], np.zeros(1536))
 
@@ -87,7 +76,6 @@ def test_embedding_generator_handles_empty_texts():
 def test_hierarchy_node_structure():
     """Test the expected structure of hierarchy nodes."""
 
-    # Verify the dict structure that hierarchy functions return
     leaf_node = {
         "cluster_id": 0,
         "level": 0,
@@ -108,13 +96,12 @@ def test_hierarchy_node_structure():
         "parent_id": None,
     }
 
-    # Verify structure
     assert leaf_node["level"] == 0
     assert leaf_node["parent_id"] == parent_node["cluster_id"]
     assert parent_node["level"] > leaf_node["level"]
     assert leaf_node["cluster_id"] in parent_node["children_ids"]
-    assert parent_node["parent_id"] is None  # Root node
-    assert leaf_node["children_ids"] is None  # Leaf node
+    assert parent_node["parent_id"] is None
+    assert leaf_node["children_ids"] is None
 
 
 def test_threadpool_executor_pattern():
@@ -128,11 +115,9 @@ def test_threadpool_executor_pattern():
             await asyncio.sleep(0.001)
             return "success"
 
-        # This is the pattern used in the fix
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(asyncio.run, async_operation())
             return future.result()
 
-    # Should work without errors
     result = sync_function_that_needs_async()
     assert result == "success"

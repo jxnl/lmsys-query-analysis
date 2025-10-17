@@ -63,7 +63,6 @@ def test_clusters_client_from_run(tmp_path):
     db = Database(str(db_path))
     db.create_tables()
 
-    # Create a clustering run
     with db.get_session() as session:
         run = ClusteringRun(
             run_id="test-run",
@@ -118,7 +117,6 @@ def test_clusters_client_from_run_with_cohere_params(tmp_path):
         session.add(run)
         session.commit()
 
-    # Mock Cohere client to avoid API key requirement
     import os
 
     with (
@@ -157,13 +155,11 @@ def test_clusters_client_from_run_cohere_default_dimension(tmp_path):
             parameters={
                 "embedding_provider": "cohere",
                 "embedding_model": "embed-v4.0",
-                # No embedding_dimension specified
             },
         )
         session.add(run)
         session.commit()
 
-    # Mock Cohere client
     import os
 
     with (
@@ -179,7 +175,6 @@ def test_clusters_client_from_run_cohere_default_dimension(tmp_path):
 
             client = ClustersClient.from_run(db=db, run_id="cohere-run", persist_dir=tmp_path)
 
-            # Should default to 256 for Cohere
             assert client.chroma.embedding_dimension == 256
         finally:
             if original_key is None:
@@ -233,7 +228,6 @@ def test_clusters_client_find_basic():
 
     client = ClustersClient(db=db, chroma=chroma, embedder=embedder, run_id="test-run")
 
-    # Mock the chroma search and embedder
     mock_results = {
         "ids": [["cluster_test-run_1", "cluster_test-run_2"]],
         "documents": [["Cluster 1 summary", "Cluster 2 summary"]],
@@ -278,7 +272,6 @@ def test_clusters_client_find_with_alias_filter():
 
     client = ClustersClient(db=db, chroma=chroma, embedder=embedder, run_id="test-run")
 
-    # Mock results with different aliases
     mock_results = {
         "ids": [["cluster_test-run_1", "cluster_test-run_2", "cluster_test-run_3"]],
         "documents": [["Summary 1", "Summary 2", "Summary 3"]],
@@ -298,7 +291,6 @@ def test_clusters_client_find_with_alias_filter():
         ):
             hits = client.find(text="test", run_id="test-run", alias="v1")
 
-    # Should only return clusters with alias "v1"
     assert len(hits) == 2
     assert all(h.cluster_id in {1, 3} for h in hits)
 
@@ -321,7 +313,6 @@ def test_clusters_client_find_with_summary_run_id_filter():
 
     client = ClustersClient(db=db, chroma=chroma, embedder=embedder, run_id="test-run")
 
-    # Mock results with different summary_run_ids
     mock_results = {
         "ids": [["cluster_1", "cluster_2"]],
         "documents": [["Summary 1", "Summary 2"]],
@@ -340,7 +331,6 @@ def test_clusters_client_find_with_summary_run_id_filter():
         ):
             hits = client.find(text="test", run_id="test-run", summary_run_id="s1")
 
-    # Should only return cluster with summary_run_id "s1"
     assert len(hits) == 1
     assert hits[0].cluster_id == 1
 
@@ -363,7 +353,6 @@ def test_clusters_client_count_with_text():
 
     client = ClustersClient(db=db, chroma=chroma, embedder=embedder, run_id="test-run")
 
-    # Mock find to return some hits
     with patch.object(client, "find", return_value=[Mock(), Mock(), Mock()]):
         count = client.count(text="test query", run_id="test-run")
 
@@ -388,7 +377,6 @@ def test_clusters_client_count_without_text():
 
     client = ClustersClient(db=db, chroma=chroma, embedder=embedder, run_id="test-run")
 
-    # Mock chroma count_summaries
     with patch.object(client.chroma, "count_summaries", return_value=42):
         with patch.object(client.chroma, "search_cluster_summaries", return_value={"ids": [[]]}):
             count = client.count(text=None, run_id="test-run")
@@ -414,7 +402,6 @@ def test_clusters_client_find_with_top_k_limit():
 
     client = ClustersClient(db=db, chroma=chroma, embedder=embedder, run_id="test-run")
 
-    # Mock results with 5 clusters
     mock_results = {
         "ids": [["c1", "c2", "c3", "c4", "c5"]],
         "documents": [["S1", "S2", "S3", "S4", "S5"]],
@@ -430,5 +417,4 @@ def test_clusters_client_find_with_top_k_limit():
         ):
             hits = client.find(text="test", run_id="test-run", top_k=3)
 
-    # Should only return top 3
     assert len(hits) == 3

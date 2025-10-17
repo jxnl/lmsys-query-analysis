@@ -30,7 +30,6 @@ def test_runner_config_defaults():
 
 def test_runner_config_validation_n_clusters_exceeds_limit():
     """Test that n_clusters validation works."""
-    # Should raise error when n_clusters > query_limit
     with pytest.raises(ValidationError, match="cannot exceed query_limit"):
         RunnerConfig(query_limit=100, n_clusters=200)
 
@@ -46,7 +45,6 @@ def test_runner_config_path_resolution_relative():
     """Test that relative paths are resolved to absolute paths."""
     config = RunnerConfig(db_path="./test.db", chroma_path="./chroma")
 
-    # Should be converted to absolute paths
     assert Path(config.db_path).is_absolute()
     assert Path(config.chroma_path).is_absolute()
     assert config.db_path.endswith("test.db")
@@ -74,18 +72,15 @@ def test_runner_config_path_resolution_none():
 
 def test_runner_config_embedding_providers():
     """Test different embedding provider configurations."""
-    # OpenAI
     config_openai = RunnerConfig(
         embedding_provider="openai", embedding_model="text-embedding-3-large"
     )
     assert config_openai.embedding_provider == "openai"
     assert config_openai.embedding_model == "text-embedding-3-large"
 
-    # Cohere
     config_cohere = RunnerConfig(embedding_provider="cohere", embedding_model="embed-v4.0")
     assert config_cohere.embedding_provider == "cohere"
 
-    # Sentence transformers
     config_st = RunnerConfig(
         embedding_provider="sentence-transformers", embedding_model="all-MiniLM-L6-v2"
     )
@@ -100,18 +95,15 @@ def test_runner_config_invalid_embedding_provider():
 
 def test_runner_config_llm_providers():
     """Test different LLM provider configurations."""
-    # OpenAI
     config_openai = RunnerConfig(llm_provider="openai", llm_model="gpt-4o")
     assert config_openai.llm_provider == "openai"
     assert config_openai.llm_model == "gpt-4o"
 
-    # Anthropic
     config_anthropic = RunnerConfig(
         llm_provider="anthropic", llm_model="claude-3-5-sonnet-20241022"
     )
     assert config_anthropic.llm_provider == "anthropic"
 
-    # Groq
     config_groq = RunnerConfig(llm_provider="groq", llm_model="llama-3.1-70b-versatile")
     assert config_groq.llm_provider == "groq"
 
@@ -156,22 +148,18 @@ def test_runner_config_hierarchy_settings():
 
 def test_runner_config_merge_ratio_validation():
     """Test that merge_ratio must be between 0 and 1."""
-    # Valid
     config = RunnerConfig(merge_ratio=0.5)
     assert config.merge_ratio == 0.5
 
-    # Invalid - too large
     with pytest.raises(ValidationError):
         RunnerConfig(merge_ratio=1.5)
 
-    # Invalid - negative
     with pytest.raises(ValidationError):
         RunnerConfig(merge_ratio=-0.1)
 
 
 def test_runner_config_positive_integer_fields():
     """Test that fields requiring positive integers are validated."""
-    # Valid
     config = RunnerConfig(
         query_limit=100,
         n_clusters=10,
@@ -180,11 +168,9 @@ def test_runner_config_positive_integer_fields():
     )
     assert config.query_limit == 100
 
-    # Invalid - zero
     with pytest.raises(ValidationError):
         RunnerConfig(query_limit=0)
 
-    # Invalid - negative
     with pytest.raises(ValidationError):
         RunnerConfig(n_clusters=-5)
 
@@ -236,13 +222,10 @@ def test_save_and_load_config_roundtrip():
         yaml_path = f.name
 
     try:
-        # Save
         save_config_to_yaml(original_config, yaml_path)
 
-        # Load
         loaded_config = load_config_from_yaml(yaml_path)
 
-        # Verify all key fields match
         assert loaded_config.query_limit == original_config.query_limit
         assert loaded_config.n_clusters == original_config.n_clusters
         assert loaded_config.embedding_provider == original_config.embedding_provider

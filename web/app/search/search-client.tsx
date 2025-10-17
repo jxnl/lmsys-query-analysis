@@ -21,7 +21,7 @@ interface SearchClientProps {
 }
 
 export function SearchClient({ runs }: SearchClientProps) {
-  // Default to latest run (first in array since ordered by newest first)
+
   const defaultRunId = runs.length > 0 ? runs[0].run_id : "all";
 
   const [searchText, setSearchText] = useState("");
@@ -29,7 +29,7 @@ export function SearchClient({ runs }: SearchClientProps) {
 
   const handleSearch = () => {
     if (!searchText.trim()) return;
-    // Search not implemented yet
+
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

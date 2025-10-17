@@ -11,7 +11,6 @@ from pydantic import BaseModel
 T = TypeVar("T")
 
 
-# ===== Base Classes & Common Patterns =====
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
@@ -32,7 +31,6 @@ class OperationResponse(BaseModel):
     data: dict[str, Any] | None = None
 
 
-# ===== Query Models =====
 
 
 class QueryResponse(BaseModel):
@@ -72,7 +70,6 @@ class PaginatedQueriesResponse(PaginatedResponse[QueryResponse]):
     pass
 
 
-# ===== Clustering Run Models =====
 
 
 class ClusteringRunSummary(BaseModel):
@@ -111,7 +108,6 @@ class ClusteringRunStatusResponse(BaseModel):
     processed: int | None = None
 
 
-# ===== Cluster Summary Models =====
 
 
 class ClusterSummaryResponse(BaseModel):
@@ -126,9 +122,8 @@ class ClusterSummaryResponse(BaseModel):
     representative_queries: list[str] | None = None
     summary_run_id: str | None = None
     alias: str | None = None
-    # Enhanced aggregations
-    query_count: int | None = None  # Alias for num_queries
-    percentage: float | None = None  # Percentage of total queries
+    query_count: int | None = None
+    percentage: float | None = None
 
     class Config:
         from_attributes = True
@@ -137,7 +132,7 @@ class ClusterSummaryResponse(BaseModel):
 class ClusterListResponse(PaginatedResponse[ClusterSummaryResponse]):
     """Paginated list of clusters with optional aggregations."""
 
-    total_queries: int | None = None  # Total queries in run (for percentage calc)
+    total_queries: int | None = None
 
 
 class ClusterDetailResponse(BaseModel):
@@ -147,7 +142,6 @@ class ClusterDetailResponse(BaseModel):
     queries: PaginatedQueriesResponse
 
 
-# ===== Hierarchy Models =====
 
 
 class HierarchyNode(BaseModel):
@@ -161,7 +155,6 @@ class HierarchyNode(BaseModel):
     children_ids: list[int]
     title: str | None = None
     description: str | None = None
-    # Enhanced aggregations
     query_count: int | None = None
     percentage: float | None = None
 
@@ -181,7 +174,7 @@ class HierarchyTreeResponse(BaseModel):
     """Full hierarchy tree with all nodes."""
 
     nodes: list[HierarchyNode]
-    total_queries: int | None = None  # For percentage calculations
+    total_queries: int | None = None
 
 
 class HierarchyListResponse(PaginatedResponse[HierarchyRunInfo]):
@@ -190,7 +183,6 @@ class HierarchyListResponse(PaginatedResponse[HierarchyRunInfo]):
     pass
 
 
-# ===== Summary Run Models =====
 
 
 class SummaryRunSummary(BaseModel):
@@ -213,7 +205,6 @@ class SummaryRunListResponse(PaginatedResponse[SummaryRunSummary]):
     pass
 
 
-# ===== Search Models =====
 
 
 class QuerySearchResult(BaseModel):
@@ -221,7 +212,7 @@ class QuerySearchResult(BaseModel):
 
     query: QueryResponse
     clusters: list[ClusterInfo]
-    distance: float | None = None  # For semantic search
+    distance: float | None = None
 
 
 class ClusterSearchResult(BaseModel):
@@ -233,16 +224,16 @@ class ClusterSearchResult(BaseModel):
     description: str | None = None
     summary: str | None = None
     num_queries: int | None = None
-    distance: float | None = None  # For semantic search
+    distance: float | None = None
 
 
 class FacetBucket(BaseModel):
     """Single facet bucket with count."""
 
-    key: Any  # cluster_id (int) or string key
+    key: Any
     count: int
     percentage: float | None = None
-    meta: dict[str, Any] | None = None  # Additional metadata (e.g., cluster title)
+    meta: dict[str, Any] | None = None
 
 
 class SearchFacets(BaseModel):
@@ -257,7 +248,7 @@ class SearchQueriesResponse(PaginatedResponse[QuerySearchResult]):
     """Query search results with facets."""
 
     facets: SearchFacets | None = None
-    applied_clusters: list[ClusterSearchResult] | None = None  # For within_clusters
+    applied_clusters: list[ClusterSearchResult] | None = None
 
 
 class SearchClustersResponse(PaginatedResponse[ClusterSearchResult]):
@@ -266,7 +257,6 @@ class SearchClustersResponse(PaginatedResponse[ClusterSearchResult]):
     pass
 
 
-# ===== Curation Models (Read-Only) =====
 
 
 class ClusterMetadata(BaseModel):
@@ -306,7 +296,7 @@ class EditHistoryResponse(PaginatedResponse[EditHistoryRecord]):
 class OrphanInfo(BaseModel):
     """Information about an orphaned query."""
 
-    orphan: dict[str, Any]  # OrphanedQuery fields
+    orphan: dict[str, Any]
     query: QueryResponse
 
 
@@ -316,7 +306,6 @@ class OrphanedQueriesResponse(PaginatedResponse[OrphanInfo]):
     pass
 
 
-# ===== Error Response =====
 
 
 class ErrorDetail(BaseModel):

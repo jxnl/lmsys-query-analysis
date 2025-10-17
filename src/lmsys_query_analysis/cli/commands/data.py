@@ -63,7 +63,6 @@ def load(
         dataset_name=hf,
     )
 
-    # Display results
     table = tables.format_loading_stats_table(stats)
     console.print(table)
 
@@ -81,22 +80,18 @@ def clear(
 ):
     """Clear all data from SQLite database and ChromaDB."""
     db = get_db(db_path)
-    # Use defaults for chroma - this just selects the directory, not specific collections
     chroma = get_chroma(chroma_path)
 
-    # Show what will be deleted
     console.print("[yellow]This will delete:[/yellow]")
     console.print(f"  - SQLite database: {db.db_path}")
     console.print(f"  - ChromaDB data: {chroma.persist_directory}")
 
-    # Confirm unless --yes flag is used
     if not confirm:
         response = typer.confirm("Are you sure you want to continue?")
         if not response:
             console.print("[green]Cancelled[/green]")
             raise typer.Exit(0)
 
-    # Delete SQLite database
     db_file = Path(db.db_path)
     if db_file.exists():
         db_file.unlink()
@@ -104,7 +99,6 @@ def clear(
     else:
         console.print(f"[yellow]SQLite database not found: {db.db_path}[/yellow]")
 
-    # Delete ChromaDB directory
     chroma_dir = Path(chroma.persist_directory)
     if chroma_dir.exists():
         shutil.rmtree(chroma_dir)
@@ -132,7 +126,6 @@ def backfill_chroma(
     chroma = create_chroma_client(chroma_path, model, provider)
 
     with db.get_session() as session:
-        # Count total queries for progress
         count_result = session.exec(select(func.count()).select_from(Query)).one()
         total_queries = int(count_result[0] if isinstance(count_result, tuple) else count_result)
         if total_queries == 0:
@@ -168,14 +161,12 @@ def backfill_chroma(
                 ids = [q.id for q in chunk]
                 texts = [q.query_text for q in chunk]
 
-                # Check which embeddings exist in Chroma
                 present = chroma.get_query_embeddings_map(ids)
                 missing_ids = [qid for qid in ids if qid not in present]
                 if missing_ids:
                     missing_idx = [ids.index(mid) for mid in missing_ids]
                     to_embed_texts = [texts[i] for i in missing_idx]
 
-                    # Generate embeddings with visible progress handled by generator
                     emb = eg.generate_embeddings(
                         to_embed_texts,
                         batch_size=embed_batch_size,
@@ -210,7 +201,6 @@ def backfill_chroma(
         already_present = max(0, scanned - backfilled)
         rate = (scanned / elapsed) if elapsed > 0 else float("inf")
 
-        # Summary table
         summary = tables.format_backfill_summary_table(
             scanned, backfilled, already_present, elapsed, rate
         )
