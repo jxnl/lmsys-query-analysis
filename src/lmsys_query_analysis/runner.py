@@ -1,37 +1,38 @@
 """
 LMSYS Query Analysis Runner
 
-A simple procedural module that runs the complete LMSYS analysis workflow 
+A simple procedural module that runs the complete LMSYS analysis workflow
 with configurable parameters and comprehensive logging.
 
 Can be used programmatically or as a simple script.
 """
 
-import os
-import time
-import tempfile
-import shutil
-import logging
 import asyncio
+import logging
+import os
+import shutil
+import tempfile
+import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any
+
 from pydantic import BaseModel
 
 # Rich for progress and console output
 from rich.console import Console
 from rich.logging import RichHandler
-from rich.progress import Progress, SpinnerColumn, TextColumn
+
+from .clustering.hierarchy import merge_clusters_hierarchical
+from .clustering.kmeans import run_kmeans_clustering
+
+# Configuration
+from .config import RunnerConfig
+from .db.chroma import ChromaManager
 
 # LMSYS SDK imports
 from .db.connection import Database
 from .db.loader import load_dataset
-from .db.chroma import ChromaManager
-from .clustering.kmeans import run_kmeans_clustering
-from .clustering.hierarchy import merge_clusters_hierarchical
 from .services import cluster_service
-
-# Configuration
-from .config import RunnerConfig, load_config_from_yaml
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 class BaseCluster(BaseModel):
     """Typed model for base cluster information."""
+
     cluster_id: int
     title: str
     description: str
@@ -66,7 +68,7 @@ class AnalysisRunner:
         """
         self.config = config
 
-    async def run(self) -> Dict[str, Any]:
+    async def run(self) -> dict[str, Any]:
         """Run the complete analysis workflow.
 
         Returns:
@@ -81,30 +83,30 @@ def setup_logging(log_level: str) -> None:
         level=getattr(logging, log_level.upper()),
         format="%(message)s",
         datefmt="[%X]",
-        handlers=[RichHandler(console=console, show_path=False)]
+        handlers=[RichHandler(console=console, show_path=False)],
     )
-    
+
     # Set specific logger levels for different components
     logging.getLogger("lmsys").setLevel(getattr(logging, log_level.upper()))
     logging.getLogger("src.lmsys_query_analysis").setLevel(getattr(logging, log_level.upper()))
-    
+
     logger.info(f"Logging initialized at {log_level} level")
 
 
 def validate_api_keys() -> None:
     """Check required API keys exist."""
     logger.info("Validating required API keys...")
-    
+
     required = ["COHERE_API_KEY", "OPENAI_API_KEY"]
     missing = [k for k in required if not os.getenv(k)]
-    
+
     if missing:
         logger.error(f"Missing required API keys: {missing}")
         logger.error("Set the following environment variables:")
         for key in missing:
             logger.error(f"  export {key}=your_api_key_here")
         raise ValueError(f"Missing API keys: {missing}")
-    
+
     logger.info("✓ All required API keys found")
 
 
@@ -115,7 +117,7 @@ def create_temp_directory() -> Path:
     return temp_dir
 
 
-def initialize_database(temp_dir: Path, persistent_path: Optional[str] = None) -> Database:
+def initialize_database(temp_dir: Path, persistent_path: str | None = None) -> Database:
     """Initialize SQLite database in temporary or persistent location."""
     if persistent_path:
         db_path = Path(persistent_path)
@@ -123,13 +125,13 @@ def initialize_database(temp_dir: Path, persistent_path: Optional[str] = None) -
     else:
         db_path = temp_dir / "queries.db"
         logger.info(f"Using temporary database: {db_path}")
-    
+
     # Create parent directory if needed
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     db = Database(str(db_path))
     db.create_tables()
-    
+
     logger.info("✓ Database initialized and tables created")
     return db
 
@@ -138,37 +140,37 @@ def initialize_chroma(temp_dir: Path) -> ChromaManager:
     """Initialize ChromaDB in temporary directory."""
     chroma_path = temp_dir / "chroma"
     logger.info(f"Initializing ChromaDB: {chroma_path}")
-    
+
     chroma = ChromaManager(str(chroma_path))
-    
+
     logger.info("✓ ChromaDB initialized")
     return chroma
 
 
-def setup_environment(config: RunnerConfig) -> Tuple[Path, Database, ChromaManager]:
+def setup_environment(config: RunnerConfig) -> tuple[Path, Database, ChromaManager]:
     """Set up temporary database and ChromaDB."""
     logger.info("Setting up analysis environment...")
-    
+
     # Set up logging first
     setup_logging(config.log_level)
-    
+
     # Validate API keys
     validate_api_keys()
-    
+
     # Create temporary directory
     temp_dir = create_temp_directory()
-    
+
     # Initialize database
     db = initialize_database(temp_dir, config.db_path)
-    
+
     # Initialize ChromaDB
     chroma = initialize_chroma(temp_dir)
-    
+
     logger.info("✓ Environment setup complete")
     return temp_dir, db, chroma
 
 
-def load_data(db: Database, chroma: ChromaManager, config: RunnerConfig) -> Dict[str, Any]:
+def load_data(db: Database, chroma: ChromaManager, config: RunnerConfig) -> dict[str, Any]:
     """Load LMSYS dataset with comprehensive logging."""
     logger.info(f"Starting data loading phase (limit: {config.query_limit})")
 
@@ -183,22 +185,22 @@ def load_data(db: Database, chroma: ChromaManager, config: RunnerConfig) -> Dict
             embedding_model=config.embedding_model,
             embedding_provider=config.embedding_provider,
             batch_size=config.embedding_batch_size,
-            use_streaming=config.use_streaming
+            use_streaming=config.use_streaming,
         )
-        
+
         elapsed = time.time() - start_time
-        
+
         logger.info(f"✓ Data loading complete in {elapsed:.2f}s")
         logger.info(f"  Total processed: {stats['total_processed']}")
         logger.info(f"  Successfully loaded: {stats['loaded']}")
         logger.info(f"  Skipped (existing): {stats['skipped']}")
         logger.info(f"  Errors: {stats['errors']}")
-        
-        if stats['loaded'] == 0:
+
+        if stats["loaded"] == 0:
             logger.warning("No new queries were loaded - they may already exist in the database")
-        
+
         return stats
-        
+
     except Exception as e:
         logger.error(f"Data loading failed after {time.time() - start_time:.2f}s: {e}")
         raise
@@ -221,30 +223,30 @@ def run_clustering(db: Database, chroma: ChromaManager, config: RunnerConfig) ->
             chunk_size=config.chunk_size,
             mb_batch_size=config.mb_batch_size,
             random_state=config.random_state,
-            chroma=chroma
+            chroma=chroma,
         )
-        
+
         elapsed = time.time() - start_time
-        
+
         if not run_id:
             logger.error("Clustering failed - no run ID returned")
             raise RuntimeError("Clustering failed to return a run ID")
-        
+
         logger.info(f"✓ Clustering complete in {elapsed:.2f}s")
         logger.info(f"  Run ID: {run_id}")
-        
+
         # Log cluster statistics
         cluster_ids = cluster_service.get_cluster_ids_for_run(db, run_id)
         logger.info(f"  Created {len(cluster_ids)} non-empty clusters")
-        
+
         return run_id
-        
+
     except Exception as e:
         logger.error(f"Clustering failed after {time.time() - start_time:.2f}s: {e}")
         raise
 
 
-def extract_base_clusters(db: Database, run_id: str, min_clusters: int = 10) -> List[BaseCluster]:
+def extract_base_clusters(db: Database, run_id: str, min_clusters: int = 10) -> list[BaseCluster]:
     """Get base cluster data for hierarchy creation.
 
     Args:
@@ -270,7 +272,7 @@ def extract_base_clusters(db: Database, run_id: str, min_clusters: int = 10) -> 
                 BaseCluster(
                     cluster_id=cluster_id,
                     title=f"Cluster {cluster_id}",
-                    description=f"Cluster {cluster_id} (no summary available)"
+                    description=f"Cluster {cluster_id} (no summary available)",
                 )
                 for cluster_id in cluster_ids
             ]
@@ -279,7 +281,7 @@ def extract_base_clusters(db: Database, run_id: str, min_clusters: int = 10) -> 
                 BaseCluster(
                     cluster_id=summary.cluster_id,
                     title=summary.title or f"Cluster {summary.cluster_id}",
-                    description=summary.summary or f"Cluster {summary.cluster_id} (no description)"
+                    description=summary.summary or f"Cluster {summary.cluster_id} (no description)",
                 )
                 for summary in summaries
             ]
@@ -301,7 +303,7 @@ def extract_base_clusters(db: Database, run_id: str, min_clusters: int = 10) -> 
             logger.debug(f"  ... and {len(base_clusters) - 3} more clusters")
 
         return base_clusters
-        
+
     except Exception as e:
         logger.error(f"Failed to extract base clusters for run {run_id}: {e}")
         raise
@@ -313,9 +315,9 @@ async def create_hierarchy(db: Database, run_id: str, config: RunnerConfig) -> s
     logger.info(f"  Target levels: {config.hierarchy_levels}")
     logger.info(f"  Merge ratio: {config.merge_ratio}")
     logger.info(f"  LLM: {config.llm_provider}/{config.llm_model}")
-    
+
     start_time = time.time()
-    
+
     try:
         # Extract base clusters
         base_clusters = extract_base_clusters(db, run_id, min_clusters=10)
@@ -335,19 +337,19 @@ async def create_hierarchy(db: Database, run_id: str, config: RunnerConfig) -> s
             merge_ratio=config.merge_ratio,
             neighborhood_size=config.neighborhood_size,
             concurrency=config.concurrency,
-            rpm=config.rpm
+            rpm=config.rpm,
         )
-        
+
         elapsed = time.time() - start_time
-        
+
         if not hierarchy_run_id:
             logger.error("Hierarchy creation failed - no hierarchy run ID returned")
             raise RuntimeError("Hierarchy creation failed to return a run ID")
-        
+
         logger.info(f"✓ Hierarchy creation complete in {elapsed:.2f}s")
         logger.info(f"  Hierarchy Run ID: {hierarchy_run_id}")
         logger.info(f"  Created {len(hierarchy_data)} total hierarchy nodes")
-        
+
         # Log hierarchy structure
         levels = {}
         for node in hierarchy_data:
@@ -355,18 +357,20 @@ async def create_hierarchy(db: Database, run_id: str, config: RunnerConfig) -> s
             if level not in levels:
                 levels[level] = 0
             levels[level] += 1
-        
+
         for level in sorted(levels.keys()):
             logger.info(f"  Level {level}: {levels[level]} clusters")
-        
+
         return hierarchy_run_id
-        
+
     except Exception as e:
         logger.error(f"Hierarchy creation failed after {time.time() - start_time:.2f}s: {e}")
         raise
 
 
-def cleanup_resources(temp_dir: Path, db: Database, chroma: ChromaManager, should_cleanup: bool) -> None:
+def cleanup_resources(
+    temp_dir: Path, db: Database, chroma: ChromaManager, should_cleanup: bool
+) -> None:
     """Clean up temporary resources with comprehensive logging.
 
     Note: Database and ChromaManager don't require explicit cleanup as they
@@ -389,29 +393,29 @@ def cleanup_resources(temp_dir: Path, db: Database, chroma: ChromaManager, shoul
         logger.info(f"Temporary directory preserved for debugging: {temp_dir}")
 
 
-async def run_analysis(config: RunnerConfig) -> Dict[str, Any]:
+async def run_analysis(config: RunnerConfig) -> dict[str, Any]:
     """Run complete analysis workflow procedurally with comprehensive logging."""
     logger.info("Starting LMSYS Query Analysis workflow")
     logger.info(f"Configuration: {config.dict()}")
-    
+
     overall_start_time = time.time()
-    
+
     # Setup
     temp_dir, db, chroma = setup_environment(config)
-    
+
     try:
         # Step 1: Load data
         logger.info("=" * 60)
         logger.info("PHASE 1: DATA LOADING")
         logger.info("=" * 60)
         load_stats = load_data(db, chroma, config)
-        
+
         # Step 2: Run clustering
         logger.info("=" * 60)
         logger.info("PHASE 2: CLUSTERING")
         logger.info("=" * 60)
         run_id = run_clustering(db, chroma, config)
-        
+
         # Step 3: Create hierarchy (optional)
         hierarchy_run_id = None
         if config.enable_hierarchy:
@@ -421,10 +425,10 @@ async def run_analysis(config: RunnerConfig) -> Dict[str, Any]:
             hierarchy_run_id = await create_hierarchy(db, run_id, config)
         else:
             logger.info("Hierarchy creation skipped (disabled in configuration)")
-        
+
         # Calculate total execution time
         total_elapsed = time.time() - overall_start_time
-        
+
         # Build results
         results = {
             "run_id": run_id,
@@ -432,12 +436,9 @@ async def run_analysis(config: RunnerConfig) -> Dict[str, Any]:
             "total_queries": load_stats["loaded"],
             "execution_time": total_elapsed,
             "config": config.dict(),
-            "stats": {
-                "loading": load_stats,
-                "total_time": total_elapsed
-            }
+            "stats": {"loading": load_stats, "total_time": total_elapsed},
         }
-        
+
         logger.info("=" * 60)
         logger.info("WORKFLOW COMPLETED SUCCESSFULLY")
         logger.info("=" * 60)
@@ -446,16 +447,16 @@ async def run_analysis(config: RunnerConfig) -> Dict[str, Any]:
         if hierarchy_run_id:
             logger.info(f"Hierarchy run ID: {hierarchy_run_id}")
         logger.info(f"Queries processed: {load_stats['loaded']}")
-        
+
         return results
-        
+
     except Exception as e:
         logger.error("=" * 60)
         logger.error("WORKFLOW FAILED")
         logger.error("=" * 60)
         logger.error(f"Error after {time.time() - overall_start_time:.2f}s: {e}")
         raise
-        
+
     finally:
         logger.info("=" * 60)
         logger.info("CLEANUP")
@@ -471,36 +472,36 @@ def main():
         n_clusters=50,
         enable_hierarchy=False,  # Skip hierarchy for faster execution
         log_level="INFO",
-        db_path="quick_analysis.db"  # Persistent by default
+        db_path="quick_analysis.db",  # Persistent by default
     )
-    
+
     console.print("[bold cyan]LMSYS Query Analysis Runner[/bold cyan]")
     console.print("Running with default configuration:")
     console.print(f"  Queries: {config.query_limit}")
     console.print(f"  Clusters: {config.n_clusters}")
     console.print(f"  Hierarchy: {config.enable_hierarchy}")
     console.print(f"  Database: {config.db_path}")
-    
+
     try:
         # Run workflow
         results = asyncio.run(run_analysis(config))
-        
+
         # Print final results
         console.print("\n[bold green]✓ Analysis Complete![/bold green]")
         console.print(f"[cyan]Run ID:[/cyan] {results['run_id']}")
-        if results['hierarchy_run_id']:
+        if results["hierarchy_run_id"]:
             console.print(f"[cyan]Hierarchy ID:[/cyan] {results['hierarchy_run_id']}")
         console.print(f"[cyan]Total Queries:[/cyan] {results['total_queries']}")
         console.print(f"[cyan]Execution Time:[/cyan] {results['execution_time']:.2f}s")
 
-        console.print(f"\n[bold yellow]Next Steps:[/bold yellow]")
-        console.print(f"Explore your results with the CLI:")
-        console.print(f"  uv run lmsys runs --latest")
+        console.print("\n[bold yellow]Next Steps:[/bold yellow]")
+        console.print("Explore your results with the CLI:")
+        console.print("  uv run lmsys runs --latest")
         console.print(f"  uv run lmsys list-clusters {results['run_id']}")
         console.print(f"  uv run lmsys search 'python' --run-id {results['run_id']}")
 
         return 0
-        
+
     except KeyboardInterrupt:
         console.print("\n[yellow]Analysis interrupted by user[/yellow]")
         return 1
@@ -511,4 +512,5 @@ def main():
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(main())

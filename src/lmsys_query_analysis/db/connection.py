@@ -1,8 +1,9 @@
 """Database connection and session management using SQLModel."""
 
 from pathlib import Path
-from sqlmodel import create_engine, SQLModel, Session
+
 from sqlalchemy import event
+from sqlmodel import Session, SQLModel, create_engine
 
 DEFAULT_DB_PATH = Path.home() / ".lmsys-query-analysis" / "queries.db"
 

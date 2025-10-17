@@ -4,7 +4,6 @@ Adds concurrent summarization using anyio + AsyncInstructor with
 optional rate limiting to speed up large runs safely.
 """
 
-from typing import List, Optional, Dict, Tuple
 import logging
 
 import anyio
@@ -12,17 +11,17 @@ import instructor
 from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.progress import (
+    BarColumn,
     Progress,
     SpinnerColumn,
-    TextColumn,
-    BarColumn,
     TaskProgressColumn,
+    TextColumn,
 )
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
 
 console = Console()
@@ -36,19 +35,20 @@ RETRY_MAX_WAIT = 8
 
 class ClusterData(BaseModel):
     """Simple data object for cluster information."""
+
     cluster_id: int
-    queries: List[str]
-    
+    queries: list[str]
+
     def __iter__(self):
         """Allow tuple unpacking for backward compatibility."""
         return iter((self.cluster_id, self.queries))
-    
+
     @classmethod
-    def from_tuple(cls, data: Tuple[int, List[str]]) -> "ClusterData":
+    def from_tuple(cls, data: tuple[int, list[str]]) -> "ClusterData":
         """Create from tuple for easy migration."""
         return cls(cluster_id=data[0], queries=data[1])
-    
-    def to_tuple(self) -> Tuple[int, List[str]]:
+
+    def to_tuple(self) -> tuple[int, list[str]]:
         """Convert to tuple for backward compatibility."""
         return (self.cluster_id, self.queries)
 
@@ -77,17 +77,16 @@ Contrastive examples:
 """
 
 
-
 class ClusterSummaryResponse(BaseModel):
     """Structured response from LLM for cluster summarization."""
 
     title: str = Field(
         ...,
-        description="Short imperative name (≤10 words) like 'Help with Python debugging' or 'Write creative stories'. Be specific, avoid vague terms like 'Various' or 'General'."
+        description="Short imperative name (≤10 words) like 'Help with Python debugging' or 'Write creative stories'. Be specific, avoid vague terms like 'Various' or 'General'.",
     )
     description: str = Field(
         ...,
-        description="Two sentences in past tense describing what users were trying to accomplish and key patterns. Focus on dominant behavior (60%+ of queries)."
+        description="Two sentences in past tense describing what users were trying to accomplish and key patterns. Focus on dominant behavior (60%+ of queries).",
     )
 
 
@@ -101,9 +100,9 @@ class ClusterSummarizer:
     def __init__(
         self,
         model: str = "openai/gpt-4o-mini",
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         concurrency: int = 40,
-        rpm: Optional[int] = None,
+        rpm: int | None = None,
     ):
         """Initialize the summarizer.
 
@@ -120,21 +119,18 @@ class ClusterSummarizer:
         self.rpm = rpm if (rpm is None or rpm > 0) else None
         self.logger = logging.getLogger("lmsys")
 
-
         # Initialize async instructor client with full model string
         if api_key:
-            self.async_client = instructor.from_provider(
-                model, api_key=api_key, async_client=True
-            )
+            self.async_client = instructor.from_provider(model, api_key=api_key, async_client=True)
         else:
             self.async_client = instructor.from_provider(model, async_client=True)
 
     def generate_batch_summaries(
         self,
-        clusters_data: List[ClusterData],
+        clusters_data: list[ClusterData],
         max_queries: int = 100,
-        concurrency: Optional[int] = None,
-        rpm: Optional[int] = None,
+        concurrency: int | None = None,
+        rpm: int | None = None,
         contrast_neighbors: int = 5,
         contrast_examples: int = 10,
         contrast_mode: str = "neighbors",
@@ -150,9 +146,7 @@ class ClusterSummarizer:
         Returns:
             Dict mapping cluster_id to summary dict
         """
-        use_concurrency = (
-            self.concurrency if concurrency is None else max(1, int(concurrency))
-        )
+        use_concurrency = self.concurrency if concurrency is None else max(1, int(concurrency))
         use_rpm = self.rpm if rpm is None else (rpm if rpm and rpm > 0 else None)
 
         return anyio.run(
@@ -170,17 +164,17 @@ class ClusterSummarizer:
 
     async def _async_generate_batch_summaries(
         self,
-        clusters_data: List[ClusterData],
+        clusters_data: list[ClusterData],
         max_queries: int,
         concurrency: int,
-        rpm: Optional[int],
+        rpm: int | None,
         contrast_neighbors: int,
         contrast_examples: int,
         contrast_mode: str,
-    ) -> Dict[int, dict]:
+    ) -> dict[int, dict]:
         """Async concurrent generation using anyio with semaphore-based rate limiting."""
         total = len(clusters_data)
-        results: Dict[int, dict] = {}
+        results: dict[int, dict] = {}
         semaphore = anyio.Semaphore(concurrency)
 
         console.print(
@@ -195,9 +189,11 @@ class ClusterSummarizer:
         )
 
         # Pre-select representative queries for each cluster
-        sampled_map: Dict[int, List[str]] = {}
+        sampled_map: dict[int, list[str]] = {}
         for cluster_data in clusters_data:
-            sampled_map[cluster_data.cluster_id] = self._select_representative_queries(cluster_data.queries, max_queries)
+            sampled_map[cluster_data.cluster_id] = self._select_representative_queries(
+                cluster_data.queries, max_queries
+            )
 
         # Build neighbor context for contrastive learning
         neighbor_context = self._build_neighbor_context(
@@ -208,12 +204,13 @@ class ClusterSummarizer:
             contrast_mode,
         )
 
-        async def worker(
-            idx: int, cluster_data: ClusterData, progress_task, progress
-        ):
+        async def worker(idx: int, cluster_data: ClusterData, progress_task, progress):
             # Build per-cluster summary (retries handled by tenacity decorator)
             self.logger.debug(
-                "Worker %d starting for cluster %d (%d queries)", idx, cluster_data.cluster_id, len(cluster_data.queries)
+                "Worker %d starting for cluster %d (%d queries)",
+                idx,
+                cluster_data.cluster_id,
+                len(cluster_data.queries),
             )
             async with semaphore:
                 summary = await self._async_generate_cluster_summary(
@@ -223,7 +220,9 @@ class ClusterSummarizer:
                     contrast_neighbors=neighbor_context.get(cluster_data.cluster_id, []),
                 )
             results[cluster_data.cluster_id] = summary
-            self.logger.info("Completed summary for cluster %d: %s", cluster_data.cluster_id, summary["title"])
+            self.logger.info(
+                "Completed summary for cluster %d: %s", cluster_data.cluster_id, summary["title"]
+            )
 
             if progress_task is not None:
                 progress.update(progress_task, advance=1)
@@ -251,10 +250,10 @@ class ClusterSummarizer:
     )
     async def _async_generate_cluster_summary(
         self,
-        cluster_queries: List[str],
+        cluster_queries: list[str],
         cluster_id: int,
         max_queries: int = 50,
-        contrast_neighbors: Optional[List[Dict]] = None,
+        contrast_neighbors: list[dict] | None = None,
     ) -> dict:
         """Async variant of single-cluster summarization using AsyncInstructor.
 
@@ -311,15 +310,17 @@ class ClusterSummarizer:
 
     def _build_neighbor_context(
         self,
-        clusters_data: List[ClusterData],
-        sampled_map: Dict[int, List[str]],
+        clusters_data: list[ClusterData],
+        sampled_map: dict[int, list[str]],
         contrast_neighbors: int,
         contrast_examples: int,
         contrast_mode: str,
-    ) -> Dict[int, List[Dict]]:
+    ) -> dict[int, list[dict]]:
         """Build neighbor context for contrastive learning with improved selection."""
         id_list = [cluster_data.cluster_id for cluster_data in clusters_data]
-        sizes_map = {cluster_data.cluster_id: len(cluster_data.queries) for cluster_data in clusters_data}
+        sizes_map = {
+            cluster_data.cluster_id: len(cluster_data.queries) for cluster_data in clusters_data
+        }
 
         # Skip if no neighbors requested or only one cluster
         if contrast_neighbors <= 0 or len(id_list) <= 1:
@@ -335,8 +336,10 @@ class ClusterSummarizer:
             # Improved neighbor selection: prioritize clusters with different sizes
             # to get better contrastive examples
             other_clusters_with_size = [(oid, sizes_map.get(oid, 0)) for oid in other_ids]
-            other_clusters_with_size.sort(key=lambda x: abs(x[1] - sizes_map.get(cid, 0)), reverse=True)
-            
+            other_clusters_with_size.sort(
+                key=lambda x: abs(x[1] - sizes_map.get(cid, 0)), reverse=True
+            )
+
             n_neighbors = min(contrast_neighbors, len(other_ids))
             neighbor_ids = [oid for oid, _ in other_clusters_with_size[:n_neighbors]]
 
@@ -347,8 +350,7 @@ class ClusterSummarizer:
                 if contrast_examples > 0:
                     examples = sampled_map.get(nid, [])[:contrast_examples]
                     examples = [
-                        e.splitlines()[0].strip()[:MAX_NEIGHBOR_EXAMPLE_LENGTH]
-                        for e in examples
+                        e.splitlines()[0].strip()[:MAX_NEIGHBOR_EXAMPLE_LENGTH] for e in examples
                     ]
 
                 neighbors_data.append(
@@ -365,7 +367,7 @@ class ClusterSummarizer:
 
         return neighbor_context
 
-    def _random_sample(self, items: List[str], k: int) -> List[str]:
+    def _random_sample(self, items: list[str], k: int) -> list[str]:
         """Sample k items using random sampling."""
         import random
 
@@ -375,8 +377,8 @@ class ClusterSummarizer:
         return random.sample(items, k)
 
     def _select_representative_queries(
-        self, cluster_queries: List[str], max_queries: int
-    ) -> List[str]:
+        self, cluster_queries: list[str], max_queries: int
+    ) -> list[str]:
         """Select a representative subset of queries using random sampling.
 
         - Deduplicate queries (case-insensitive, trimmed)
@@ -391,7 +393,7 @@ class ClusterSummarizer:
 
         # Normalize and deduplicate while preserving original text
         seen = set()
-        originals: List[str] = []
+        originals: list[str] = []
         for q in cluster_queries:
             q = (q or "").strip()
             key = " ".join(q.lower().split())

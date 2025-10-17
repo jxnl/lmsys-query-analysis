@@ -544,6 +544,57 @@ uv run lmsys verify sync <RUN_ID> --json | jq .
 
 ## Development
 
+### Linting and Formatting
+
+This project uses **Ruff** for Python (linting + formatting) and **Prettier** + **ESLint** for TypeScript/React.
+
+#### Python (Ruff)
+
+```bash
+# Check linting issues
+uv run ruff check src/ tests/
+
+# Auto-fix linting issues
+uv run ruff check --fix src/ tests/
+
+# Format code
+uv run ruff format src/ tests/
+
+# Check formatting without writing
+uv run ruff format --check src/ tests/
+```
+
+#### TypeScript/React (Prettier + ESLint)
+
+```bash
+cd web
+
+# Check linting issues
+npm run lint
+
+# Auto-fix linting issues
+npm run lint:fix
+
+# Format code
+npm run format
+
+# Check formatting without writing
+npm run format:check
+```
+
+#### Both at Once (Convenience Scripts)
+
+```bash
+# Lint both Python and TypeScript
+./scripts/lint.sh
+
+# Format both Python and TypeScript
+./scripts/format.sh
+
+# Check everything (lint + format check)
+./scripts/check.sh
+```
+
 ### Run Tests
 
 ```bash

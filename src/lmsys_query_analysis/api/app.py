@@ -1,11 +1,11 @@
 """FastAPI application with CORS and error handling."""
 
 from fastapi import FastAPI, Request, status
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .schemas import ErrorResponse, ErrorDetail
+from .routers import analysis, clustering, curation, hierarchy, search, summaries
 
 # Create FastAPI app
 app = FastAPI(
@@ -87,9 +87,6 @@ async def health_check():
 
 # ===== Register Routers =====
 
-# Import routers (will be created next)
-from .routers import clustering, analysis, hierarchy, summaries, search, curation
-
 app.include_router(clustering.router, prefix="/api/clustering", tags=["clustering"])
 app.include_router(analysis.router, prefix="/api", tags=["analysis"])
 app.include_router(hierarchy.router, prefix="/api/hierarchy", tags=["hierarchy"])
@@ -118,6 +115,7 @@ async def root():
 def main():
     """Entry point for lmsys-api command."""
     import uvicorn
+
     uvicorn.run(
         "lmsys_query_analysis.api.app:app",
         host="0.0.0.0",

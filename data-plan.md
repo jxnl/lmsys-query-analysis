@@ -131,7 +131,13 @@ def extract_first_query(conversation: list[dict] | None) -> str | None:
 # Add to adapters.py:
 
 class HuggingFaceAdapter:
-    """Adapter for HuggingFace datasets (lmsys/lmsys-chat-1m)."""
+    """Adapter for HuggingFace datasets with flexible schema mapping.
+    
+    Supports different dataset schemas through column mapping:
+    - LMSYS datasets: conversation field with JSON structure
+    - Simple prompt datasets: direct text column (e.g., 'prompt')
+    - Custom schemas: configurable field mappings
+    """
     
     def __init__(
         self,
@@ -139,22 +145,48 @@ class HuggingFaceAdapter:
         split: str = "train",
         limit: int | None = None,
         use_streaming: bool = False,
+        query_column: str | None = None,  # NEW: Column name for query text
+        is_conversation_format: bool | None = None,  # NEW: Whether to parse as conversation JSON (None = auto-detect)
     ):
         # Load dataset using datasets.load_dataset()
         # Apply limit if specified
         # Store dataset and configuration
+        # Auto-detect schema if columns not specified
         ...
     
     def __iter__(self) -> Iterator[dict]:
         # Iterate over HF dataset
-        # Parse conversation field (handle JSON strings)
-        # Extract first query using extract_first_query()
+        # If is_conversation_format:
+        #   Parse conversation field (handle JSON strings)
+        #   Extract first query using extract_first_query()
+        # Else:
+        #   Read directly from query_column
+        # Generate conversation_id:
+        #   - Use row's conversation_id if present
+        #   - Otherwise generate random UUID
         # Build extra_metadata from HF fields
         # Yield normalized dicts matching protocol schema
         ...
     
     def __len__(self) -> int | None:
         # Return dataset length or None if streaming
+        ...
+    
+    @staticmethod
+    def _detect_schema(dataset) -> dict:
+        """Auto-detect schema from dataset columns.
+        
+        Returns schema config dict with:
+        - query_column: str (column containing query text)
+        - is_conversation_format: bool (needs JSON parsing)
+        
+        Note: conversation_id will be read from row if present, 
+        otherwise a random UUID will be generated.
+        """
+        # Check for common column patterns:
+        # - 'conversation' → LMSYS format
+        # - 'prompt' → Simple prompt format
+        # - 'text' → Generic text format
         ...
 ```
 
@@ -165,7 +197,12 @@ class HuggingFaceAdapter:
   - `test_hf_adapter_iteration_basic`
   - `test_hf_adapter_with_limit`
   - `test_hf_adapter_normalized_output_schema`
-  - `test_hf_adapter_handles_json_conversations`
+  - `test_hf_adapter_handles_json_conversations`  # LMSYS format
+  - `test_hf_adapter_handles_simple_prompt_column`  # NEW: fka/awesome-chatgpt-prompts format
+  - `test_hf_adapter_auto_detects_schema`  # NEW: Auto-detect column names
+  - `test_hf_adapter_custom_column_mapping`  # NEW: Explicit column mapping
+  - `test_hf_adapter_generates_uuid_for_missing_ids`  # NEW: UUID generation
+  - `test_hf_adapter_preserves_existing_conversation_ids`  # NEW: Preserve IDs when present
   - `test_hf_adapter_handles_missing_fields`
   - `test_hf_adapter_streaming_mode`
   - `test_hf_adapter_conforms_to_protocol`
@@ -174,6 +211,11 @@ class HuggingFaceAdapter:
 
 - [x] `HuggingFaceAdapter` class extracts all HF-specific logic
 - [x] Adapter conforms to `DataSourceAdapter` protocol
+- [x] Schema auto-detection supports LMSYS conversation format
+- [x] Schema auto-detection supports simple prompt format (e.g., fka/awesome-chatgpt-prompts)
+- [x] Manual schema override parameters work correctly
+- [x] Random UUIDs generated when conversation_id not present in dataset
+- [x] Existing conversation_id values preserved when present
 - [x] All HF adapter tests pass
 - [x] Unit tests pass: `uv run pytest tests/unit/db/test_adapters.py -v`
 - [x] Adapter can be instantiated and iterated independently
@@ -212,11 +254,14 @@ adapter = HuggingFaceAdapter(
     split="train",
     limit=limit,
     use_streaming=use_streaming,
+    # Schema detection is automatic by default
+    # Can override with: query_column="prompt", is_conversation_format=False
 )
 
 for batch in chunk_iter(adapter, batch_size):
     for normalized_record in batch:
         # normalized_record already has conversation_id, query_text, etc.
+        # Works for both LMSYS (conversation) and simple prompt formats
         conversation_id = normalized_record["conversation_id"]
         query_text = normalized_record["query_text"]
         ...
@@ -593,17 +638,23 @@ def test_load_with_custom_dataset_name(temp_db):
 ### Manual CLI Testing
 
 ```bash
-# Test with default dataset (should work as before)
+# Test with default dataset (should work as before - LMSYS conversation format)
 uv run lmsys load --limit 10 --db-path /tmp/test-default.db
 
-# Test with custom dataset (using another LMSYS dataset)
-uv run lmsys load --hf lmsys/chatbot-arena-conversations --limit 10 --db-path /tmp/test-custom.db
+# Test with simple prompt dataset (fka/awesome-chatgpt-prompts)
+uv run lmsys load --hf fka/awesome-chatgpt-prompts --limit 10 --db-path /tmp/test-prompts.db
+
+# Verify the prompts were loaded correctly
+uv run lmsys list --db-path /tmp/test-prompts.db --limit 5
+
+# Test with another LMSYS conversation format dataset
+uv run lmsys load --hf lmsys/chatbot-arena-conversations --limit 10 --db-path /tmp/test-arena.db
 
 # Test help text shows the new flag
 uv run lmsys load --help | grep -A2 "\-\-hf"
 
 # Clean up
-rm /tmp/test-default.db /tmp/test-custom.db
+rm /tmp/test-default.db /tmp/test-prompts.db /tmp/test-arena.db
 ```
 
 ### Success Criteria
@@ -612,15 +663,183 @@ rm /tmp/test-default.db /tmp/test-custom.db
 - [x] `dataset_name` parameter added to `load_dataset()` with default value
 - [x] Dataset name passed to `HuggingFaceAdapter` correctly
 - [x] CLI imports updated to use `load_dataset` (new name)
-- [ ] `--hf` flag added to CLI load command
-- [ ] Default value for `--hf` is `lmsys/lmsys-chat-1m` (backward compatible)
-- [ ] Runner imports updated to use `load_dataset` (new name)
-- [ ] All test files updated to use new function name
-- [ ] All existing tests still pass
-- [ ] New unit tests for custom dataset name pass
-- [ ] New CLI tests for `--hf` flag pass
-- [ ] Help text displays the new option clearly
-- [ ] Manual testing with different datasets works
+- [x] `--hf` flag added to CLI load command
+- [x] Default value for `--hf` is `lmsys/lmsys-chat-1m` (backward compatible)
+- [x] Runner imports updated to use `load_dataset` (new name)
+- [x] All test files updated to use new function name
+- [x] All existing tests still pass
+- [x] New unit tests for custom dataset name pass
+- [x] New CLI tests for `--hf` flag pass
+- [x] Help text displays the new option clearly
+- [x] Manual testing with different datasets works
+
+---
+
+## Schema Detection Strategy
+
+The `HuggingFaceAdapter` supports multiple dataset schemas through auto-detection:
+
+### Supported Dataset Formats
+
+#### 1. LMSYS Conversation Format
+**Datasets**: `lmsys/lmsys-chat-1m`, `lmsys/chatbot-arena-conversations`
+
+**Schema**:
+```json
+{
+  "conversation_id": "abc123",
+  "conversation": [
+    {"role": "user", "content": "What is Python?"},
+    {"role": "assistant", "content": "Python is..."}
+  ],
+  "model": "gpt-4",
+  "language": "en",
+  "timestamp": "2024-01-01T00:00:00"
+}
+```
+
+**Detection**: Presence of `conversation` column (list or JSON string)
+
+**Extraction**: Use `extract_first_query()` to get first user message
+
+#### 2. Simple Prompt Format
+**Datasets**: `fka/awesome-chatgpt-prompts`
+
+**Schema**:
+```json
+{
+  "act": "Linux Terminal",
+  "prompt": "I want you to act as a linux terminal..."
+}
+```
+
+**Detection**: Presence of `prompt` column, absence of `conversation` column
+
+**Extraction**: Read directly from `prompt` field
+
+**Conversation ID**: Generate random UUID (no `conversation_id` field in dataset)
+
+#### 3. Generic Text Format (Future)
+**Potential columns**: `text`, `query`, `question`, `input`
+
+**Detection**: Check for these column names in priority order
+
+### Auto-Detection Logic
+
+```python
+def _detect_schema(dataset) -> dict:
+    """Auto-detect dataset schema from column names.
+    
+    Returns:
+        Dict with keys:
+        - query_column: str (column containing query text)
+        - is_conversation_format: bool (needs JSON parsing)
+    
+    Note: conversation_id is handled separately - read from row if present,
+          otherwise generate random UUID.
+    """
+    columns = dataset.column_names
+    
+    # Priority 1: LMSYS conversation format
+    if "conversation" in columns:
+        return {
+            "query_column": "conversation",
+            "is_conversation_format": True,
+        }
+    
+    # Priority 2: Simple prompt format
+    if "prompt" in columns:
+        return {
+            "query_column": "prompt",
+            "is_conversation_format": False,
+        }
+    
+    # Priority 3: Generic text columns
+    for col in ["text", "query", "question", "input"]:
+        if col in columns:
+            return {
+                "query_column": col,
+                "is_conversation_format": False,
+            }
+    
+    raise ValueError(f"Could not detect query column. Available columns: {columns}")
+```
+
+### Conversation ID Generation
+
+For datasets without a `conversation_id` column, generate random UUIDs:
+
+```python
+import uuid
+
+def get_or_generate_conversation_id(row: dict) -> str:
+    """Get conversation_id from row or generate a new UUID.
+    
+    Args:
+        row: Dataset row (dict)
+    
+    Returns:
+        Conversation ID string
+    """
+    # Check if row has conversation_id field
+    if "conversation_id" in row and row["conversation_id"]:
+        return str(row["conversation_id"])
+    
+    # Generate random UUID for datasets without conversation_id
+    return str(uuid.uuid4())
+```
+
+**Why random UUIDs?**
+- Simple and straightforward
+- Guaranteed unique within database
+- No complex hashing logic needed
+- Standard approach for generating IDs
+
+**Note**: Each load will generate new UUIDs for rows without `conversation_id`, so:
+- Re-loading the same dataset will create duplicate entries (different IDs)
+- Use `--force-reload` cautiously with datasets that don't have native IDs
+- Consider using `lmsys clear` before re-loading such datasets
+
+### Test Cases to Add
+
+```python
+# Test LMSYS format with conversation_id
+def test_adapter_lmsys_format():
+    mock_dataset = [
+        {"conversation_id": "existing-id-123", "conversation": [{"role": "user", "content": "Hi"}]}
+    ]
+    # Should detect conversation format and use existing conversation_id
+
+# Test simple prompt format without conversation_id
+def test_adapter_simple_prompt_format():
+    mock_dataset = [
+        {"act": "Coder", "prompt": "Write a function..."}
+    ]
+    # Should detect prompt column and generate UUID for conversation_id
+
+# Test UUID generation for missing IDs
+def test_adapter_generates_uuid_when_no_id():
+    """Datasets without conversation_id should get UUIDs."""
+    # Test that UUIDs are generated (valid UUID format)
+    # Test that each row gets a unique UUID
+
+# Test existing IDs are preserved
+def test_adapter_preserves_existing_ids():
+    """If conversation_id exists in row, it should be used."""
+    mock_dataset = [
+        {"conversation_id": "custom-123", "prompt": "Test"}
+    ]
+    # Verify conversation_id is "custom-123", not a generated UUID
+
+# Test explicit override
+def test_adapter_explicit_schema_override():
+    adapter = HuggingFaceAdapter(
+        dataset_name="custom/dataset",
+        query_column="custom_field",
+        is_conversation_format=False
+    )
+    # Should use explicit configuration
+```
 
 ---
 

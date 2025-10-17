@@ -40,7 +40,7 @@ export default async function RunPage({ params }: RunPageProps) {
     hierarchyTree = treeResponse.nodes;
   }
 
-  const runParams = run.parameters as Record<string, any> | null;
+  const runParams = run.parameters as Record<string, unknown> | null;
 
   return (
     <div className="container mx-auto py-8 space-y-6">
@@ -101,9 +101,7 @@ export default async function RunPage({ params }: RunPageProps) {
                 <div key={key}>
                   <dt className="font-medium text-muted-foreground">{key}</dt>
                   <dd className="mt-1 font-mono text-xs">
-                    {typeof value === "object"
-                      ? JSON.stringify(value)
-                      : String(value)}
+                    {typeof value === "object" ? JSON.stringify(value) : String(value)}
                   </dd>
                 </div>
               ))}
@@ -117,8 +115,7 @@ export default async function RunPage({ params }: RunPageProps) {
           <CardTitle>Cluster Hierarchy</CardTitle>
           {hierarchiesResponse.items.length > 1 && (
             <p className="text-sm text-muted-foreground">
-              Showing latest hierarchy ({hierarchiesResponse.items.length}{" "}
-              total)
+              Showing latest hierarchy ({hierarchiesResponse.items.length} total)
             </p>
           )}
         </CardHeader>
@@ -132,10 +129,8 @@ export default async function RunPage({ params }: RunPageProps) {
           ) : (
             <p className="text-muted-foreground text-center py-8">
               No hierarchy found. Run{" "}
-              <code className="bg-muted px-2 py-1 rounded">
-                lmsys merge-clusters {runId}
-              </code>{" "}
-              to create one.
+              <code className="bg-muted px-2 py-1 rounded">lmsys merge-clusters {runId}</code> to
+              create one.
             </p>
           )}
         </CardContent>

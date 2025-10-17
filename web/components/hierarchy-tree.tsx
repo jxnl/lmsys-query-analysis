@@ -2,11 +2,7 @@
 
 import { useState, useEffect, createContext, useContext } from "react";
 import Link from "next/link";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   ChevronRight,
   ChevronDown,
@@ -55,9 +51,7 @@ export function HierarchyTree({
 
   // Calculate hierarchy stats
   const maxLevel = Math.max(...nodes.map((n) => n.level), 0);
-  const leafCount = nodes.filter(
-    (n) => !n.children_ids || n.children_ids.length === 0,
-  ).length;
+  const leafCount = nodes.filter((n) => !n.children_ids || n.children_ids.length === 0).length;
 
   // Helper to calculate total query count for any node (including descendants)
   const getTotalQueryCount = (nodeId: number): number => {
@@ -78,16 +72,13 @@ export function HierarchyTree({
   if (sortedRootNodes.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
-        No hierarchy found for this run. Run `lmsys merge-clusters` to create
-        one.
+        No hierarchy found for this run. Run `lmsys merge-clusters` to create one.
       </div>
     );
   }
 
   return (
-    <ExpandContext.Provider
-      value={{ expandAll, toggleExpandAll: () => setExpandAll(!expandAll) }}
-    >
+    <ExpandContext.Provider value={{ expandAll, toggleExpandAll: () => setExpandAll(!expandAll) }}>
       <div className="space-y-4">
         {/* Header with stats and controls */}
         <div className="flex items-center justify-between pb-2 border-b">
@@ -202,8 +193,7 @@ function TreeNode({
   if (node.parent_cluster_id !== null && node.parent_cluster_id !== undefined) {
     parentTotal = getTotalQueryCount(node.parent_cluster_id);
   }
-  const percentage =
-    parentTotal > 0 ? (totalQueryCount / parentTotal) * 100 : 0;
+  const percentage = parentTotal > 0 ? (totalQueryCount / parentTotal) * 100 : 0;
 
   // Determine size category for color coding
   const getSizeCategory = (): "large" | "medium" | "small" => {
@@ -223,7 +213,7 @@ function TreeNode({
       if (!currentNode) break;
 
       path.unshift(
-        `${currentNode.title || `Cluster ${currentNode.cluster_id}`} (ID: ${currentNode.cluster_id}, Level: ${currentNode.level})`,
+        `${currentNode.title || `Cluster ${currentNode.cluster_id}`} (ID: ${currentNode.cluster_id}, Level: ${currentNode.level})`
       );
       currentId = currentNode.parent_cluster_id ?? null;
     }
@@ -245,9 +235,7 @@ function TreeNode({
           page: number;
           pages: number;
           limit: number;
-        }>(
-          `/api/queries?run_id=${runId}&cluster_id=${node.cluster_id}&page=1&limit=5`,
-        );
+        }>(`/api/queries?run_id=${runId}&cluster_id=${node.cluster_id}&page=1&limit=5`);
         sampleQueries = data.items;
       } catch (err) {
         console.error("Failed to fetch sample queries:", err);
@@ -265,7 +253,7 @@ ${sampleQueries
 - **Model**: ${q.model || "N/A"}
 - **Language**: ${q.language || "N/A"}
 - **ID**: ${q.id}
-`,
+`
   )
   .join("\n")}
 `
@@ -320,7 +308,7 @@ ${JSON.stringify(
     description: node.description,
   },
   null,
-  2,
+  2
 )}
 \`\`\`
 `;
@@ -344,9 +332,7 @@ ${JSON.stringify(
         page: number;
         pages: number;
         limit: number;
-      }>(
-        `/api/queries?run_id=${runId}&cluster_id=${node.cluster_id}&page=1&limit=10`,
-      )
+      }>(`/api/queries?run_id=${runId}&cluster_id=${node.cluster_id}&page=1&limit=10`)
         .then((data) => {
           setQueries(data.items);
         })
@@ -406,8 +392,7 @@ ${JSON.stringify(
                           : "text-muted-foreground"
                     }`}
                   >
-                    {queryCount.toLocaleString()} queries (
-                    {percentage.toFixed(1)}%)
+                    {queryCount.toLocaleString()} queries ({percentage.toFixed(1)}%)
                   </span>
                 </div>
                 {/* Visual progress bar */}
@@ -474,9 +459,7 @@ ${JSON.stringify(
                             : query.query_text}
                         </p>
                         <div className="flex gap-2 mt-1.5 text-xs text-muted-foreground">
-                          {query.model && (
-                            <span className="font-medium">{query.model}</span>
-                          )}
+                          {query.model && <span className="font-medium">{query.model}</span>}
                           {query.language && <span>• {query.language}</span>}
                         </div>
                       </div>
@@ -504,9 +487,7 @@ ${JSON.stringify(
                   )}
                 </>
               ) : (
-                <p className="text-sm text-muted-foreground py-2">
-                  No queries found
-                </p>
+                <p className="text-sm text-muted-foreground py-2">No queries found</p>
               )}
             </CollapsibleContent>
           </div>
@@ -547,12 +528,10 @@ ${JSON.stringify(
                           : "text-muted-foreground"
                     }`}
                   >
-                    {totalQueryCount.toLocaleString()} queries (
-                    {percentage.toFixed(1)}%)
+                    {totalQueryCount.toLocaleString()} queries ({percentage.toFixed(1)}%)
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    • {sortedChildren.length}{" "}
-                    {sortedChildren.length === 1 ? "child" : "children"}
+                    • {sortedChildren.length} {sortedChildren.length === 1 ? "child" : "children"}
                   </span>
                 </div>
                 {/* Visual progress bar */}

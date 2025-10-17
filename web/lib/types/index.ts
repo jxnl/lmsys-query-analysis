@@ -17,17 +17,12 @@ export type ClusterMetadata = components["schemas"]["ClusterMetadata"];
 export type ClusterEdit = components["schemas"]["EditHistoryRecord"];
 
 // Paginated responses
-export type PaginatedQueriesResponse =
-  components["schemas"]["PaginatedQueriesResponse"];
-export type ClusteringRunListResponse =
-  components["schemas"]["ClusteringRunListResponse"];
+export type PaginatedQueriesResponse = components["schemas"]["PaginatedQueriesResponse"];
+export type ClusteringRunListResponse = components["schemas"]["ClusteringRunListResponse"];
 export type ClusterListResponse = components["schemas"]["ClusterListResponse"];
-export type HierarchyTreeResponse =
-  components["schemas"]["HierarchyTreeResponse"];
-export type SearchQueriesResponse =
-  components["schemas"]["SearchQueriesResponse"];
-export type SearchClustersResponse =
-  components["schemas"]["SearchClustersResponse"];
+export type HierarchyTreeResponse = components["schemas"]["HierarchyTreeResponse"];
+export type SearchQueriesResponse = components["schemas"]["SearchQueriesResponse"];
+export type SearchClustersResponse = components["schemas"]["SearchClustersResponse"];
 
 // Additional utility types
 export type PaginatedQueries = {

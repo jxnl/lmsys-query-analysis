@@ -1,11 +1,11 @@
 """FastAPI dependency injection for database and configuration."""
 
 import os
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
-from ..db.connection import Database, DEFAULT_DB_PATH
 from ..db.chroma import ChromaManager
+from ..db.connection import DEFAULT_DB_PATH, Database
 
 # Read configuration from environment variables (same as CLI)
 DB_PATH = os.getenv("DB_PATH") or str(DEFAULT_DB_PATH)
@@ -61,12 +61,11 @@ def create_chroma_manager(
         ValueError: If run_id is not found in database
     """
     from sqlmodel import select
+
     from ..db.models import ClusteringRun
 
     with db.get_session() as session:
-        run = session.exec(
-            select(ClusteringRun).where(ClusteringRun.run_id == run_id)
-        ).first()
+        run = session.exec(select(ClusteringRun).where(ClusteringRun.run_id == run_id)).first()
 
         if not run:
             raise ValueError(f"Run not found: {run_id}")

@@ -66,9 +66,7 @@ export function QueryList({ data, onPageChange }: QueryListProps) {
                   </div>
                   <div className="flex gap-4 text-xs text-muted-foreground">
                     <span>ID: {query.id}</span>
-                    <span>
-                      Conversation: {query.conversation_id.substring(0, 8)}...
-                    </span>
+                    <span>Conversation: {query.conversation_id.substring(0, 8)}...</span>
                   </div>
                 </div>
               </CardContent>

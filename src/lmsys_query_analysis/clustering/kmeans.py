@@ -1,19 +1,19 @@
 """Mini-batch KMeans clustering implementation with streaming embeddings."""
 
-import numpy as np
-import time
 import logging
+import time
 from datetime import datetime
-from typing import Optional, Dict, List
-from sklearn.cluster import MiniBatchKMeans
-from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.console import Console
-from sqlmodel import select
-from sqlalchemy import func
 
-from ..db.connection import Database
-from ..db.models import Query, ClusteringRun, QueryCluster
+import numpy as np
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from sklearn.cluster import MiniBatchKMeans
+from sqlalchemy import func
+from sqlmodel import select
+
 from ..db.chroma import ChromaManager
+from ..db.connection import Database
+from ..db.models import ClusteringRun, Query, QueryCluster
 from .embeddings import EmbeddingGenerator
 
 console = Console()
@@ -30,8 +30,8 @@ def run_kmeans_clustering(
     mb_batch_size: int = 4096,
     embedding_provider: str = "sentence-transformers",
     random_state: int = 42,
-    chroma: Optional[ChromaManager] = None,
-    max_queries: Optional[int] = None,
+    chroma: ChromaManager | None = None,
+    max_queries: int | None = None,
 ) -> str:
     """Run MiniBatchKMeans clustering on all queries using streaming embeddings.
 
@@ -52,17 +52,15 @@ def run_kmeans_clustering(
     try:
         console.print("Counting queries in database...")
         count_result = session.exec(select(func.count()).select_from(Query)).one()
-        total_queries = int(
-            count_result[0] if isinstance(count_result, tuple) else count_result
-        )
+        total_queries = int(count_result[0] if isinstance(count_result, tuple) else count_result)
 
         if total_queries == 0:
-            console.print(
-                "[red]No queries found in database. Run 'lmsys load' first.[/red]"
-            )
+            console.print("[red]No queries found in database. Run 'lmsys load' first.[/red]")
             return None
 
-        effective_total = total_queries if max_queries is None else min(total_queries, int(max_queries))
+        effective_total = (
+            total_queries if max_queries is None else min(total_queries, int(max_queries))
+        )
         console.print(f"[green]Found {total_queries} queries[/green]")
         if max_queries is not None and effective_total < total_queries:
             console.print(f"[yellow]Limiting to first {effective_total} queries[/yellow]")
@@ -115,9 +113,7 @@ def run_kmeans_clustering(
                 offset += len(rows)
 
         # First pass: partial_fit on streaming embeddings
-        console.print(
-            f"[yellow]Training MiniBatchKMeans with {n_clusters} clusters...[/yellow]"
-        )
+        console.print(f"[yellow]Training MiniBatchKMeans with {n_clusters} clusters...[/yellow]")
         fit_start = time.perf_counter()
         total_fit = 0
         with Progress(
@@ -150,15 +146,13 @@ def run_kmeans_clustering(
                                 show_progress=False,
                             )
                             # Backfill map and Chroma for missing
-                            for qid, emb in zip(ids, all_emb):
+                            for qid, emb in zip(ids, all_emb, strict=False):
                                 if qid not in emb_map:
                                     emb_map[qid] = emb
                             # Optionally write missing to Chroma (with metadata)
                             try:
                                 if chroma is not None and len(missing_ids) > 0:
-                                    missing_idx = [
-                                        ids.index(mid) for mid in missing_ids
-                                    ]
+                                    missing_idx = [ids.index(mid) for mid in missing_ids]
                                     meta = [
                                         {
                                             "model": chunk[i].model,
@@ -170,9 +164,7 @@ def run_kmeans_clustering(
                                     chroma.add_queries_batch(
                                         query_ids=missing_ids,
                                         texts=[texts[i] for i in missing_idx],
-                                        embeddings=np.array(
-                                            [all_emb[i] for i in missing_idx]
-                                        ),
+                                        embeddings=np.array([all_emb[i] for i in missing_idx]),
                                         metadata=meta,
                                     )
                             except Exception:
@@ -209,10 +201,10 @@ def run_kmeans_clustering(
 
         # Second pass: predict labels and write assignments incrementally
         console.print("[yellow]Assigning clusters and writing to DB...[/yellow]")
-        cluster_counts: Dict[int, int] = {i: 0 for i in range(n_clusters)}
-        sample_texts: Dict[int, List[str]] = {i: [] for i in range(n_clusters)}
+        cluster_counts: dict[int, int] = dict.fromkeys(range(n_clusters), 0)
+        sample_texts: dict[int, list[str]] = {i: [] for i in range(n_clusters)}
 
-        batch_assignments: List[QueryCluster] = []
+        batch_assignments: list[QueryCluster] = []
         commit_every = 5000
 
         predict_start = time.perf_counter()
@@ -241,7 +233,7 @@ def run_kmeans_clustering(
                             batch_size=embed_batch_size,
                             show_progress=False,
                         )
-                        for qid, emb in zip(ids, all_emb):
+                        for qid, emb in zip(ids, all_emb, strict=False):
                             if qid not in emb_map:
                                 emb_map[qid] = emb
                         try:
@@ -258,9 +250,7 @@ def run_kmeans_clustering(
                                 chroma.add_queries_batch(
                                     query_ids=missing_ids,
                                     texts=[texts[i] for i in missing_idx],
-                                    embeddings=np.array(
-                                        [all_emb[i] for i in missing_idx]
-                                    ),
+                                    embeddings=np.array([all_emb[i] for i in missing_idx]),
                                     metadata=meta,
                                 )
                         except Exception:
@@ -283,7 +273,7 @@ def run_kmeans_clustering(
                 labels = mbk.predict(chunk_embeddings)
                 total_pred += len(texts)
 
-                for qid, qtext, label in zip(ids, texts, labels):
+                for qid, qtext, label in zip(ids, texts, labels, strict=False):
                     cid = int(label)
                     batch_assignments.append(
                         QueryCluster(run_id=run_id, query_id=qid, cluster_id=cid)
@@ -327,9 +317,7 @@ def run_kmeans_clustering(
         if chroma:
             console.print("[yellow]Writing cluster centroids to ChromaDB...[/yellow]")
 
-            used_cluster_ids = [
-                cid for cid in range(n_clusters) if cluster_counts[cid] > 0
-            ]
+            used_cluster_ids = [cid for cid in range(n_clusters) if cluster_counts[cid] > 0]
             centroids = mbk.cluster_centers_[used_cluster_ids]
             summaries = [
                 f"Cluster {cid} ({cluster_counts[cid]} queries)\nSamples:\n"
@@ -387,9 +375,7 @@ def get_cluster_info(db: Database, run_id: str, cluster_id: int) -> dict:
         )
         results = session.exec(statement).all()
 
-        queries = [
-            {"id": q.id, "text": q.query_text, "model": q.model} for q, _ in results
-        ]
+        queries = [{"id": q.id, "text": q.query_text, "model": q.model} for q, _ in results]
 
         return {
             "run_id": run_id,

@@ -35,11 +35,10 @@ from lmsys_query_analysis import (
     load_config_from_yaml,
     save_config_to_yaml,
 )
-from lmsys_query_analysis.db.connection import Database, DEFAULT_DB_PATH
-from lmsys_query_analysis.db.chroma import ChromaManager, DEFAULT_CHROMA_PATH
+from lmsys_query_analysis.db.chroma import DEFAULT_CHROMA_PATH, ChromaManager
+from lmsys_query_analysis.db.connection import DEFAULT_DB_PATH, Database
 from lmsys_query_analysis.semantic.clusters import ClustersClient
 from lmsys_query_analysis.semantic.queries import QueriesClient
-from lmsys_query_analysis.services import cluster_service
 
 console = Console()
 
@@ -123,7 +122,7 @@ async def demonstrate_searches(run_id: str, hierarchy_run_id: str, db_path: str 
     console.print(f"[dim]Hierarchy: {hierarchy_run_id or 'Not created'}[/dim]\n")
 
     db = Database(db_path)
-    chroma = ChromaManager()
+    ChromaManager()
 
     try:
         # Initialize search clients (run_id defines the vector space)
@@ -153,8 +152,9 @@ async def demonstrate_searches(run_id: str, hierarchy_run_id: str, db_path: str 
         # Optional: Demonstrate filtering by summary_run_id
         try:
             with db.get_session() as session:
-                from lmsys_query_analysis.db.models import ClusterSummary
                 from sqlmodel import select
+
+                from lmsys_query_analysis.db.models import ClusterSummary
 
                 stmt = select(ClusterSummary.summary_run_id).where(
                     ClusterSummary.run_id == run_id
@@ -197,8 +197,9 @@ async def demonstrate_searches(run_id: str, hierarchy_run_id: str, db_path: str 
 
 def display_hierarchy(db: Database, hierarchy_run_id: str, max_levels: int = 3):
     """Display hierarchical cluster organization with statistics."""
-    from lmsys_query_analysis.db.models import ClusterHierarchy
     from sqlmodel import select
+
+    from lmsys_query_analysis.db.models import ClusterHierarchy
 
     with db.get_session() as session:
         stmt = select(ClusterHierarchy).where(

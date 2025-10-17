@@ -1,17 +1,17 @@
 """Reusable table formatting utilities for CLI output."""
 
 from rich.table import Table
-from typing import List, Optional
-from ...db.models import Query, ClusteringRun, ClusterSummary, ClusterHierarchy
+
+from ...db.models import ClusteringRun, ClusterSummary, Query
 
 
-def format_queries_table(queries: List[Query], title: Optional[str] = None) -> Table:
+def format_queries_table(queries: list[Query], title: str | None = None) -> Table:
     """Format queries as a rich table.
-    
+
     Args:
         queries: List of Query objects to format
         title: Optional custom title for the table
-    
+
     Returns:
         Formatted Rich table
     """
@@ -21,27 +21,25 @@ def format_queries_table(queries: List[Query], title: Optional[str] = None) -> T
     table.add_column("Model", style="yellow", width=20)
     table.add_column("Query", style="white", width=80)
     table.add_column("Language", style="green", width=10)
-    
+
     for query in queries:
         table.add_row(
             str(query.id),
             query.model[:20] if query.model else "unknown",
-            (query.query_text[:77] + "...")
-            if len(query.query_text) > 80
-            else query.query_text,
+            (query.query_text[:77] + "...") if len(query.query_text) > 80 else query.query_text,
             query.language or "?",
         )
-    
+
     return table
 
 
-def format_runs_table(runs: List[ClusteringRun], latest: bool = False) -> Table:
+def format_runs_table(runs: list[ClusteringRun], latest: bool = False) -> Table:
     """Format clustering runs as a rich table.
-    
+
     Args:
         runs: List of ClusteringRun objects to format
         latest: Whether this is showing only the latest run
-    
+
     Returns:
         Formatted Rich table
     """
@@ -52,7 +50,7 @@ def format_runs_table(runs: List[ClusteringRun], latest: bool = False) -> Table:
     table.add_column("Clusters", style="green")
     table.add_column("Created", style="magenta")
     table.add_column("Description", style="white")
-    
+
     for run in runs:
         table.add_row(
             run.run_id,
@@ -61,24 +59,24 @@ def format_runs_table(runs: List[ClusteringRun], latest: bool = False) -> Table:
             run.created_at.strftime("%Y-%m-%d %H:%M") if run.created_at else "?",
             run.description[:50] if run.description else "",
         )
-    
+
     return table
 
 
 def format_cluster_summaries_table(
-    summaries: List[ClusterSummary],
+    summaries: list[ClusterSummary],
     run_id: str,
     show_examples: int = 0,
     example_width: int = 80,
 ) -> Table:
     """Format cluster summaries as a rich table.
-    
+
     Args:
         summaries: List of ClusterSummary objects to format
         run_id: The clustering run ID
         show_examples: Number of example queries to show per cluster
         example_width: Max characters per example query
-    
+
     Returns:
         Formatted Rich table
     """
@@ -89,7 +87,7 @@ def format_cluster_summaries_table(
     table.add_column("Description", style="white", width=60)
     if show_examples and show_examples > 0:
         table.add_column("Examples", style="white", width=example_width + 6)
-    
+
     for summary in summaries:
         row = [
             str(summary.cluster_id),
@@ -99,7 +97,7 @@ def format_cluster_summaries_table(
             if summary.description and len(summary.description) > 60
             else (summary.description or "No description"),
         ]
-        
+
         if show_examples and show_examples > 0:
             reps = summary.representative_queries or []
             examples = reps[:show_examples]
@@ -110,30 +108,30 @@ def format_cluster_summaries_table(
                     ex = ex[: example_width - 3] + "..."
                 formatted.append("- " + ex)
             row.append("\n".join(formatted) if formatted else "")
-        
+
         table.add_row(*row)
-    
+
     return table
 
 
 def format_loading_stats_table(stats: dict) -> Table:
     """Format loading statistics as a rich table.
-    
+
     Args:
         stats: Dictionary with keys: total_processed, loaded, skipped, errors
-    
+
     Returns:
         Formatted Rich table
     """
     table = Table(title="Loading Statistics")
     table.add_column("Metric", style="cyan")
     table.add_column("Count", style="green")
-    
+
     table.add_row("Total Processed", str(stats["total_processed"]))
     table.add_row("Loaded", str(stats["loaded"]))
     table.add_row("Skipped", str(stats["skipped"]))
     table.add_row("Errors", str(stats["errors"]))
-    
+
     return table
 
 
@@ -141,36 +139,36 @@ def format_backfill_summary_table(
     scanned: int, backfilled: int, already_present: int, elapsed: float, rate: float
 ) -> Table:
     """Format backfill summary as a rich table.
-    
+
     Args:
         scanned: Number of records scanned
         backfilled: Number of records backfilled
         already_present: Number of records already present
         elapsed: Elapsed time in seconds
         rate: Average rate per second
-    
+
     Returns:
         Formatted Rich table
     """
     table = Table(title="Backfill Summary")
     table.add_column("Metric", style="cyan")
     table.add_column("Count", style="green")
-    
+
     table.add_row("Scanned", str(scanned))
     table.add_row("Backfilled", str(backfilled))
     table.add_row("Already Present", str(already_present))
     table.add_row("Elapsed (s)", f"{elapsed:.2f}")
     table.add_row("Avg Rate (/s)", f"{rate:.1f}")
-    
+
     return table
 
 
 def format_search_results_queries_table(hits: list) -> Table:
     """Format query search results as a rich table.
-    
+
     Args:
         hits: List of query hit objects with attributes: query_id, snippet, model, distance
-    
+
     Returns:
         Formatted Rich table
     """
@@ -180,7 +178,7 @@ def format_search_results_queries_table(hits: list) -> Table:
     table.add_column("Query Text", style="white", width=60)
     table.add_column("Model", style="green", width=15)
     table.add_column("Distance", style="magenta", width=10)
-    
+
     for rank, h in enumerate(hits, 1):
         doc = h.snippet
         table.add_row(
@@ -190,16 +188,16 @@ def format_search_results_queries_table(hits: list) -> Table:
             h.model or "unknown",
             f"{h.distance:.4f}",
         )
-    
+
     return table
 
 
 def format_search_results_clusters_table(hits: list) -> Table:
     """Format cluster search results as a rich table.
-    
+
     Args:
         hits: List of cluster hit objects with attributes: cluster_id, title, distance
-    
+
     Returns:
         Formatted Rich table
     """
@@ -208,7 +206,7 @@ def format_search_results_clusters_table(hits: list) -> Table:
     table.add_column("Cluster", style="green", width=10)
     table.add_column("Title", style="yellow", width=40)
     table.add_column("Distance", style="magenta", width=10)
-    
+
     for rank, h in enumerate(hits, 1):
         table.add_row(
             str(rank),
@@ -216,16 +214,16 @@ def format_search_results_clusters_table(hits: list) -> Table:
             h.title or "(no title)",
             f"{h.distance:.4f}",
         )
-    
+
     return table
 
 
 def format_chroma_collections_table(collections: list) -> Table:
     """Format ChromaDB collections as a rich table.
-    
+
     Args:
         collections: List of collection dicts with keys: name, count, embedding_provider, etc.
-    
+
     Returns:
         Formatted Rich table
     """
@@ -236,7 +234,7 @@ def format_chroma_collections_table(collections: list) -> Table:
     table.add_column("Model", style="white")
     table.add_column("Dim", style="magenta")
     table.add_column("Description", style="dim")
-    
+
     for c in collections:
         table.add_row(
             str(c["name"]),
@@ -246,16 +244,16 @@ def format_chroma_collections_table(collections: list) -> Table:
             str(c.get("embedding_dimension") or ""),
             (c.get("description") or "")[:60],
         )
-    
+
     return table
 
 
 def format_verify_sync_table(report: dict) -> Table:
     """Format verification sync report as a rich table.
-    
+
     Args:
         report: Dictionary with verification details
-    
+
     Returns:
         Formatted Rich table
     """
@@ -263,7 +261,7 @@ def format_verify_sync_table(report: dict) -> Table:
     table = Table(title=f"Verify Sync: {run_id}")
     table.add_column("Field", style="cyan")
     table.add_column("Value", style="white")
-    
+
     table.add_row("Provider", report["space"]["embedding_provider"])
     table.add_row("Model", report["space"]["embedding_model"])
     table.add_row("Dimension", str(report["space"]["embedding_dimension"] or ""))
@@ -274,17 +272,17 @@ def format_verify_sync_table(report: dict) -> Table:
     table.add_row("Status", report["status"])
     if report["issues"]:
         table.add_row("Issues", " | ".join(report["issues"]))
-    
+
     return table
 
 
 def format_hierarchy_summary_table(hierarchy_run_id: str, levels: dict) -> Table:
     """Format hierarchy summary as a rich table.
-    
+
     Args:
         hierarchy_run_id: The hierarchy run ID
         levels: Dictionary mapping level number to count
-    
+
     Returns:
         Formatted Rich table
     """
@@ -292,10 +290,9 @@ def format_hierarchy_summary_table(hierarchy_run_id: str, levels: dict) -> Table
     table.add_column("Level", style="cyan")
     table.add_column("Clusters", style="green")
     table.add_column("Description", style="yellow")
-    
+
     for level in sorted(levels.keys()):
         desc = "Leaf clusters" if level == 0 else f"Merge level {level}"
         table.add_row(str(level), str(levels[level]), desc)
-    
-    return table
 
+    return table

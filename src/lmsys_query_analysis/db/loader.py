@@ -7,20 +7,22 @@ Performance optimizations:
 - Only embed newly-inserted queries into ChromaDB
 """
 
-from typing import Optional, Iterable
-from sqlmodel import select
-from sqlalchemy import func, text
+from collections.abc import Iterable
+
 from rich.progress import (
+    BarColumn,
     Progress,
     SpinnerColumn,
-    TextColumn,
-    BarColumn,
     TaskProgressColumn,
+    TextColumn,
 )
-from .models import Query
-from .connection import Database
-from .chroma import ChromaManager
+from sqlalchemy import func, text
+from sqlmodel import select
+
 from .adapters import HuggingFaceAdapter
+from .chroma import ChromaManager
+from .connection import Database
+from .models import Query
 
 # Note: extract_first_query moved to adapters.py
 
@@ -29,7 +31,7 @@ def load_dataset(
     db: Database,
     limit: int | None = None,
     skip_existing: bool = True,
-    chroma: Optional[ChromaManager] = None,
+    chroma: ChromaManager | None = None,
     embedding_model: str = "embed-v4.0",
     embedding_provider: str = "cohere",
     batch_size: int = 5000,
@@ -72,7 +74,7 @@ def load_dataset(
         TaskProgressColumn(),
     ) as progress:
         task = progress.add_task(f"[cyan]Downloading dataset {dataset_name}...", total=None)
-        
+
         # Create the adapter (it will handle dataset loading internally)
         adapter = HuggingFaceAdapter(
             dataset_name=dataset_name,
@@ -80,7 +82,7 @@ def load_dataset(
             limit=limit,
             use_streaming=use_streaming,
         )
-        
+
         progress.update(task, completed=True, description="[green]Dataset downloaded")
 
         # Setup progress for loading
@@ -88,9 +90,7 @@ def load_dataset(
         if adapter_len is None:
             load_task = progress.add_task("[cyan]Loading queries...", total=None)
         else:
-            load_task = progress.add_task(
-                "[cyan]Loading queries...", total=adapter_len
-            )
+            load_task = progress.add_task("[cyan]Loading queries...", total=adapter_len)
 
         session = db.get_session()
 
@@ -135,7 +135,7 @@ def load_dataset(
 
                 for normalized_record in batch:
                     stats["total_processed"] += 1
-                    
+
                     # Extract fields from normalized record
                     conversation_id = normalized_record["conversation_id"]
                     query_text = normalized_record["query_text"]
@@ -181,18 +181,14 @@ def load_dataset(
                     EXIST_CHUNK = 900
                     existing_ids: set[str] = set()
                     for c in chunk_iter(batch_conv_ids, EXIST_CHUNK):
-                        stmt = select(Query.conversation_id).where(
-                            Query.conversation_id.in_(c)
-                        )
+                        stmt = select(Query.conversation_id).where(Query.conversation_id.in_(c))
                         # Use scalars() to get flat list of conversation_id
                         rows = session.exec(stmt).all()
                         existing_ids.update(rows)
 
                     if existing_ids:
                         filtered_rows = [
-                            r
-                            for r in to_insert_rows
-                            if r["conversation_id"] not in existing_ids
+                            r for r in to_insert_rows if r["conversation_id"] not in existing_ids
                         ]
                         stats["skipped"] += len(to_insert_rows) - len(filtered_rows)
                         to_insert_rows = filtered_rows

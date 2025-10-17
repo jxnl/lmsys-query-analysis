@@ -4,9 +4,9 @@ Based on FASTAPI_SPEC.md with field names using snake_case to match SQLModel lay
 """
 
 from datetime import datetime
-from typing import Any, Dict, Generic, List, Literal, Optional, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 T = TypeVar("T")
 
@@ -17,7 +17,7 @@ T = TypeVar("T")
 class PaginatedResponse(BaseModel, Generic[T]):
     """Generic pagination wrapper for list responses."""
 
-    items: List[T]
+    items: list[T]
     total: int
     page: int
     pages: int
@@ -28,8 +28,8 @@ class OperationResponse(BaseModel):
     """Generic operation response."""
 
     status: str
-    message: Optional[str] = None
-    data: Optional[Dict[str, Any]] = None
+    message: str | None = None
+    data: dict[str, Any] | None = None
 
 
 # ===== Query Models =====
@@ -42,8 +42,8 @@ class QueryResponse(BaseModel):
     conversation_id: str
     model: str
     query_text: str
-    language: Optional[str] = None
-    timestamp: Optional[datetime] = None
+    language: str | None = None
+    timestamp: datetime | None = None
     created_at: datetime
 
     class Config:
@@ -55,15 +55,15 @@ class ClusterInfo(BaseModel):
 
     run_id: str
     cluster_id: int
-    title: Optional[str] = None
-    confidence_score: Optional[float] = None
+    title: str | None = None
+    confidence_score: float | None = None
 
 
 class QueryDetailResponse(BaseModel):
     """Query with its cluster assignments."""
 
     query: QueryResponse
-    clusters: List[ClusterInfo]
+    clusters: list[ClusterInfo]
 
 
 class PaginatedQueriesResponse(PaginatedResponse[QueryResponse]):
@@ -80,9 +80,9 @@ class ClusteringRunSummary(BaseModel):
 
     run_id: str
     algorithm: str
-    num_clusters: Optional[int] = None
-    description: Optional[str] = None
-    parameters: Optional[Dict[str, Any]] = None
+    num_clusters: int | None = None
+    description: str | None = None
+    parameters: dict[str, Any] | None = None
     created_at: datetime
     status: Literal["pending", "running", "completed", "failed"] = "completed"
 
@@ -93,8 +93,8 @@ class ClusteringRunSummary(BaseModel):
 class ClusteringRunDetail(ClusteringRunSummary):
     """Detailed clustering run with metrics."""
 
-    metrics: Optional[Dict[str, Any]] = None
-    latest_errors: Optional[List[str]] = None
+    metrics: dict[str, Any] | None = None
+    latest_errors: list[str] | None = None
 
 
 class ClusteringRunListResponse(PaginatedResponse[ClusteringRunSummary]):
@@ -108,7 +108,7 @@ class ClusteringRunStatusResponse(BaseModel):
 
     run_id: str
     status: str
-    processed: Optional[int] = None
+    processed: int | None = None
 
 
 # ===== Cluster Summary Models =====
@@ -119,16 +119,16 @@ class ClusterSummaryResponse(BaseModel):
 
     run_id: str
     cluster_id: int
-    title: Optional[str] = None
-    description: Optional[str] = None
-    summary: Optional[str] = None
-    num_queries: Optional[int] = None
-    representative_queries: Optional[List[str]] = None
-    summary_run_id: Optional[str] = None
-    alias: Optional[str] = None
+    title: str | None = None
+    description: str | None = None
+    summary: str | None = None
+    num_queries: int | None = None
+    representative_queries: list[str] | None = None
+    summary_run_id: str | None = None
+    alias: str | None = None
     # Enhanced aggregations
-    query_count: Optional[int] = None  # Alias for num_queries
-    percentage: Optional[float] = None  # Percentage of total queries
+    query_count: int | None = None  # Alias for num_queries
+    percentage: float | None = None  # Percentage of total queries
 
     class Config:
         from_attributes = True
@@ -137,7 +137,7 @@ class ClusterSummaryResponse(BaseModel):
 class ClusterListResponse(PaginatedResponse[ClusterSummaryResponse]):
     """Paginated list of clusters with optional aggregations."""
 
-    total_queries: Optional[int] = None  # Total queries in run (for percentage calc)
+    total_queries: int | None = None  # Total queries in run (for percentage calc)
 
 
 class ClusterDetailResponse(BaseModel):
@@ -156,14 +156,14 @@ class HierarchyNode(BaseModel):
     hierarchy_run_id: str
     run_id: str
     cluster_id: int
-    parent_cluster_id: Optional[int] = None
+    parent_cluster_id: int | None = None
     level: int
-    children_ids: List[int]
-    title: Optional[str] = None
-    description: Optional[str] = None
+    children_ids: list[int]
+    title: str | None = None
+    description: str | None = None
     # Enhanced aggregations
-    query_count: Optional[int] = None
-    percentage: Optional[float] = None
+    query_count: int | None = None
+    percentage: float | None = None
 
     class Config:
         from_attributes = True
@@ -180,8 +180,8 @@ class HierarchyRunInfo(BaseModel):
 class HierarchyTreeResponse(BaseModel):
     """Full hierarchy tree with all nodes."""
 
-    nodes: List[HierarchyNode]
-    total_queries: Optional[int] = None  # For percentage calculations
+    nodes: list[HierarchyNode]
+    total_queries: int | None = None  # For percentage calculations
 
 
 class HierarchyListResponse(PaginatedResponse[HierarchyRunInfo]):
@@ -198,7 +198,7 @@ class SummaryRunSummary(BaseModel):
 
     summary_run_id: str
     run_id: str
-    alias: Optional[str] = None
+    alias: str | None = None
     model: str
     generated_at: datetime
     status: Literal["pending", "running", "completed", "failed"] = "completed"
@@ -220,8 +220,8 @@ class QuerySearchResult(BaseModel):
     """Query search result with cluster context."""
 
     query: QueryResponse
-    clusters: List[ClusterInfo]
-    distance: Optional[float] = None  # For semantic search
+    clusters: list[ClusterInfo]
+    distance: float | None = None  # For semantic search
 
 
 class ClusterSearchResult(BaseModel):
@@ -229,11 +229,11 @@ class ClusterSearchResult(BaseModel):
 
     run_id: str
     cluster_id: int
-    title: Optional[str] = None
-    description: Optional[str] = None
-    summary: Optional[str] = None
-    num_queries: Optional[int] = None
-    distance: Optional[float] = None  # For semantic search
+    title: str | None = None
+    description: str | None = None
+    summary: str | None = None
+    num_queries: int | None = None
+    distance: float | None = None  # For semantic search
 
 
 class FacetBucket(BaseModel):
@@ -241,23 +241,23 @@ class FacetBucket(BaseModel):
 
     key: Any  # cluster_id (int) or string key
     count: int
-    percentage: Optional[float] = None
-    meta: Optional[Dict[str, Any]] = None  # Additional metadata (e.g., cluster title)
+    percentage: float | None = None
+    meta: dict[str, Any] | None = None  # Additional metadata (e.g., cluster title)
 
 
 class SearchFacets(BaseModel):
     """Faceted search results."""
 
-    clusters: Optional[List[FacetBucket]] = None
-    language: Optional[List[FacetBucket]] = None
-    model: Optional[List[FacetBucket]] = None
+    clusters: list[FacetBucket] | None = None
+    language: list[FacetBucket] | None = None
+    model: list[FacetBucket] | None = None
 
 
 class SearchQueriesResponse(PaginatedResponse[QuerySearchResult]):
     """Query search results with facets."""
 
-    facets: Optional[SearchFacets] = None
-    applied_clusters: Optional[List[ClusterSearchResult]] = None  # For within_clusters
+    facets: SearchFacets | None = None
+    applied_clusters: list[ClusterSearchResult] | None = None  # For within_clusters
 
 
 class SearchClustersResponse(PaginatedResponse[ClusterSearchResult]):
@@ -272,11 +272,11 @@ class SearchClustersResponse(PaginatedResponse[ClusterSearchResult]):
 class ClusterMetadata(BaseModel):
     """Cluster quality metadata."""
 
-    coherence_score: Optional[int] = None
-    quality: Optional[Literal["high", "medium", "low"]] = None
-    notes: Optional[str] = None
-    flags: Optional[List[str]] = None
-    last_edited: Optional[datetime] = None
+    coherence_score: int | None = None
+    quality: Literal["high", "medium", "low"] | None = None
+    notes: str | None = None
+    flags: list[str] | None = None
+    last_edited: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -286,12 +286,12 @@ class EditHistoryRecord(BaseModel):
     """Single edit history record."""
 
     timestamp: datetime
-    cluster_id: Optional[int] = None
+    cluster_id: int | None = None
     edit_type: str
     editor: str
-    reason: Optional[str] = None
-    old_value: Optional[Dict[str, Any]] = None
-    new_value: Optional[Dict[str, Any]] = None
+    reason: str | None = None
+    old_value: dict[str, Any] | None = None
+    new_value: dict[str, Any] | None = None
 
     class Config:
         from_attributes = True
@@ -306,7 +306,7 @@ class EditHistoryResponse(PaginatedResponse[EditHistoryRecord]):
 class OrphanInfo(BaseModel):
     """Information about an orphaned query."""
 
-    orphan: Dict[str, Any]  # OrphanedQuery fields
+    orphan: dict[str, Any]  # OrphanedQuery fields
     query: QueryResponse
 
 

@@ -3,11 +3,11 @@
 import typer
 from rich.console import Console
 
-from ..common import with_error_handling, db_path_option, chroma_path_option, embedding_model_option
-from ..helpers.client_factory import parse_embedding_model, create_chroma_client
-from ...db.connection import get_db
-from ...clustering.kmeans import run_kmeans_clustering
 from ...clustering.hdbscan_clustering import run_hdbscan_clustering
+from ...clustering.kmeans import run_kmeans_clustering
+from ...db.connection import get_db
+from ..common import chroma_path_option, db_path_option, embedding_model_option, with_error_handling
+from ..helpers.client_factory import create_chroma_client, parse_embedding_model
 
 console = Console()
 app = typer.Typer(help="Clustering commands")
@@ -31,11 +31,11 @@ def cluster_kmeans(
     model, provider = parse_embedding_model(embedding_model)
     db = get_db(db_path)
     chroma = create_chroma_client(chroma_path, model, provider) if use_chroma else None
-    
+
     console.print(
         f"[cyan]Running clustering: algo=kmeans, n_clusters={n_clusters}, model={model}, provider={provider}, use_chroma={use_chroma}, limit={limit}[/cyan]"
     )
-    
+
     run_id = run_kmeans_clustering(
         db=db,
         n_clusters=n_clusters,
@@ -48,12 +48,10 @@ def cluster_kmeans(
         chroma=chroma,
         max_queries=limit,
     )
-    
+
     if run_id:
         console.print(f"[green]Clustering completed: run_id={run_id}[/green]")
-        console.print(
-            f"[cyan]Use 'lmsys inspect {run_id} <cluster_id>' to explore clusters[/cyan]"
-        )
+        console.print(f"[cyan]Use 'lmsys inspect {run_id} <cluster_id>' to explore clusters[/cyan]")
         if use_chroma and chroma:
             console.print(
                 f"[cyan]Use 'lmsys search --run-id {run_id} <query>' to search cluster summaries[/cyan]"
@@ -69,13 +67,9 @@ def cluster_hdbscan(
     embed_batch_size: int = typer.Option(50, help="Embedding encode batch size"),
     chunk_size: int = typer.Option(5000, help="DB iteration chunk size"),
     min_cluster_size: int = typer.Option(25, help="HDBSCAN minimum cluster size"),
-    min_samples: int = typer.Option(
-        None, help="HDBSCAN min_samples (default: min_cluster_size)"
-    ),
+    min_samples: int = typer.Option(None, help="HDBSCAN min_samples (default: min_cluster_size)"),
     epsilon: float = typer.Option(0.0, help="HDBSCAN cluster_selection_epsilon"),
-    metric: str = typer.Option(
-        "euclidean", help="Distance metric: euclidean or cosine"
-    ),
+    metric: str = typer.Option("euclidean", help="Distance metric: euclidean or cosine"),
     use_chroma: bool = typer.Option(False, help="Enable ChromaDB"),
     chroma_path: str = chroma_path_option,
     limit: int = typer.Option(None, help="Limit number of queries to cluster"),
@@ -84,11 +78,11 @@ def cluster_hdbscan(
     model, provider = parse_embedding_model(embedding_model)
     db = get_db(db_path)
     chroma = create_chroma_client(chroma_path, model, provider) if use_chroma else None
-    
+
     console.print(
         f"[cyan]Running clustering: algo=hdbscan, model={model}, provider={provider}, use_chroma={use_chroma}, limit={limit}[/cyan]"
     )
-    
+
     run_id = run_hdbscan_clustering(
         db=db,
         description=description,
@@ -103,14 +97,11 @@ def cluster_hdbscan(
         chroma=chroma,
         max_queries=limit,
     )
-    
+
     if run_id:
         console.print(f"[green]Clustering completed: run_id={run_id}[/green]")
-        console.print(
-            f"[cyan]Use 'lmsys inspect {run_id} <cluster_id>' to explore clusters[/cyan]"
-        )
+        console.print(f"[cyan]Use 'lmsys inspect {run_id} <cluster_id>' to explore clusters[/cyan]")
         if use_chroma and chroma:
             console.print(
                 f"[cyan]Use 'lmsys search --run-id {run_id} <query>' to search cluster summaries[/cyan]"
             )
-

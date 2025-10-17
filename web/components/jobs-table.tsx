@@ -35,29 +35,17 @@ export function JobsTable({ runs }: JobsTableProps) {
         <TableBody>
           {runs.length === 0 ? (
             <TableRow>
-              <TableCell
-                colSpan={7}
-                className="text-center text-muted-foreground"
-              >
+              <TableCell colSpan={7} className="text-center text-muted-foreground">
                 No clustering runs found. Run `lmsys cluster` to create one.
               </TableCell>
             </TableRow>
           ) : (
             runs.map((run) => {
               // Extract embedding info from parameters
-              const params = run.parameters as
-                | Record<string, unknown>
-                | null
-                | undefined;
-              const embeddingProvider = params?.embedding_provider as
-                | string
-                | undefined;
-              const embeddingModel = params?.embedding_model as
-                | string
-                | undefined;
-              const embeddingDimension = params?.embedding_dimension as
-                | number
-                | undefined;
+              const params = run.parameters as Record<string, unknown> | null | undefined;
+              const embeddingProvider = params?.embedding_provider as string | undefined;
+              const embeddingModel = params?.embedding_model as string | undefined;
+              const embeddingDimension = params?.embedding_dimension as number | undefined;
 
               // Filter out embedding-related and redundant parameters
               const excludeKeys = new Set([
@@ -69,9 +57,7 @@ export function JobsTable({ runs }: JobsTableProps) {
               ]);
 
               const otherParams = params
-                ? Object.entries(params).filter(
-                    ([key]) => !excludeKeys.has(key),
-                  )
+                ? Object.entries(params).filter(([key]) => !excludeKeys.has(key))
                 : [];
 
               const formatParamValue = (value: unknown): string => {
@@ -86,15 +72,11 @@ export function JobsTable({ runs }: JobsTableProps) {
 
               return (
                 <TableRow key={run.run_id}>
-                  <TableCell className="font-mono text-sm">
-                    {run.run_id}
-                  </TableCell>
+                  <TableCell className="font-mono text-sm">{run.run_id}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{run.algorithm}</Badge>
                   </TableCell>
-                  <TableCell className="text-right">
-                    {run.num_clusters || "N/A"}
-                  </TableCell>
+                  <TableCell className="text-right">{run.num_clusters || "N/A"}</TableCell>
                   <TableCell className="text-sm">
                     {embeddingProvider && embeddingModel ? (
                       <div className="space-y-0.5">
@@ -115,10 +97,7 @@ export function JobsTable({ runs }: JobsTableProps) {
                     {otherParams.length > 0 ? (
                       <div className="space-y-0.5 max-w-xs">
                         {otherParams.map(([key, value]) => (
-                          <div
-                            key={key}
-                            className="flex items-baseline gap-1.5"
-                          >
+                          <div key={key} className="flex items-baseline gap-1.5">
                             <span className="font-mono text-[10px] text-muted-foreground/70 whitespace-nowrap">
                               {key}:
                             </span>

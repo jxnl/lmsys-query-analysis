@@ -1,8 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { DataViewer, type DataViewerData } from "@/components/data-viewer";
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,12 +11,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiFetch } from "@/lib/api";
 import type { components } from "@/lib/api/types";
-import { Search, Loader2 } from "lucide-react";
+import { Search } from "lucide-react";
 
 type ClusteringRun = components["schemas"]["ClusteringRunSummary"];
-type SearchQueryResult = components["schemas"]["QuerySearchResult"];
 
 interface SearchClientProps {
   runs: ClusteringRun[];
@@ -30,21 +26,13 @@ export function SearchClient({ runs }: SearchClientProps) {
 
   const [searchText, setSearchText] = useState("");
   const [selectedRunId, setSelectedRunId] = useState<string>(defaultRunId);
-  const [results, setResults] = useState<DataViewerData | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const [hasSearched, setHasSearched] = useState(false);
-  const router = useRouter();
 
   const handleSearch = () => {
     if (!searchText.trim()) return;
-    throw new Error("Search is not implemented yet");
+    // Search not implemented yet
   };
 
-  const handlePageChange = (newPage: number) => {
-    throw new Error("Search is not implemented yet");
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleSearch();
     }
@@ -62,7 +50,7 @@ export function SearchClient({ runs }: SearchClientProps) {
                   placeholder="Search queries..."
                   value={searchText}
                   onChange={(e) => setSearchText(e.target.value)}
-                  onKeyPress={handleKeyPress}
+                  onKeyDown={handleKeyDown}
                   className="w-full"
                 />
               </div>
@@ -81,72 +69,27 @@ export function SearchClient({ runs }: SearchClientProps) {
                   </SelectContent>
                 </Select>
               </div>
-              <Button
-                onClick={handleSearch}
-                disabled={isPending || !searchText.trim()}
-              >
-                {isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Searching...
-                  </>
-                ) : (
-                  <>
-                    <Search className="mr-2 h-4 w-4" />
-                    Search
-                  </>
-                )}
+              <Button onClick={handleSearch} disabled={!searchText.trim()}>
+                <Search className="mr-2 h-4 w-4" />
+                Search
               </Button>
             </div>
 
             <div className="text-sm text-muted-foreground">
-              <p>
-                Search uses full-text search to find queries matching your
-                search terms.
+              <p>Search functionality coming soon!</p>
+              <p className="mt-2">
+                This will allow you to search queries semantically using vector similarity. Results will
+                show matching queries with their cluster assignments and relevance scores.
               </p>
               {selectedRunId !== "all" && (
                 <p className="mt-1">
-                  Filtering by run:{" "}
-                  <span className="font-mono">{selectedRunId}</span>
+                  Filtering by run: <span className="font-mono">{selectedRunId}</span>
                 </p>
               )}
             </div>
           </div>
         </CardContent>
       </Card>
-
-      {isPending && !results && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      )}
-
-      {!isPending && hasSearched && results && results.queries.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center space-y-3">
-            <p className="text-muted-foreground">
-              No results found for "{searchText}"
-            </p>
-            <div className="text-sm text-muted-foreground">
-              <p>
-                Try different search terms or check that queries have been
-                loaded into the database.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {results && results.queries.length > 0 && (
-        <div className={isPending ? "opacity-50 pointer-events-none" : ""}>
-          <DataViewer
-            data={results}
-            onPageChange={handlePageChange}
-            showClusters={true}
-            filterRunId={selectedRunId === "all" ? undefined : selectedRunId}
-          />
-        </div>
-      )}
     </div>
   );
 }

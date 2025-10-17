@@ -1,10 +1,9 @@
 """Database models for LMSYS query analysis using SQLModel."""
 
 from datetime import datetime
-import uuid
-from typing import Optional
-from sqlmodel import SQLModel, Field, Relationship, Column, JSON
-from sqlalchemy import UniqueConstraint, ForeignKey, Index
+
+from sqlalchemy import ForeignKey, Index, UniqueConstraint
+from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
 
 class Query(SQLModel, table=True):
@@ -12,13 +11,13 @@ class Query(SQLModel, table=True):
 
     __tablename__ = "queries"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     conversation_id: str = Field(unique=True, index=True)
     model: str = Field(index=True)
     query_text: str
-    language: Optional[str] = Field(default=None, index=True)
-    timestamp: Optional[datetime] = None
-    extra_metadata: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    language: str | None = Field(default=None, index=True)
+    timestamp: datetime | None = None
+    extra_metadata: dict | None = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Relationship to cluster assignments
@@ -32,10 +31,10 @@ class ClusteringRun(SQLModel, table=True):
 
     run_id: str = Field(primary_key=True)
     algorithm: str
-    parameters: Optional[dict] = Field(default=None, sa_column=Column(JSON))
-    description: Optional[str] = None
+    parameters: dict | None = Field(default=None, sa_column=Column(JSON))
+    description: str | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    num_clusters: Optional[int] = None
+    num_clusters: int | None = None
 
     # Relationships
     cluster_assignments: list["QueryCluster"] = Relationship(back_populates="run")
@@ -52,7 +51,7 @@ class QueryCluster(SQLModel, table=True):
         Index("ix_query_clusters_query_id", "query_id"),
     )
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     run_id: str = Field(
         sa_column=Column(
             "run_id",
@@ -66,12 +65,12 @@ class QueryCluster(SQLModel, table=True):
         ),
     )
     cluster_id: int = Field(index=True)
-    confidence_score: Optional[float] = None
+    confidence_score: float | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Relationships
-    run: Optional[ClusteringRun] = Relationship(back_populates="cluster_assignments")
-    query: Optional[Query] = Relationship(back_populates="cluster_assignments")
+    run: ClusteringRun | None = Relationship(back_populates="cluster_assignments")
+    query: Query | None = Relationship(back_populates="cluster_assignments")
 
 
 class ClusterSummary(SQLModel, table=True):
@@ -83,13 +82,15 @@ class ClusterSummary(SQLModel, table=True):
 
     __tablename__ = "cluster_summaries"
     __table_args__ = (
-        UniqueConstraint("run_id", "cluster_id", "summary_run_id", name="uq_clustersummary_run_cluster_summary"),
+        UniqueConstraint(
+            "run_id", "cluster_id", "summary_run_id", name="uq_clustersummary_run_cluster_summary"
+        ),
         Index("ix_cluster_summaries_run_id", "run_id"),
         Index("ix_cluster_summaries_cluster_id", "cluster_id"),
         Index("ix_cluster_summaries_summary_run_id", "summary_run_id"),
     )
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     run_id: str = Field(
         sa_column=Column(
             "run_id",
@@ -98,19 +99,23 @@ class ClusterSummary(SQLModel, table=True):
     )
     cluster_id: int
     # Unique ID for this summarization run; default to timestamp-based if not provided
-    summary_run_id: str = Field(default_factory=lambda: f"summary-{datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f')}")
-    alias: Optional[str] = None  # Friendly name for this summary run (e.g., "claude-v1", "gpt4-test")
-    title: Optional[str] = None  # LLM-generated short title
-    description: Optional[str] = None  # LLM-generated description
-    summary: Optional[str] = None  # Full summary text (backwards compat)
-    num_queries: Optional[int] = None
-    representative_queries: Optional[list] = Field(default=None, sa_column=Column(JSON))
-    model: Optional[str] = None  # LLM model used (e.g., "anthropic/claude-sonnet-4-5-20250929")
-    parameters: Optional[dict] = Field(default=None, sa_column=Column(JSON))  # Summarization parameters
+    summary_run_id: str = Field(
+        default_factory=lambda: f"summary-{datetime.utcnow().strftime('%Y%m%d-%H%M%S-%f')}"
+    )
+    alias: str | None = None  # Friendly name for this summary run (e.g., "claude-v1", "gpt4-test")
+    title: str | None = None  # LLM-generated short title
+    description: str | None = None  # LLM-generated description
+    summary: str | None = None  # Full summary text (backwards compat)
+    num_queries: int | None = None
+    representative_queries: list | None = Field(default=None, sa_column=Column(JSON))
+    model: str | None = None  # LLM model used (e.g., "anthropic/claude-sonnet-4-5-20250929")
+    parameters: dict | None = Field(
+        default=None, sa_column=Column(JSON)
+    )  # Summarization parameters
     generated_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Relationship
-    run: Optional[ClusteringRun] = Relationship(back_populates="cluster_summaries")
+    run: ClusteringRun | None = Relationship(back_populates="cluster_summaries")
 
 
 class ClusterHierarchy(SQLModel, table=True):
@@ -130,7 +135,7 @@ class ClusterHierarchy(SQLModel, table=True):
         Index("ix_cluster_hierarchies_level", "level"),
     )
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     run_id: str = Field(
         sa_column=Column(
             "run_id",
@@ -139,15 +144,17 @@ class ClusterHierarchy(SQLModel, table=True):
     )
     hierarchy_run_id: str  # Unique ID for this hierarchy run (e.g., "hier-20251004-123456")
     cluster_id: int  # The cluster being organized (can be virtual for merged clusters)
-    parent_cluster_id: Optional[int] = None  # Parent cluster ID (null for top level)
+    parent_cluster_id: int | None = None  # Parent cluster ID (null for top level)
     level: int  # 0=leaf (base clusters), 1=first merge, 2=second merge, etc.
-    children_ids: Optional[list] = Field(default=None, sa_column=Column(JSON))  # List of child cluster IDs
-    title: Optional[str] = None  # Title for merged/parent clusters
-    description: Optional[str] = None  # Description for merged/parent clusters
+    children_ids: list | None = Field(
+        default=None, sa_column=Column(JSON)
+    )  # List of child cluster IDs
+    title: str | None = None  # Title for merged/parent clusters
+    description: str | None = None  # Description for merged/parent clusters
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Relationship
-    run: Optional[ClusteringRun] = Relationship()
+    run: ClusteringRun | None = Relationship()
 
 
 class ClusterEdit(SQLModel, table=True):
@@ -165,25 +172,25 @@ class ClusterEdit(SQLModel, table=True):
         Index("ix_cluster_edits_timestamp", "timestamp"),
     )
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     run_id: str = Field(
         sa_column=Column(
             "run_id",
             ForeignKey("clustering_runs.run_id", ondelete="CASCADE"),
         ),
     )
-    cluster_id: Optional[int] = None  # Null for query-level edits
+    cluster_id: int | None = None  # Null for query-level edits
     edit_type: str  # 'rename', 'move_query', 'merge', 'split', 'delete', 'tag'
     editor: str  # 'claude', 'cli-user', or username
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
     # Change tracking
-    old_value: Optional[dict] = Field(default=None, sa_column=Column(JSON))  # Previous state
-    new_value: Optional[dict] = Field(default=None, sa_column=Column(JSON))  # New state
-    reason: Optional[str] = None  # Why the edit was made
+    old_value: dict | None = Field(default=None, sa_column=Column(JSON))  # Previous state
+    new_value: dict | None = Field(default=None, sa_column=Column(JSON))  # New state
+    reason: str | None = None  # Why the edit was made
 
     # Relationship
-    run: Optional[ClusteringRun] = Relationship()
+    run: ClusteringRun | None = Relationship()
 
 
 class ClusterMetadata(SQLModel, table=True):
@@ -201,7 +208,7 @@ class ClusterMetadata(SQLModel, table=True):
         Index("ix_cluster_metadata_coherence_score", "coherence_score"),
     )
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     run_id: str = Field(
         sa_column=Column(
             "run_id",
@@ -209,14 +216,16 @@ class ClusterMetadata(SQLModel, table=True):
         ),
     )
     cluster_id: int
-    coherence_score: Optional[int] = None  # 1-5 scale
-    quality: Optional[str] = None  # 'high', 'medium', 'low'
-    flags: Optional[list] = Field(default=None, sa_column=Column(JSON))  # ['language_mixing', 'needs_review', etc.]
-    notes: Optional[str] = None  # Free-form notes
+    coherence_score: int | None = None  # 1-5 scale
+    quality: str | None = None  # 'high', 'medium', 'low'
+    flags: list | None = Field(
+        default=None, sa_column=Column(JSON)
+    )  # ['language_mixing', 'needs_review', etc.]
+    notes: str | None = None  # Free-form notes
     last_edited: datetime = Field(default_factory=datetime.utcnow)
 
     # Relationship
-    run: Optional[ClusteringRun] = Relationship()
+    run: ClusteringRun | None = Relationship()
 
 
 class OrphanedQuery(SQLModel, table=True):
@@ -233,7 +242,7 @@ class OrphanedQuery(SQLModel, table=True):
         Index("ix_orphaned_queries_query_id", "query_id"),
     )
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     run_id: str = Field(
         sa_column=Column(
             "run_id",
@@ -246,10 +255,10 @@ class OrphanedQuery(SQLModel, table=True):
             ForeignKey("queries.id", ondelete="CASCADE"),
         ),
     )
-    original_cluster_id: Optional[int] = None
+    original_cluster_id: int | None = None
     orphaned_at: datetime = Field(default_factory=datetime.utcnow)
-    reason: Optional[str] = None
+    reason: str | None = None
 
     # Relationships
-    run: Optional[ClusteringRun] = Relationship()
-    query: Optional[Query] = Relationship()
+    run: ClusteringRun | None = Relationship()
+    query: Query | None = Relationship()

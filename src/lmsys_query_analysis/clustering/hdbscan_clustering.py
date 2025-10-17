@@ -1,14 +1,13 @@
 """HDBSCAN clustering for query analysis."""
 
-from typing import List, Optional, Dict
-import numpy as np
 import hdbscan
+import numpy as np
 from rich.console import Console
 from sqlmodel import select
 
-from ..db.connection import Database
-from ..db.models import Query, ClusteringRun, QueryCluster
 from ..db.chroma import ChromaManager
+from ..db.connection import Database
+from ..db.models import ClusteringRun, Query, QueryCluster
 from .embeddings import EmbeddingGenerator
 
 console = Console()
@@ -20,7 +19,7 @@ class HDBSCANClustering:
     def __init__(
         self,
         min_cluster_size: int = 15,
-        min_samples: Optional[int] = None,
+        min_samples: int | None = None,
         cluster_selection_epsilon: float = 0.0,
         metric: str = "euclidean",
     ):
@@ -48,7 +47,7 @@ class HDBSCANClustering:
             Array of cluster labels (shape: n_samples)
             Note: Label -1 indicates noise/outliers
         """
-        console.print(f"[cyan]Running HDBSCAN clustering...[/cyan]")
+        console.print("[cyan]Running HDBSCAN clustering...[/cyan]")
         console.print(f"  Min cluster size: {self.min_cluster_size}")
         console.print(f"  Min samples: {self.min_samples}")
         console.print(f"  Cluster selection epsilon: {self.cluster_selection_epsilon}")
@@ -99,9 +98,7 @@ class HDBSCANClustering:
         persistence = {}
         for cluster_id in set(self.clusterer.labels_):
             if cluster_id != -1:
-                persistence[cluster_id] = self.clusterer.cluster_persistence_[
-                    cluster_id
-                ]
+                persistence[cluster_id] = self.clusterer.cluster_persistence_[cluster_id]
 
         return persistence
 
@@ -133,11 +130,11 @@ def run_hdbscan_clustering(
     chunk_size: int = 5000,
     embedding_provider: str = "sentence-transformers",
     min_cluster_size: int = 15,
-    min_samples: Optional[int] = None,
+    min_samples: int | None = None,
     cluster_selection_epsilon: float = 0.0,
     metric: str = "euclidean",
-    chroma: Optional[ChromaManager] = None,
-    max_queries: Optional[int] = None,
+    chroma: ChromaManager | None = None,
+    max_queries: int | None = None,
 ) -> str:
     """Run HDBSCAN clustering on all queries in the database.
 
@@ -147,15 +144,15 @@ def run_hdbscan_clustering(
     try:
         total_ids = session.exec(select(Query.id)).all()
         if not total_ids:
-            console.print(
-                "[red]No queries found in database. Run 'lmsys load' first.[/red]"
-            )
+            console.print("[red]No queries found in database. Run 'lmsys load' first.[/red]")
             return None
         total_queries = len(total_ids)
-        effective_total = total_queries if max_queries is None else min(total_queries, int(max_queries))
+        effective_total = (
+            total_queries if max_queries is None else min(total_queries, int(max_queries))
+        )
 
         # Load texts and ids in chunks and embed
-        def iter_query_chunks() -> List[Query]:
+        def iter_query_chunks() -> list[Query]:
             offset = 0
             target = effective_total
             while offset < target:
@@ -169,8 +166,8 @@ def run_hdbscan_clustering(
                 offset += len(rows)
 
         eg = EmbeddingGenerator(model_name=embedding_model, provider=embedding_provider)
-        all_ids: List[int] = []
-        all_embs: List[np.ndarray] = []
+        all_ids: list[int] = []
+        all_embs: list[np.ndarray] = []
         for chunk in iter_query_chunks():
             texts = [q.query_text for q in chunk]
             ids = [q.id for q in chunk]
@@ -194,9 +191,7 @@ def run_hdbscan_clustering(
         # Persist run
         from datetime import datetime
 
-        run_id = (
-            f"hdbscan-{min_cluster_size}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
-        )
+        run_id = f"hdbscan-{min_cluster_size}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
         run = ClusteringRun(
             run_id=run_id,
             algorithm="hdbscan",
@@ -217,11 +212,9 @@ def run_hdbscan_clustering(
 
         # Store assignments (exclude noise)
         assignments = []
-        for qid, label in zip(all_ids, labels):
+        for qid, label in zip(all_ids, labels, strict=False):
             if label != -1:
-                assignments.append(
-                    QueryCluster(run_id=run_id, query_id=qid, cluster_id=int(label))
-                )
+                assignments.append(QueryCluster(run_id=run_id, query_id=qid, cluster_id=int(label)))
         session.add_all(assignments)
         session.commit()
 

@@ -4,13 +4,12 @@ Supports multiple embedding models by using model-specific collection names.
 Collections are named: queries_{provider}_{model} and summaries_{provider}_{model}
 """
 
-from pathlib import Path
-from typing import List, Optional
-import chromadb
-from chromadb.config import Settings
-import numpy as np
 import re
+from pathlib import Path
 
+import chromadb
+import numpy as np
+from chromadb.config import Settings
 
 DEFAULT_CHROMA_PATH = Path.home() / ".lmsys-query-analysis" / "chroma"
 
@@ -24,17 +23,17 @@ def sanitize_collection_name(name: str) -> str:
     - Only contain alphanumeric, underscores, or hyphens
     """
     # Replace dots, slashes, and invalid chars with underscores
-    name = re.sub(r'[^a-zA-Z0-9_-]', '_', name)
+    name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
     # Remove consecutive underscores
-    name = re.sub(r'_+', '_', name)
+    name = re.sub(r"_+", "_", name)
     # Ensure starts/ends with alphanumeric
-    name = name.strip('_-')
+    name = name.strip("_-")
     # Truncate if too long
     if len(name) > 63:
-        name = name[:63].rstrip('_-')
+        name = name[:63].rstrip("_-")
     # Ensure minimum length
     if len(name) < 3:
-        name = name + '_default'
+        name = name + "_default"
     return name
 
 
@@ -74,7 +73,11 @@ class ChromaManager:
 
         # Create model-specific collection names
         # Optionally include dimension in suffix (useful for Cohere Matryoshka)
-        dim_part = f"_{embedding_dimension}" if (embedding_provider == "cohere" and embedding_dimension) else ""
+        dim_part = (
+            f"_{embedding_dimension}"
+            if (embedding_provider == "cohere" and embedding_dimension)
+            else ""
+        )
         model_suffix = sanitize_collection_name(f"{embedding_provider}_{embedding_model}{dim_part}")
         queries_name = f"queries_{model_suffix}"
         summaries_name = f"summaries_{model_suffix}"
@@ -107,10 +110,10 @@ class ChromaManager:
 
     def add_queries_batch(
         self,
-        query_ids: List[int],
-        texts: List[str],
+        query_ids: list[int],
+        texts: list[str],
         embeddings: np.ndarray,
-        metadata: List[dict],
+        metadata: list[dict],
     ):
         """Add a batch of queries to ChromaDB.
 
@@ -125,7 +128,7 @@ class ChromaManager:
 
         # Add SQLite ID to metadata for reference
         enriched_metadata = [
-            {**meta, "query_id": qid} for meta, qid in zip(metadata, query_ids)
+            {**meta, "query_id": qid} for meta, qid in zip(metadata, query_ids, strict=False)
         ]
 
         self.queries_collection.add(
@@ -142,8 +145,8 @@ class ChromaManager:
         summary: str,
         embedding: np.ndarray,
         metadata: dict,
-        title: Optional[str] = None,
-        description: Optional[str] = None,
+        title: str | None = None,
+        description: str | None = None,
     ):
         """Add a cluster summary to ChromaDB.
 
@@ -186,12 +189,12 @@ class ChromaManager:
     def add_cluster_summaries_batch(
         self,
         run_id: str,
-        cluster_ids: List[int],
-        summaries: List[str],
+        cluster_ids: list[int],
+        summaries: list[str],
         embeddings: np.ndarray,
-        metadata_list: List[dict],
-        titles: Optional[List[str]] = None,
-        descriptions: Optional[List[str]] = None,
+        metadata_list: list[dict],
+        titles: list[str] | None = None,
+        descriptions: list[str] | None = None,
     ):
         """Add multiple cluster summaries for a run.
 
@@ -209,7 +212,7 @@ class ChromaManager:
         # Use titles + descriptions if available
         if titles and descriptions:
             documents = [
-                f"{title}\n\n{desc}" for title, desc in zip(titles, descriptions)
+                f"{title}\n\n{desc}" for title, desc in zip(titles, descriptions, strict=False)
             ]
             enriched_metadata = [
                 {
@@ -220,7 +223,7 @@ class ChromaManager:
                     "description": desc,
                 }
                 for meta, cid, title, desc in zip(
-                    metadata_list, cluster_ids, titles, descriptions
+                    metadata_list, cluster_ids, titles, descriptions, strict=False
                 )
             ]
         else:
@@ -229,9 +232,9 @@ class ChromaManager:
                 {
                     **{k: v for k, v in meta.items() if v is not None},  # Filter out None values
                     "run_id": run_id,
-                    "cluster_id": int(cid)
+                    "cluster_id": int(cid),
                 }
-                for meta, cid in zip(metadata_list, cluster_ids)
+                for meta, cid in zip(metadata_list, cluster_ids, strict=False)
             ]
 
         # Use upsert to update existing entries or create new ones
@@ -246,8 +249,8 @@ class ChromaManager:
         self,
         query_text: str,
         n_results: int = 10,
-        where: Optional[dict] = None,
-        query_embedding: Optional[np.ndarray] = None,
+        where: dict | None = None,
+        query_embedding: np.ndarray | None = None,
     ) -> dict:
         """Semantic search across all queries.
 
@@ -277,9 +280,9 @@ class ChromaManager:
     def search_cluster_summaries(
         self,
         query_text: str,
-        run_id: Optional[str] = None,
+        run_id: str | None = None,
         n_results: int = 5,
-        query_embedding: Optional[np.ndarray] = None,
+        query_embedding: np.ndarray | None = None,
     ) -> dict:
         """Search cluster summaries, optionally filtered by run_id.
 
@@ -307,7 +310,7 @@ class ChromaManager:
             )
         return results
 
-    def get_queries_by_ids(self, query_ids: List[int]) -> dict:
+    def get_queries_by_ids(self, query_ids: list[int]) -> dict:
         """Get queries by SQLite IDs.
 
         Args:
@@ -317,11 +320,9 @@ class ChromaManager:
             Dictionary with documents and metadatas
         """
         chroma_ids = [f"query_{qid}" for qid in query_ids]
-        return self.queries_collection.get(
-            ids=chroma_ids, include=["documents", "metadatas"]
-        )
+        return self.queries_collection.get(ids=chroma_ids, include=["documents", "metadatas"])
 
-    def get_query_embeddings_map(self, query_ids: List[int]) -> dict[int, np.ndarray]:
+    def get_query_embeddings_map(self, query_ids: list[int]) -> dict[int, np.ndarray]:
         """Get a mapping from SQLite query ID -> embedding vector.
 
         Args:
@@ -335,13 +336,13 @@ class ChromaManager:
 
         id_to_embedding: dict[int, np.ndarray] = {}
         if results and results.get("ids"):
-            for cid, emb in zip(results.get("ids", []), results.get("embeddings", [])):
+            for cid, emb in zip(
+                results.get("ids", []), results.get("embeddings", []), strict=False
+            ):
                 if cid and emb is not None and len(emb) > 0:
                     # Extract integer query_id from "query_{id}"
                     try:
-                        qid = (
-                            int(str(cid).split("_")[1]) if "_" in str(cid) else int(cid)
-                        )
+                        qid = int(str(cid).split("_")[1]) if "_" in str(cid) else int(cid)
                         id_to_embedding[qid] = np.array(emb, dtype=float)
                     except Exception:
                         continue
@@ -360,7 +361,7 @@ class ChromaManager:
         chroma_id = f"cluster_{run_id}_{cluster_id}"
         return self.summaries_collection.get(ids=[chroma_id])
 
-    def list_runs_in_summaries(self) -> List[str]:
+    def list_runs_in_summaries(self) -> list[str]:
         """Get all unique run_ids stored in cluster summaries.
 
         Returns:
@@ -379,14 +380,14 @@ class ChromaManager:
         """Count total queries in ChromaDB."""
         return self.queries_collection.count()
 
-    def count_summaries(self, run_id: Optional[str] = None) -> int:
+    def count_summaries(self, run_id: str | None = None) -> int:
         """Count cluster summaries, optionally filtered by run_id."""
         if run_id:
             results = self.summaries_collection.get(where={"run_id": run_id})
             return len(results["ids"]) if results["ids"] else 0
         return self.summaries_collection.count()
 
-    def list_all_collections(self) -> List[dict]:
+    def list_all_collections(self) -> list[dict]:
         """List all collections in ChromaDB with their metadata.
 
         Returns:
@@ -435,4 +436,6 @@ def get_chroma(
         embedding_model: Embedding model name for collection naming
         embedding_provider: Embedding provider (openai, cohere, sentence-transformers)
     """
-    return ChromaManager(persist_directory, embedding_model, embedding_provider, embedding_dimension)
+    return ChromaManager(
+        persist_directory, embedding_model, embedding_provider, embedding_dimension
+    )

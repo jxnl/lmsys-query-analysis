@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional
 
-from ..db.connection import Database
-from ..db.chroma import ChromaManager
 from ..clustering.embeddings import EmbeddingGenerator
+from ..db.chroma import ChromaManager
+from ..db.connection import Database
 from .types import FacetBucket, QueryHit, RunSpace
 
 
@@ -18,7 +17,13 @@ class QueriesClient:
     Note: This is a stub/skeleton. Methods raise NotImplementedError.
     """
 
-    def __init__(self, db: Database, chroma: ChromaManager, embedder: EmbeddingGenerator, run_id: str | None = None):
+    def __init__(
+        self,
+        db: Database,
+        chroma: ChromaManager,
+        embedder: EmbeddingGenerator,
+        run_id: str | None = None,
+    ):
         """Initialize with explicit dependencies.
 
         Args:
@@ -34,9 +39,10 @@ class QueriesClient:
     @classmethod
     def from_run(
         cls, db: Database, run_id: str, persist_dir: str | Path | None = None
-    ) -> "QueriesClient":
+    ) -> QueriesClient:
         """Construct a client by resolving vector space from a clustering run."""
         from sqlmodel import select
+
         from ..db.models import ClusteringRun
 
         with db.get_session() as s:
@@ -66,23 +72,25 @@ class QueriesClient:
     def find(
         self,
         text: str,
-        run_id: Optional[str] = None,
-        cluster_ids: Optional[List[int]] = None,
-        within_clusters: Optional[str] = None,
+        run_id: str | None = None,
+        cluster_ids: list[int] | None = None,
+        within_clusters: str | None = None,
         top_clusters: int = 10,
         n_results: int = 50,
         n_candidates: int = 250,
-        threshold: Optional[float] = None,
-    ) -> List[QueryHit]:
+        threshold: float | None = None,
+    ) -> list[QueryHit]:
         """Return ranked query hits filtered and conditioned as requested."""
         effective_run = run_id or self._run_id
 
         # If within_clusters specified, select top clusters via summary search
-        selected_cluster_ids: Optional[List[int]] = None
+        selected_cluster_ids: list[int] | None = None
         if within_clusters:
             from .clusters import ClustersClient
 
-            clusters_client = ClustersClient(self.db, self.chroma, self.embedder, run_id=effective_run)
+            clusters_client = ClustersClient(
+                self.db, self.chroma, self.embedder, run_id=effective_run
+            )
             chits = clusters_client.find(
                 text=within_clusters,
                 run_id=effective_run,
@@ -108,7 +116,7 @@ class QueriesClient:
         dists = results.get("distances", [[]])[0] if results else []
 
         # Extract numeric query IDs
-        cand_ids: List[int] = []
+        cand_ids: list[int] = []
         for cid in ids:
             try:
                 if isinstance(cid, str) and "_" in cid:
@@ -119,10 +127,11 @@ class QueriesClient:
                 continue
 
         # If run/cluster filters are requested, filter using SQLite
-        keep_idx: List[int] = list(range(len(cand_ids)))
-        cluster_map: Dict[int, int] = {}
+        keep_idx: list[int] = list(range(len(cand_ids)))
+        cluster_map: dict[int, int] = {}
         if effective_run or selected_cluster_ids is not None:
             from sqlmodel import select
+
             from ..db.models import QueryCluster
 
             with self.db.get_session() as s:
@@ -145,7 +154,7 @@ class QueriesClient:
                 keep_idx.append(i)
 
         # Assemble hits with filtering and optional threshold
-        hits: List[QueryHit] = []
+        hits: list[QueryHit] = []
         for i in keep_idx:
             dist = float(dists[i])
             if threshold is not None and dist > threshold:
@@ -166,17 +175,17 @@ class QueriesClient:
 
         # Re-rank by distance after filtering, then truncate
         hits.sort(key=lambda h: h.distance)
-        return hits[: n_results]
+        return hits[:n_results]
 
     def count(
         self,
         text: str,
-        run_id: Optional[str] = None,
-        cluster_ids: Optional[List[int]] = None,
-        within_clusters: Optional[str] = None,
+        run_id: str | None = None,
+        cluster_ids: list[int] | None = None,
+        within_clusters: str | None = None,
         top_clusters: int = 10,
-        by: Optional[str] = None,
-    ) -> int | Dict:
+        by: str | None = None,
+    ) -> int | dict:
         """Return total count or grouped counts (by=cluster|language|model)."""
         effective_run = run_id or self._run_id
 
@@ -198,14 +207,14 @@ class QueriesClient:
             raise ValueError("by must be one of: cluster, language, model")
 
         if by == "cluster":
-            counts: Dict[int, int] = {}
+            counts: dict[int, int] = {}
             for h in hits:
                 cid = h.cluster_id if h.cluster_id is not None else -1
                 counts[cid] = counts.get(cid, 0) + 1
             return counts
 
         if by in {"language", "model"}:
-            counts2: Dict[str, int] = {}
+            counts2: dict[str, int] = {}
             for h in hits:
                 key = getattr(h, by) or ""
                 counts2[key] = counts2.get(key, 0) + 1
@@ -216,13 +225,16 @@ class QueriesClient:
     def facets(
         self,
         text: str,
-        run_id: Optional[str] = None,
-        cluster_ids: Optional[List[int]] = None,
-        within_clusters: Optional[str] = None,
+        run_id: str | None = None,
+        cluster_ids: list[int] | None = None,
+        within_clusters: str | None = None,
         top_clusters: int = 10,
-        facet_by: List[str] = ["cluster"],
-    ) -> Dict[str, List[FacetBucket]]:
+        facet_by: list[str] | None = None,
+    ) -> dict[str, list[FacetBucket]]:
         """Return facet buckets for the filtered/conditioned result set."""
+        if facet_by is None:
+            facet_by = ["cluster"]
+
         effective_run = run_id or self._run_id
         hits = self.find(
             text=text,
@@ -234,30 +246,36 @@ class QueriesClient:
             n_candidates=20_000,
         )
 
-        facets: Dict[str, List[FacetBucket]] = {}
+        facets: dict[str, list[FacetBucket]] = {}
         for facet in facet_by:
             if facet == "cluster":
-                agg: Dict[int, int] = {}
+                agg: dict[int, int] = {}
                 for h in hits:
                     cid = h.cluster_id if h.cluster_id is not None else -1
                     agg[cid] = agg.get(cid, 0) + 1
                 # Optionally enrich with cluster titles when run is known
-                meta_map: Dict[int, Dict[str, str]] = {}
+                meta_map: dict[int, dict[str, str]] = {}
                 effective_run = run_id or self._run_id
                 if effective_run is not None and agg:
                     try:
                         from sqlmodel import select
+
                         from ..db.models import ClusterSummary
+
                         with self.db.get_session() as s:
                             # Pick the most recent summary per cluster if multiple exist
                             # Fetch all summaries for relevant clusters
                             rows = s.exec(
-                                select(ClusterSummary.cluster_id, ClusterSummary.title, ClusterSummary.generated_at)
+                                select(
+                                    ClusterSummary.cluster_id,
+                                    ClusterSummary.title,
+                                    ClusterSummary.generated_at,
+                                )
                                 .where(ClusterSummary.run_id == effective_run)
                                 .where(ClusterSummary.cluster_id.in_(list(agg.keys())))
                             ).all()
                             # Keep latest by generated_at
-                            tmp: Dict[int, tuple[str | None, any]] = {}
+                            tmp: dict[int, tuple[str | None, any]] = {}
                             for cid, title, gen_at in rows:
                                 prev = tmp.get(cid)
                                 if prev is None or (gen_at and prev[1] and gen_at > prev[1]):
@@ -273,14 +291,14 @@ class QueriesClient:
                 ]
                 facets["cluster"] = sorted(buckets, key=lambda b: b.count, reverse=True)
             elif facet == "language":
-                agg2: Dict[str, int] = {}
+                agg2: dict[str, int] = {}
                 for h in hits:
                     key = h.language or ""
                     agg2[key] = agg2.get(key, 0) + 1
                 buckets = [FacetBucket(key=k, count=v, meta={}) for k, v in agg2.items()]
                 facets["language"] = sorted(buckets, key=lambda b: b.count, reverse=True)
             elif facet == "model":
-                agg3: Dict[str, int] = {}
+                agg3: dict[str, int] = {}
                 for h in hits:
                     key = h.model or ""
                     agg3[key] = agg3.get(key, 0) + 1
@@ -301,7 +319,7 @@ class QueriesClient:
             run_id=self._run_id,
         )
 
-    def embed(self, text: str) -> List[float]:
+    def embed(self, text: str) -> list[float]:
         """Embed a single text in the configured space and return the vector."""
         vec = self.embedder.generate_embeddings([text], batch_size=1, show_progress=False)[0]
         return list(vec)

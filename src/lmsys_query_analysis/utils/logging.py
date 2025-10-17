@@ -3,20 +3,18 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+
 from rich.logging import RichHandler
 
 
-def setup_logging(verbose: bool = False, level: Optional[int] = None) -> None:
+def setup_logging(verbose: bool = False, level: int | None = None) -> None:
     """Configure global logging with Rich handler.
 
     Args:
         verbose: When True, set level to DEBUG; otherwise INFO.
         level: Optional explicit level to override verbose flag.
     """
-    resolved_level = (
-        level if level is not None else (logging.DEBUG if verbose else logging.INFO)
-    )
+    resolved_level = level if level is not None else (logging.DEBUG if verbose else logging.INFO)
     logging.basicConfig(
         level=resolved_level,
         format="%(message)s",
