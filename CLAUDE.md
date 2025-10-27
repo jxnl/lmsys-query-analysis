@@ -208,486 +208,341 @@ The viewer uses only SQLite (no ChromaDB server). All search uses SQL LIKE queri
 
 ### Row Summarization: LLM-Based Dataset Derivation
 
-**Purpose**: Transform raw queries using LLM into structured, canonical representations for hypothesis-driven analysis.
+Transform raw queries using LLM to extract structured properties (intent, complexity, emotional state, etc.) for hypothesis-driven analysis.
 
-**Key Use Cases**:
-- **Intent extraction**: Classify queries by intent (code_generation, debugging, explanation, etc.)
-- **Emotional analysis**: Detect frustration, urgency, politeness levels
-- **Task classification**: Categorize by cognitive task type and complexity
-- **Normalization**: Remove greetings, translate to English, extract core request
-- **Property extraction**: Pull out structured fields (domain, requires_code, is_homework, etc.)
-- **Chained transformations**: Summarize a summary to create multi-level data pipelines
+**When to use**: Extract custom properties not in raw data (intent classification, frustration detection, task categorization).
 
-**Command**: `lmsys summarize-dataset`
-
-**CRITICAL PROMPT REQUIREMENTS**:
-- ⚠️ **Write DETAILED, COMPREHENSIVE prompts (200-500 words recommended)**
-- Short prompts produce low-quality, inconsistent results
-- Include: task description, output format, edge cases, property definitions, examples
-- Use instructor's structured output format with Pydantic models
-
-**Basic Usage**:
+**Simple Example - Extract Intent**:
 ```bash
-# Create a detailed prompt file
-cat > intent_prompt.txt << 'EOF'
-You are analyzing user queries to extract structured information.
+# Write prompt (be specific about properties to extract)
+cat > prompt.txt << 'EOF'
+Extract user intent and properties.
 
-TASK: Extract core user intent and classify the query.
+OUTPUT:
+- summary: What user wants in one sentence (10-15 words)
+- properties:
+  * intent: One of [code_generation, debugging, explanation, creative_writing, other]
+  * complexity: 1-5 (1=simple, 5=expert)
+  * domain: Topic (e.g., "python", "javascript", "general")
 
-OUTPUT FORMAT:
-- summary: One clear sentence describing what user wants (10-15 words)
-- properties: Extract these specific fields:
-  * intent: One of [code_generation, debugging, explanation, creative_writing, 
-    question_answering, translation, data_analysis, other]
-  * complexity: Integer 1-5 (1=simple, 5=expert-level)
-  * domain: Primary topic (e.g., "python", "javascript", "general")
-  * requires_code: Boolean - expect code in response?
-
-GUIDELINES:
-- Strip greetings and filler words
-- Translate non-English to English for summary
-- Infer intent from context clues
-- Code snippets suggest debugging/code_generation
-
-Now analyze: {query}
+Query: {query}
 EOF
 
-# Run summarization
+# Run extraction on 10k queries
 uv run lmsys summarize-dataset lmsys-chat-1m \
   --output lmsys-intent \
-  --prompt "$(cat intent_prompt.txt)" \
-  --model openai/gpt-4o-mini \
-  --limit 10000
-```
-
-**Advanced: Chained Summarization**:
-```bash
-# Level 1: Extract intent
-uv run lmsys summarize-dataset lmsys-chat-1m \
-  --output level1-intent \
-  --prompt "$(cat intent_prompt.txt)" \
+  --prompt "$(cat prompt.txt)" \
   --limit 10000
 
-# Level 2: Further classify by frustration
-uv run lmsys summarize-dataset level1-intent \
-  --output level2-frustration \
-  --prompt "$(cat frustration_prompt.txt)" \
-  --limit 10000
-
-# Lineage tracking: level2-frustration.root_dataset_id → lmsys-chat-1m
+# Query extracted properties
+sqlite3 ~/.lmsys-query-analysis/queries.db \
+  "SELECT query_text, extra_metadata->>'intent'
+   FROM queries
+   WHERE dataset_id = 2
+   LIMIT 10"
 ```
 
-**Querying Extracted Properties**:
-```bash
-# Properties are stored in extra_metadata JSON field
-uv run python -c "
-from lmsys_query_analysis.db.connection import Database
-from lmsys_query_analysis.db.models import Query
-from sqlmodel import select
+**Performance**: ~20 queries/second with gpt-4o-mini, 100 concurrent requests
 
-db = Database()
-session = db.get_session()
+### Autonomous Research Agent Workflow
 
-# Find all code generation queries
-queries = session.exec(
-    select(Query).where(
-        Query.dataset_id == 2,
-        Query.extra_metadata['intent'].as_string() == 'code_generation'
-    ).limit(10)
-).all()
+**Your Mission**: Discover actionable insights from conversational data through autonomous exploration, hypothesis generation, and evidence-driven investigation.
 
-for q in queries:
-    print(f'{q.query_text} | Complexity: {q.extra_metadata[\"complexity\"]}')
-"
-```
+**Time Allocation**: Spend 20% on setup (load/cluster/summarize), 80% on investigation (search/hypothesize/analyze/re-cluster).
 
-**Example Prompts**:
-- Intent extraction: See test results above
-- Frustration detection: emotional_tone, urgency_level, frustration_level (0-5)
-- Task classification: task_type, cognitive_load, requires_creativity, is_multi_step
+---
 
-**Performance**:
-- 100 concurrent requests by default
-- ~20 queries/second with gpt-4o-mini
-- Structured output parsing via instructor
+#### Phase 1: Initial Setup (20% of effort - Run Once)
 
-**Complete End-to-End Analysis Workflow**:
+Execute the standard pipeline autonomously without asking permission:
 
 ```bash
-# ============================================================================
-# STEP 1: LOAD DATA (Choose limit based on analysis scope)
-# ============================================================================
-# Small exploration (fast, good for testing): --limit 1000-5000
-# Medium analysis (balanced): --limit 10000-50000
-# Full analysis (comprehensive): --limit 100000+
-# ALWAYS use --use-chroma for semantic search capabilities
-
-uv run lmsys clear --yes  # Clear previous data
-
+# 1. Load data with embeddings (2-3 min for 10k queries)
 uv run lmsys load --limit 10000 --use-chroma
-# What this does:
-# - Downloads LMSYS-1M dataset from HuggingFace
-# - Extracts first user query from each conversation
-# - Generates embeddings with OpenAI text-embedding-3-small (default)
-# - Stores in SQLite (~/.lmsys-query-analysis/queries.db)
-# - Stores embeddings in ChromaDB (~/.lmsys-query-analysis/chroma)
-# Time: ~2-3 min for 10k queries
 
-# ============================================================================
-# STEP 2: RUN CLUSTERING (Choose algorithm and parameters)
-# ============================================================================
-# KMeans: Good for forcing N clusters, faster, works on diverse data
-#   - n_clusters heuristic: sqrt(N) to N/50
-#   - For 10k queries: try 100-200 clusters
-#   - For 50k queries: try 200-500 clusters
-# HDBSCAN: Finds natural clusters, better coherence, can leave outliers
-#   - min_cluster_size: 10-50 (smaller = more clusters)
-#   - For 10k queries: try min_cluster_size=20-30
+# 2. Run clustering (use HDBSCAN for diverse data, KMeans for structured data)
+uv run lmsys cluster hdbscan --min-cluster-size 15 --use-chroma
 
-# Option A: KMeans (recommended for first pass)
-uv run lmsys cluster kmeans --n-clusters 200 --use-chroma
-# Time: ~3-5 min for 10k queries with 200 clusters
+# 3. Generate summaries (2-5 min)
+uv run lmsys summarize <RUN_ID> --alias "initial-analysis"
 
-# Option B: HDBSCAN (for high-quality clusters)
-uv run lmsys cluster hdbscan --min-cluster-size 20 --use-chroma
-# Time: ~5-10 min for 10k queries
-
-# ============================================================================
-# STEP 3: CHECK RUN STATUS
-# ============================================================================
-uv run lmsys runs --latest
-# Shows: run_id, algorithm, num_clusters, parameters, created_at
-# Copy the run_id (e.g., "kmeans-200-20251027-123456")
-
-# ============================================================================
-# STEP 4: GENERATE CLUSTER SUMMARIES (REQUIRED)
-# ============================================================================
-# Model choices:
-# - openai/gpt-4o-mini: Fast, cheap, good quality (RECOMMENDED)
-# - openai/gpt-4o: Higher quality, slower, more expensive
-# - anthropic/claude-sonnet-4-5-20250929: Excellent quality, slower
-# - groq/llama-3.1-8b-instant: Very fast, lower quality
-
-uv run lmsys summarize <RUN_ID> --alias "analysis-v1" \
-  --model openai/gpt-4o-mini --concurrency 40
-# What this does:
-# - Generates title and description for each cluster
-# - Uses contrastive learning (compares to neighbor clusters)
-# - Stores in cluster_summaries table with summary_run_id
-# - --alias gives friendly name for this summary run
-# - --concurrency: 20-50 for gpt-4o-mini, 5-10 for Claude
-# Time: ~2-5 min for 200 clusters with gpt-4o-mini
-
-# ============================================================================
-# STEP 5: BUILD HIERARCHY (ALWAYS DO THIS!)
-# ============================================================================
+# 4. Build hierarchy (REQUIRED - enables top-down navigation)
 uv run lmsys merge-clusters <RUN_ID>
-# What this does:
-# - Groups related clusters into parent categories
-# - Creates 2-3 level hierarchy (leaf → mid-level → top-level)
-# - Uses Anthropic Clio methodology with LLM-driven merging
-# - Enables top-down navigation from themes to specific patterns
-# Time: ~5-10 min for 200 clusters
-# CRITICAL: Always run this - it's required for navigable results
-
-# ============================================================================
-# STEP 6: EXPLORE RESULTS
-# ============================================================================
-
-# 6a. View cluster list with hierarchical organization
-uv run lmsys list-clusters <RUN_ID> --limit 50
-# Shows: cluster_id, title, num_queries, hierarchy level
-# Use this to get overview of what was found
-
-# 6b. View hierarchy tree structure
-uv run lmsys show-hierarchy <RUN_ID>
-# Shows: tree view of parent-child relationships
-# Navigate from broad themes to specific patterns
-
-# 6c. Inspect specific clusters (deep-dive)
-uv run lmsys inspect <RUN_ID> 4 --show-queries 20
-# Replace "4" with interesting cluster_id from list-clusters
-# Shows: title, description, sample queries, statistics
-# Use this to validate cluster quality and understand contents
-
-# 6d. Semantic search across queries (find specific examples)
-uv run lmsys search "python debugging" --run-id <RUN_ID> --n-results 20 --xml
-# ALWAYS use --xml for full non-truncated output
-# ALWAYS use --run-id to ensure vector space consistency
-# Returns: matching queries with cluster assignments
-
-# 6e. Semantic search for clusters (find themes)
-uv run lmsys search "creative writing" --search-type clusters \
-  --run-id <RUN_ID> --n-results 10 --xml
-# Finds clusters whose titles/descriptions match the search
-
-# 6f. Two-stage search (contextual search within theme)
-uv run lmsys search "error handling" --run-id <RUN_ID> \
-  --within-clusters "python programming" --top-clusters 3 \
-  --n-results 20 --xml
-# First finds top 3 clusters about "python programming"
-# Then searches for "error handling" within those clusters
-# Most powerful search method for specific investigations
-
-# 6g. Faceted analysis (understand distribution)
-uv run lmsys search "debugging" --run-id <RUN_ID> \
-  --facets cluster,model,language --n-results 100 --xml
-# Shows which clusters, models, languages handle debugging queries
-# Use for quantifying patterns across dimensions
-
-# ============================================================================
-# STEP 7 (OPTIONAL): ROW SUMMARIZATION FOR HYPOTHESIS TESTING
-# ============================================================================
-# Only use if you need custom classification/property extraction
-# Example: Test hypothesis "15% of queries show frustration"
-
-# 7a. Create derived dataset with intent extraction
-uv run lmsys summarize-dataset lmsys-chat-1m \
-  --output lmsys-intent \
-  --limit 10000 \
-  --model openai/gpt-4o-mini \
-  --prompt '<FULL_DETAILED_PROMPT_HERE>'
-# See full prompt examples below
-# Time: ~8-10 min for 10k queries
-
-# 7b. Cluster the derived dataset
-uv run lmsys cluster kmeans --n-clusters 100 --use-chroma
-uv run lmsys summarize <NEW_RUN_ID> --alias "intent-clusters"
-uv run lmsys merge-clusters <NEW_RUN_ID>  # ALWAYS!
-
-# 7c. Query extracted properties via SQL
-uv run python -c "
-from lmsys_query_analysis.db.connection import Database
-from lmsys_query_analysis.db.models import Query
-from sqlmodel import select
-
-db = Database()
-session = db.get_session()
-
-# Find high-frustration queries
-high_frustration = session.exec(
-    select(Query).where(Query.dataset_id == 2)  # Adjust dataset_id
-).all()
-
-frustrated_count = sum(
-    1 for q in high_frustration 
-    if q.extra_metadata and q.extra_metadata.get('frustration_level', 0) >= 3
-)
-
-print(f'High frustration: {frustrated_count}/{len(high_frustration)} queries')
-session.close()
-"
 ```
 
-**Row Summarization Prompt Examples** (Use for STEP 7):
+**Parameters to choose autonomously**:
+- **Dataset size**: 1k-5k (testing), 10k-50k (standard), 100k+ (comprehensive)
+- **Algorithm**: HDBSCAN (diverse/noisy data, 80-90% coherence), KMeans (structured data, forces K clusters)
+- **min_cluster_size** (HDBSCAN): 10-20 (more clusters), 20-50 (fewer, tighter clusters)
+- **n_clusters** (KMeans): sqrt(N) to N/50 (for 10k queries: 100-200 clusters)
 
+**Quality check**: If you find a catch-all cluster containing >50% of data, autonomously re-run with HDBSCAN.
+
+---
+
+#### Phase 2: Hypothesis Generation (80% of effort - Iterate Freely)
+
+**Your autonomous investigation tools:**
+
+**1. Explore the landscape** - Understand what patterns exist
 ```bash
-# EXAMPLE 1: INTENT EXTRACTION - Classify user intent and extract properties
-uv run lmsys summarize-dataset lmsys-chat-1m \
-  --output lmsys-intent \
-  --limit 10000 \
-  --prompt 'You are analyzing user queries to LLMs to extract structured information about user intent.
+# View cluster hierarchy
+uv run lmsys show-hierarchy <RUN_ID>
 
-TASK: Extract the core user intent and classify the query comprehensively.
+# List all clusters with sizes
+uv run lmsys list-clusters <RUN_ID> --limit 100
 
-OUTPUT FORMAT:
-- summary: One clear, concise sentence describing what the user wants (10-20 words max). Write in simple, normalized English.
-- properties: Extract these specific fields as structured data:
-  * intent: One of [code_generation, debugging, explanation, creative_writing, question_answering, translation, data_analysis, brainstorming, comparison, tutoring, other]
-  * complexity: Integer 1-5 where:
-    1 = Simple factual question or trivial request
-    2 = Requires basic explanation or simple code snippet
-    3 = Multi-step reasoning or moderate coding task
-    4 = Complex analysis, non-trivial implementation, or research
-    5 = Highly specialized expertise or novel problem-solving
-  * domain: Primary topic area in lowercase (e.g., "python", "javascript", "math", "creative", "legal", "general", "history")
-  * requires_code: Boolean - does user explicitly or implicitly expect code in response?
-  * requires_step_by_step: Boolean - does user need detailed procedural guidance?
-  * is_homework: Boolean - does this appear to be homework or educational assignment?
+# Inspect largest/most interesting clusters
+uv run lmsys inspect <RUN_ID> 4 --show-queries 20
+```
 
-NORMALIZATION GUIDELINES:
-- Strip all greetings ("hello", "hi", "please", "thanks", "appreciate it")
-- Remove meta-commentary ("this is urgent", "I'\''ve been stuck for hours")
-- Remove filler words and unnecessary context
-- If query is in non-English language, translate the INTENT to English for the summary
-- For vague queries, infer the most likely specific intent from context
-- Code snippets in query strongly suggest debugging or code_generation intent
-- Questions starting with "why/how/what/explain" typically indicate explanation intent
-- Requests for "write/create/generate/make" indicate code_generation or creative_writing intent
-- If user says "help me", infer what KIND of help from the rest of the query
+**2. Search semantically** - Find patterns and examples (ALWAYS use `--xml` for full output)
 
-CLASSIFICATION RULES:
-- code_generation: User wants code written (functions, scripts, programs)
-- debugging: User has broken code and needs help fixing it
-- explanation: User wants to understand a concept, how something works
-- creative_writing: Stories, poems, dialogue, creative content
-- question_answering: Factual questions, definitions, seeking information
-- translation: Converting between languages
-- data_analysis: Working with data, statistics, interpreting results
-- brainstorming: Generating ideas, exploring possibilities
-- comparison: Comparing options, pros/cons, which is better
-- tutoring: Step-by-step learning, teaching a skill
-- other: Anything that doesn'\''t fit above categories
+**Basic Search Patterns:**
+```bash
+# Pattern 1: Find clusters by theme (high-level exploration)
+uv run lmsys search "python debugging" --search-type clusters --run-id <RUN_ID> --xml
+# Use when: You want to see what high-level themes exist
+# Returns: Cluster summaries matching "python debugging"
 
-EXAMPLES:
-{examples}
+# Pattern 2: Find specific query examples (needle in haystack)
+uv run lmsys search "connection timeout" --run-id <RUN_ID> --n-results 20 --xml
+# Use when: You need concrete examples of a specific issue
+# Returns: Individual queries matching "connection timeout"
 
-Now analyze this query and return structured output:
-{query}' \
-  --model openai/gpt-4o-mini
+# Pattern 3: Two-stage contextual search (MOST POWERFUL)
+uv run lmsys search "error messages" --within-clusters "database SQL" \
+  --top-clusters 3 --run-id <RUN_ID> --n-results 20 --xml
+# Use when: You want to find specific patterns within a broader context
+# How it works: (1) Find top 3 clusters about "database SQL"
+#               (2) Search for "error messages" ONLY within those clusters
+# Why powerful: Dramatically improves precision by narrowing context
 
-# 2. FRUSTRATION DETECTION - Identify emotional state and urgency
+# Pattern 4: Faceted analysis (quantify distribution)
+uv run lmsys search "debugging" --facets cluster,model,language \
+  --run-id <RUN_ID> --n-results 100 --xml
+# Use when: You want to understand how a pattern distributes
+# Returns: Top clusters, models, languages handling "debugging" queries
+# Good for: "Which models struggle with X?", "Which clusters contain Y?"
+```
+
+**Advanced Search Techniques:**
+```bash
+# Technique 1: Comparative search (find differences between models)
+uv run lmsys search "code generation" --facets model --n-results 500 --xml
+# Analyze output to see: gpt-4 vs gpt-3.5 vs claude usage patterns
+
+# Technique 2: Multi-query investigation (search related concepts)
+uv run lmsys search "debugging" --run-id <RUN_ID> --xml > debug.xml
+uv run lmsys search "error messages" --run-id <RUN_ID> --xml > errors.xml
+uv run lmsys search "stack traces" --run-id <RUN_ID> --xml > traces.xml
+# Compare results to understand the full "troubleshooting" landscape
+
+# Technique 3: Cluster-specific deep dive (filter by cluster IDs)
+uv run lmsys search "authentication" --cluster-ids 12,47,89 \
+  --run-id <RUN_ID> --n-results 50 --xml
+# Use when: You already know interesting clusters and want to search within them
+
+# Technique 4: Language-specific patterns
+uv run lmsys search "code generation" --facets language,cluster \
+  --run-id <RUN_ID> --n-results 200 --xml
+# Reveals: Do Chinese users ask different code questions than English users?
+```
+
+**Search Investigation Workflows:**
+
+**Workflow A: Discover High-Impact Failure Patterns**
+```bash
+# 1. Find failure-related clusters
+uv run lmsys search "error fails broken" --search-type clusters --run-id <RUN_ID> --xml
+
+# 2. Search for specific error types within failure clusters
+uv run lmsys search "connection timeout" --within-clusters "errors failures" \
+  --top-clusters 5 --n-results 30 --xml
+
+# 3. Quantify which models/languages hit these errors most
+uv run lmsys search "connection timeout" --facets model,language \
+  --cluster-ids <IDS_FROM_STEP1> --n-results 200 --xml
+
+# 4. Extract examples for engineering team
+uv run lmsys inspect <RUN_ID> <CLUSTER_ID> --show-queries 50
+```
+
+**Workflow B: Find Underserved Use Cases**
+```bash
+# 1. Find clusters about creative/specialized topics
+uv run lmsys search "creative writing storytelling" --search-type clusters \
+  --run-id <RUN_ID> --xml
+
+# 2. Measure volume across models
+uv run lmsys search "creative writing" --facets model,cluster --n-results 500 --xml
+# If gpt-4 handles most creative queries, there's a market gap
+
+# 3. Sample queries to understand needs
+uv run lmsys search "story plot character" --within-clusters "creative writing" \
+  --top-clusters 3 --n-results 50 --xml
+
+# 4. Quantify business opportunity
+sqlite3 ~/.lmsys-query-analysis/queries.db \
+  "SELECT COUNT(*) FROM queries q
+   JOIN query_clusters qc ON q.id = qc.query_id
+   WHERE qc.run_id = '<RUN_ID>' AND qc.cluster_id IN (<CREATIVE_CLUSTER_IDS>)"
+```
+
+**Workflow C: Model Performance Comparison**
+```bash
+# 1. Find code generation clusters
+uv run lmsys search "code generation programming" --search-type clusters \
+  --run-id <RUN_ID> --xml
+
+# 2. Search for failure indicators within code clusters
+uv run lmsys search "doesn't work error failed" \
+  --within-clusters "code generation" --top-clusters 5 --n-results 100 --xml
+
+# 3. Group failures by model
+uv run lmsys search "doesn't work error" --facets model \
+  --cluster-ids <CODE_CLUSTER_IDS> --n-results 500 --xml
+# Reveals: "gpt-3.5 has 3x more failures than gpt-4 in cluster 47"
+```
+
+**Critical Rules:**
+- ✓ ALWAYS use `--xml` (not --table or --json) - tables truncate text
+- ✓ ALWAYS use `--run-id` to ensure vector space consistency
+- ✓ Use `--within-clusters` for focused investigation (higher precision)
+- ✓ Use `--facets` to quantify patterns across dimensions
+- ✓ Search clusters first (themes), then queries (examples)
+- ✓ Combine search with SQL for hard counts and validation
+
+**3. Generate hypotheses** - Autonomously propose 3-5 testable hypotheses based on:
+- Cluster size anomalies (giant clusters, tiny outliers)
+- Quality issues (low coherence, language mixing, failure patterns)
+- User intent patterns (underserved use cases, high-impact behaviors)
+- Model performance gaps (certain models struggle with specific query types)
+
+**4. Test hypotheses with sub-agents** - Launch parallel investigations
+```python
+# Use Task tool to investigate multiple hypotheses concurrently
+# Example: "Investigate cluster 47 for code generation failures and quantify impact"
+# Example: "Analyze creative writing queries and estimate market size"
+# Example: "Compare failure rates across conversation lengths using SQL"
+```
+
+**5. Extract custom properties when needed** - Row summarization for hypothesis testing
+```bash
+# Example: Test "20% of queries show frustration"
+cat > prompt.txt << 'EOF'
+Analyze user query for frustration and urgency.
+
+OUTPUT:
+- summary: Neutral restatement (remove emotional language, 10-15 words)
+- properties:
+  * frustration_level: 0-5 (0=calm, 3=significant, 5=extreme)
+  * urgency_level: 0-5 (0=no pressure, 3=deadline, 5=crisis)
+  * has_tried_solutions: Boolean
+  * emotional_tone: One of [neutral, frustrated, desperate, angry, polite]
+
+Frustration indicators: "still not working", "I've tried X/Y/Z", "???"
+Urgency indicators: "ASAP", "urgent", "deadline", "emergency"
+
+Query: {query}
+EOF
+
 uv run lmsys summarize-dataset lmsys-chat-1m \
   --output lmsys-frustration \
-  --limit 10000 \
-  --prompt 'You are analyzing user queries to LLMs to detect frustration, emotional state, and urgency.
+  --prompt "$(cat prompt.txt)" \
+  --limit 10000
 
-TASK: Assess the user'\''s emotional state and extract frustration indicators.
-
-OUTPUT FORMAT:
-- summary: A brief neutral restatement of what the user is trying to do, stripped of emotional language (10-20 words)
-- properties: Extract these specific psychological/emotional indicators:
-  * frustration_level: Integer 0-5 where:
-    0 = Neutral, calm, no frustration indicators
-    1 = Mild impatience or minor annoyance
-    2 = Clear frustration, using words like "still doesn'\''t work", "keep getting"
-    3 = Significant frustration, repetition, desperation ("I'\''ve tried everything")
-    4 = High frustration, anger indicators, strong language
-    5 = Extreme distress, giving up, existential crisis about the problem
-  * urgency_level: Integer 0-5 where:
-    0 = No time pressure mentioned
-    1 = Casual mention of preference ("would be nice")
-    2 = Some time pressure ("need this soon")
-    3 = Clear deadline ("due tomorrow", "urgent")
-    4 = Critical deadline ("emergency", "ASAP", "right now")
-    5 = Crisis situation ("production is down", "emergency")
-  * has_tried_solutions: Boolean - did user mention trying other solutions already?
-  * is_repeat_attempt: Boolean - does user indicate they'\''ve asked this before or it'\''s a recurring problem?
-  * politeness_level: Integer 0-3 where:
-    0 = Rude, demanding, or aggressive
-    1 = Direct but not hostile
-    2 = Neutral tone
-    3 = Very polite, uses please/thank you
-  * emotional_tone: One of [neutral, confused, frustrated, desperate, angry, polite, apologetic, excited]
-
-FRUSTRATION INDICATORS TO DETECT:
-Strong indicators (frustration_level 3+):
-- "I'\''ve tried X, Y, Z and nothing works"
-- "still not working", "keeps failing"
-- "I don'\''t understand why..."
-- Multiple question marks "???"
-- All caps: "PLEASE HELP"
-- Repetition or restating same question
-- "I'\''m stuck", "I'\''m lost", "I give up"
-- Time investment: "been working on this for hours"
-
-Moderate indicators (frustration_level 2):
-- "doesn'\''t work", "not working"
-- "I keep getting [error]"
-- "I tried X but..."
-- Simple statement of repeated failure
-
-Urgency indicators:
-- "urgent", "ASAP", "emergency"
-- "due [soon]", "deadline"
-- "production", "client waiting"
-- "immediately", "right now"
-
-NORMALIZATION GUIDELINES:
-- For the summary, remove ALL emotional language and urgency markers
-- Extract factual task only: "Debug Python script" not "URGENT: Please help debug Python"
-- Translate non-English emotional expressions appropriately
-- If query is pure greeting/frustration with no ask, summary should reflect that
-
-EXAMPLES:
-{examples}
-
-Now analyze this query for emotional indicators:
-{query}' \
-  --model openai/gpt-4o-mini
-
-# 3. TASK CLASSIFICATION - Categorize by cognitive task type
-uv run lmsys summarize-dataset lmsys-chat-1m \
-  --output lmsys-tasks \
-  --limit 10000 \
-  --prompt 'You are analyzing user queries to LLMs to classify the type of cognitive task being requested.
-
-TASK: Classify the query by cognitive task type, complexity, and characteristics.
-
-OUTPUT FORMAT:
-- summary: A normalized, concise description of the task (10-15 words, remove greetings and filler)
-- properties: Extract cognitive task characteristics:
-  * task_type: One of [creative, analytical, procedural, factual, conversational, transformation, generation]
-  * cognitive_load: Integer 1-5 measuring mental effort required:
-    1 = Simple recall or lookup
-    2 = Basic understanding or simple manipulation  
-    3 = Moderate analysis or synthesis
-    4 = Complex reasoning or multi-step problem solving
-    5 = Expert-level synthesis or novel creation
-  * output_type: One of [code, text, analysis, data, explanation, creative_content, step_by_step, comparison]
-  * requires_context: Boolean - does task need significant background knowledge beyond the query?
-  * requires_creativity: Boolean - does task need creative/original thinking vs deterministic answer?
-  * has_constraints: Boolean - are there specific constraints or requirements mentioned?
-  * domain_expertise_needed: Boolean - does this require specialized domain knowledge?
-  * is_multi_step: Boolean - does completing this require multiple distinct steps?
-
-TASK TYPE DEFINITIONS:
-- creative: Writing stories, poems, creative content, brainstorming novel ideas
-- analytical: Analyzing data, comparing options, evaluating tradeoffs, critique
-- procedural: Step-by-step instructions, how-to guides, process explanation
-- factual: Looking up facts, definitions, specific information
-- conversational: Chitchat, greetings, casual conversation
-- transformation: Converting format, translating, reformatting, summarizing
-- generation: Creating code, generating structured data, producing artifacts
-
-OUTPUT TYPE DEFINITIONS:
-- code: Programming code or scripts
-- text: Natural language text (essays, summaries, etc.)
-- analysis: Analytical breakdowns, comparisons, evaluations
-- data: Structured data, tables, JSON, etc.
-- explanation: Explanations of concepts or how things work
-- creative_content: Stories, poems, creative writing
-- step_by_step: Procedural guides and instructions
-- comparison: Side-by-side comparisons
-
-COGNITIVE LOAD EXAMPLES:
-Level 1: "What is Python?", "Define photosynthesis"
-Level 2: "How do I print hello world in Python?", "Explain photosynthesis simply"
-Level 3: "Write a Python function to reverse a string", "Compare photosynthesis in C3 vs C4 plants"
-Level 4: "Design a Python class for a doubly-linked list with O(1) insertion", "Analyze climate impact on photosynthesis evolution"
-Level 5: "Architect a distributed system for real-time photosynthesis monitoring", "Propose novel applications of photosynthesis principles"
-
-ANALYSIS GUIDELINES:
-- Distinguish between simple requests and complex tasks
-- "Explain" can be level 2-4 depending on depth requested
-- "Write code" ranges from level 2 (basic) to level 5 (complex architecture)
-- Multiple requirements or constraints indicate higher cognitive load
-- Vague requests typically need more context
-- Homework problems usually procedural or analytical
-
-EXAMPLES:
-{examples}
-
-Now classify this query by cognitive task type:
-{query}' \
-  --model openai/gpt-4o-mini
+# Then query extracted properties
+sqlite3 ~/.lmsys-query-analysis/queries.db \
+  "SELECT COUNT(*), extra_metadata->>'frustration_level'
+   FROM queries WHERE dataset_id = 2
+   GROUP BY extra_metadata->>'frustration_level'"
 ```
 
-**Parameter Decision Guide**:
+**6. Write SQL to quantify patterns** - Extract hard evidence
+```sql
+-- Find all queries in high-failure clusters
+SELECT q.id, q.query_text, q.model
+FROM queries q
+JOIN query_clusters qc ON q.id = qc.query_id
+WHERE qc.run_id = 'kmeans-200-...' AND qc.cluster_id IN (47, 89, 123);
 
-| Parameter | Small Analysis | Medium Analysis | Large Analysis |
-|-----------|---------------|-----------------|----------------|
-| `--limit` (load) | 1,000-5,000 | 10,000-50,000 | 100,000+ |
-| `--n-clusters` (kmeans) | 50-100 | 100-300 | 300-1000 |
-| `--min-cluster-size` (hdbscan) | 20-30 | 10-20 | 5-15 |
-| `--concurrency` (summarize) | 20-40 | 40-60 | 40-80 |
-| Row summarization `--limit` | 5,000-10,000 | 10,000-50,000 | 50,000+ |
+-- Count queries by model and cluster
+SELECT q.model, qc.cluster_id, COUNT(*) as count
+FROM queries q JOIN query_clusters qc ON q.id = qc.query_id
+WHERE qc.run_id = '...'
+GROUP BY q.model, qc.cluster_id ORDER BY count DESC;
+```
 
-**Heuristics**:
-- **n_clusters**: Start with `sqrt(num_queries)`, adjust based on cluster sizes
-- **min_cluster_size**: Smaller values = more clusters, but risk noise
-- **concurrency**: Higher for fast models (gpt-4o-mini), lower for Claude
-- **Row summarization**: Only use when you need custom properties not in raw data
+**7. Re-cluster adaptively** - Autonomously adjust parameters based on findings
+```bash
+# If clusters are too coarse: increase granularity
+uv run lmsys cluster kmeans --n-clusters 400 --use-chroma
+uv run lmsys summarize <RUN_ID> --alias "refined-v2"
+uv run lmsys merge-clusters <RUN_ID>  # ALWAYS!
+
+# If you found interesting sub-patterns: cluster a derived dataset
+uv run lmsys cluster hdbscan --min-cluster-size 10 --dataset frustration-subset
+```
+
+---
+
+#### Phase 3: Report Insights (Deliverable)
+
+Present findings with:
+1. **Executive summary**: Top 3-5 insights with business impact quantified
+2. **Evidence**: Specific query examples, cluster IDs, SQL query results, coherence scores
+3. **Quantified patterns**: "23% of code generation queries fail" not "many queries fail"
+4. **Recommendations**: Actionable next steps with effort estimates
+
+**Autonomous Decision Rules**:
+- ✓ Re-cluster without asking if you find quality issues (>50% catch-all, low coherence)
+- ✓ Use row summarization without asking if hypothesis needs custom properties
+- ✓ Launch sub-agents without asking to parallelize hypothesis testing
+- ✓ Write SQL queries without asking to extract evidence and quantify patterns
+- ✓ Search extensively before forming conclusions (use search tools heavily)
+- ✗ Ask for permission only when making product/business decisions (not technical exploration)
+
+---
+
+**Example Prompt Templates for Row Summarization**:
+
+```bash
+# Example 1: Intent Classification
+uv run lmsys summarize-dataset lmsys-chat-1m --output lmsys-intent --limit 10000 \
+  --prompt 'Extract user intent and classify query.
+
+OUTPUT:
+- summary: One sentence describing user intent (10-15 words, normalized English)
+- properties:
+  * intent: [code_generation, debugging, explanation, creative_writing, question_answering, other]
+  * complexity: 1-5 (1=simple, 3=moderate, 5=expert)
+  * domain: Topic area (python, javascript, math, general, etc.)
+  * requires_code: Boolean
+
+Strip greetings, remove filler, translate to English. Infer intent from context.
+
+Query: {query}'
+
+# Example 2: Emotional State Detection
+uv run lmsys summarize-dataset lmsys-chat-1m --output lmsys-emotion --limit 10000 \
+  --prompt 'Detect frustration and urgency in user query.
+
+OUTPUT:
+- summary: Neutral task description (remove emotional language)
+- properties:
+  * frustration_level: 0-5 (0=calm, 3=significant, 5=extreme)
+  * urgency_level: 0-5 (0=no pressure, 3=deadline, 5=crisis)
+  * has_tried_solutions: Boolean
+  * emotional_tone: [neutral, frustrated, desperate, angry, polite]
+
+Frustration indicators: "still not working", "I'\''ve tried X/Y/Z", "???"
+Urgency indicators: "ASAP", "urgent", "deadline", "emergency"
+
+Query: {query}'
+```
+
+**Key principle**: Write detailed prompts (100-300 words) specifying exact properties, value ranges, and classification rules. Short prompts produce inconsistent results.
 
 ### Extensibility
 
@@ -1045,9 +900,6 @@ You are expected to act as an **autonomous data scientist** specializing in conv
 When asked to analyze a dataset, **automatically execute** the complete pipeline:
 
 ```bash
-# 1. Clear previous data (if using default DB)
-uv run lmsys clear --yes
-
 # 2. Load data with embeddings
 uv run lmsys load --limit 10000 --use-chroma
 

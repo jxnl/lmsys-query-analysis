@@ -14,7 +14,7 @@ from ...clustering.embeddings import EmbeddingGenerator
 from ...clustering.row_summarizer import RowSummarizer
 from ...db.chroma import ChromaManager
 from ...db.connection import Database
-from ...db.models import Dataset, Prompt, Query, compute_prompt_hash
+from ...db.models import ClusteringRun, Dataset, Prompt, Query, QueryCluster, compute_prompt_hash
 
 app = typer.Typer()
 console = Console()
@@ -31,6 +31,10 @@ def summarize(
     model: str = typer.Option("openai/gpt-4o-mini", "--model", help="LLM model (provider/model)"),
     limit: int | None = typer.Option(None, "--limit", help="Max queries to summarize (first N)"),
     where: str | None = typer.Option(None, "--where", help="SQL WHERE clause for filtering"),
+    run_id: str | None = typer.Option(None, "--run-id", help="Filter by clustering run ID"),
+    cluster_ids: str | None = typer.Option(
+        None, "--cluster-ids", help="Comma-separated cluster IDs (requires --run-id)"
+    ),
     examples_file: str | None = typer.Option(
         None, "--examples", help="JSONL file with few-shot examples"
     ),
@@ -53,27 +57,34 @@ def summarize(
 
     Examples:
         # Basic summarization
-        lmsys summarize "lmsys-1m" \\
+        lmsys summarize-dataset "lmsys-1m" \\
           --output "lmsys-1m-intent" \\
           --prompt "Extract user intent from <query_text>: {query}" \\
           --limit 10000 \\
           --use-chroma
 
+        # Filter by specific clusters (after clustering analysis)
+        lmsys summarize-dataset "WildChat-1M" \\
+          --output "wildchat-security-analysis" \\
+          --run-id hdbscan-10-20251027-045256 \\
+          --cluster-ids 4,7,11 \\
+          --prompt "Detailed security analysis: {query}"
+
         # With few-shot examples from file
-        lmsys summarize "lmsys-1m" \\
+        lmsys summarize-dataset "lmsys-1m" \\
           --output "lmsys-1m-classified" \\
           --prompt "Examples:\\n{examples}\\n\\nClassify this query: {query}" \\
           --examples examples.jsonl
 
         # With inline examples
-        lmsys summarize "lmsys-1m" \\
+        lmsys summarize-dataset "lmsys-1m" \\
           --output "lmsys-1m-intent" \\
           --prompt "Examples: {examples}\\nIntent: {query}" \\
           --example "12345:Write Python code" \\
           --example "67890:Debug JavaScript error"
 
         # Metadata-aware prompt
-        lmsys summarize "lmsys-1m" \\
+        lmsys summarize-dataset "lmsys-1m" \\
           --output "lmsys-1m-normalized" \\
           --prompt "If <language> is not English, translate <query_text> to English. Otherwise extract intent: {query}"
     """
@@ -93,6 +104,43 @@ def summarize(
             raise typer.Exit(1)
 
         console.print(f"[cyan]Source dataset: {source_dataset} (ID: {source_ds.id})[/cyan]")
+
+        # 1b. Validate cluster filtering flags
+        if (run_id and not cluster_ids) or (cluster_ids and not run_id):
+            console.print(
+                "[red]Error: --run-id and --cluster-ids must be used together[/red]"
+            )
+            raise typer.Exit(1)
+
+        if (run_id or cluster_ids) and where:
+            console.print(
+                "[red]Error: Cannot use both cluster filtering (--run-id/--cluster-ids) "
+                "and custom --where clause[/red]"
+            )
+            raise typer.Exit(1)
+
+        if run_id:
+            # Validate run exists
+            clustering_run = session.exec(
+                select(ClusteringRun).where(ClusteringRun.run_id == run_id)
+            ).first()
+            if not clustering_run:
+                console.print(f"[red]Error: Clustering run '{run_id}' not found[/red]")
+                raise typer.Exit(1)
+
+            # Parse cluster IDs
+            try:
+                cluster_id_list = [int(x.strip()) for x in cluster_ids.split(",")]
+            except ValueError:
+                console.print(
+                    f"[red]Error: Invalid cluster IDs '{cluster_ids}' - must be comma-separated integers[/red]"
+                )
+                raise typer.Exit(1)
+
+            console.print(
+                f"[cyan]Filtering by run '{run_id}' "
+                f"clusters {cluster_id_list}[/cyan]"
+            )
 
         # 2. Check if output dataset already exists
         existing_output = session.exec(select(Dataset).where(Dataset.name == output)).first()
@@ -163,12 +211,23 @@ def summarize(
             console.print(f"[green]Loaded {len(examples_list)} inline examples[/green]")
 
         # 4. Build query for source queries
-        query_stmt = select(Query).where(Query.dataset_id == source_ds.id)
+        if run_id:
+            # Filter by cluster: requires JOIN with query_clusters
+            query_stmt = (
+                select(Query)
+                .join(QueryCluster, Query.id == QueryCluster.query_id)
+                .where(Query.dataset_id == source_ds.id)
+                .where(QueryCluster.run_id == run_id)
+                .where(QueryCluster.cluster_id.in_(cluster_id_list))
+            )
+        else:
+            # Standard query (no cluster filtering)
+            query_stmt = select(Query).where(Query.dataset_id == source_ds.id)
 
-        # Apply WHERE clause if provided
-        if where:
-            # Wrap in text() for raw SQL
-            query_stmt = query_stmt.where(text(where))
+            # Apply WHERE clause if provided
+            if where:
+                # Wrap in text() for raw SQL
+                query_stmt = query_stmt.where(text(where))
 
         # Apply limit if provided
         if limit:
