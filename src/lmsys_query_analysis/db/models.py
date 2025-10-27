@@ -6,12 +6,40 @@ from sqlalchemy import ForeignKey, Index, UniqueConstraint
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
 
-class Query(SQLModel, table=True):
-    """Table storing extracted first prompts from LMSYS-1M dataset."""
+class Dataset(SQLModel, table=True):
+    """Table tracking loaded datasets."""
 
-    __tablename__ = "queries"
+    __tablename__ = "datasets"
 
     id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, index=True)  # e.g., "wildchat-1m", "lmsys-1m"
+    source: str  # HuggingFace dataset identifier, e.g., "allenai/WildChat-1M"
+    description: str | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Column mapping metadata (stored as JSON for flexibility)
+    column_mapping: dict | None = Field(default=None, sa_column=Column(JSON))
+
+    # Statistics
+    query_count: int = Field(default=0)
+
+    # Relationships
+    queries: list["Query"] = Relationship(back_populates="dataset")
+
+
+class Query(SQLModel, table=True):
+    """Table storing extracted first prompts from datasets."""
+
+    __tablename__ = "queries"
+    __table_args__ = (Index("ix_queries_dataset_id", "dataset_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    dataset_id: int = Field(
+        sa_column=Column(
+            "dataset_id",
+            ForeignKey("datasets.id", ondelete="CASCADE"),
+        ),
+    )
     conversation_id: str = Field(unique=True, index=True)
     model: str = Field(index=True)
     query_text: str
@@ -20,7 +48,8 @@ class Query(SQLModel, table=True):
     extra_metadata: dict | None = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-    # Relationship to cluster assignments
+    # Relationships
+    dataset: Dataset | None = Relationship(back_populates="queries")
     cluster_assignments: list["QueryCluster"] = Relationship(back_populates="query")
 
 

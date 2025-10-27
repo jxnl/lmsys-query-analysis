@@ -22,7 +22,7 @@ from sqlmodel import select
 from .adapters import HuggingFaceAdapter
 from .chroma import ChromaManager
 from .connection import Database
-from .models import Query
+from .models import Dataset, Query
 
 # Note: extract_first_query moved to adapters.py
 
@@ -38,6 +38,8 @@ def load_dataset(
     use_streaming: bool = False,
     apply_pragmas: bool = True,
     dataset_name: str = "lmsys/lmsys-chat-1m",
+    dataset_label: str | None = None,
+    dataset_description: str | None = None,
     text_column: str = "conversation",
     is_conversation_format: bool = True,
     model_column: str = "model",
@@ -59,6 +61,8 @@ def load_dataset(
         use_streaming: Use streaming dataset iteration
         apply_pragmas: Apply SQLite PRAGMA speedups during load
         dataset_name: HuggingFace dataset identifier (default: lmsys/lmsys-chat-1m)
+        dataset_label: User-friendly label for dataset (default: derived from dataset_name)
+        dataset_description: Optional description of the dataset
         text_column: Column name for query text (default: "conversation")
         is_conversation_format: Whether to parse as conversation JSON (default: True)
         model_column: Column name for model field (default: "model")
@@ -79,6 +83,46 @@ def load_dataset(
 
     # Create tables if they don't exist
     db.create_tables()
+
+    # Get or create dataset record
+    session = db.get_session()
+    try:
+        # Derive label from dataset_name if not provided
+        if dataset_label is None:
+            dataset_label = dataset_name.split("/")[-1]  # e.g., "WildChat-1M" from "allenai/WildChat-1M"
+
+        # Check if dataset already exists
+        existing_dataset = session.exec(
+            select(Dataset).where(Dataset.name == dataset_label)
+        ).first()
+
+        if existing_dataset:
+            dataset_id = existing_dataset.id
+            print(f"Using existing dataset: {dataset_label} (ID: {dataset_id})")
+        else:
+            # Create new dataset record
+            new_dataset = Dataset(
+                name=dataset_label,
+                source=dataset_name,
+                description=dataset_description or f"Dataset loaded from {dataset_name}",
+                query_count=0,
+                column_mapping={
+                    "text_column": text_column,
+                    "is_conversation_format": is_conversation_format,
+                    "model_column": model_column,
+                    "language_column": language_column,
+                    "timestamp_column": timestamp_column,
+                    "conversation_id_column": conversation_id_column,
+                    "model_default": model_default,
+                },
+            )
+            session.add(new_dataset)
+            session.commit()
+            session.refresh(new_dataset)
+            dataset_id = new_dataset.id
+            print(f"Created new dataset: {dataset_label} (ID: {dataset_id})")
+    finally:
+        session.close()
 
     # Create adapter for HuggingFace dataset
     with Progress(
@@ -182,6 +226,7 @@ def load_dataset(
 
                     to_insert_rows.append(
                         {
+                            "dataset_id": dataset_id,
                             "conversation_id": conversation_id,
                             "model": model,
                             "query_text": query_text,
@@ -312,5 +357,18 @@ def load_dataset(
                 completed=len(new_queries_meta),
                 description="[green]ChromaDB updated",
             )
+
+    # Update dataset query count
+    session = db.get_session()
+    try:
+        dataset = session.exec(select(Dataset).where(Dataset.id == dataset_id)).first()
+        if dataset:
+            dataset.query_count = session.exec(
+                select(func.count(Query.id)).where(Query.dataset_id == dataset_id)
+            ).one()
+            session.add(dataset)
+            session.commit()
+    finally:
+        session.close()
 
     return stats
