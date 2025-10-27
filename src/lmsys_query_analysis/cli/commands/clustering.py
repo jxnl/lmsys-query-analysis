@@ -19,6 +19,7 @@ def cluster_kmeans(
     n_clusters: int = typer.Option(200, help="Number of clusters"),
     description: str = typer.Option("", help="Description of this clustering run"),
     db_path: str = db_path_option,
+    dataset: str = typer.Option(None, help="Filter queries by dataset label"),
     embedding_model: str = embedding_model_option,
     embed_batch_size: int = typer.Option(50, help="Embedding encode batch size"),
     chunk_size: int = typer.Option(5000, help="DB iteration chunk size"),
@@ -33,7 +34,7 @@ def cluster_kmeans(
     chroma = create_chroma_client(chroma_path, model, provider) if use_chroma else None
 
     console.print(
-        f"[cyan]Running clustering: algo=kmeans, n_clusters={n_clusters}, model={model}, provider={provider}, use_chroma={use_chroma}, limit={limit}[/cyan]"
+        f"[cyan]Running clustering: algo=kmeans, n_clusters={n_clusters}, model={model}, provider={provider}, use_chroma={use_chroma}, dataset={dataset}, limit={limit}[/cyan]"
     )
 
     run_id = run_kmeans_clustering(
@@ -47,6 +48,7 @@ def cluster_kmeans(
         embedding_provider=provider,
         chroma=chroma,
         max_queries=limit,
+        dataset_label=dataset,
     )
 
     if run_id:

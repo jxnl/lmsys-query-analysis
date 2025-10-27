@@ -32,6 +32,7 @@ def run_kmeans_clustering(
     random_state: int = 42,
     chroma: ChromaManager | None = None,
     max_queries: int | None = None,
+    dataset_label: str | None = None,
 ) -> str:
     """Run MiniBatchKMeans clustering on all queries using streaming embeddings.
 
@@ -50,8 +51,23 @@ def run_kmeans_clustering(
     session = db.get_session()
 
     try:
+        # Build query with optional dataset filtering
+        from ..db.models import Dataset
+
+        dataset_id = None
+        if dataset_label:
+            dataset_record = session.exec(
+                select(Dataset).where(Dataset.name == dataset_label)
+            ).first()
+            if not dataset_record:
+                console.print(f"[red]Dataset '{dataset_label}' not found in database.[/red]")
+                return None
+            dataset_id = dataset_record.id
+            console.print(f"[cyan]Filtering queries for dataset: {dataset_label} (ID: {dataset_id})[/cyan]")
+
         console.print("Counting queries in database...")
-        count_result = session.exec(select(func.count()).select_from(Query)).one()
+        query_filter = Query.dataset_id == dataset_id if dataset_id else True
+        count_result = session.exec(select(func.count()).select_from(Query).where(query_filter)).one()
         total_queries = int(count_result[0] if isinstance(count_result, tuple) else count_result)
 
         if total_queries == 0:
@@ -79,6 +95,7 @@ def run_kmeans_clustering(
                 "encode_batch_size": embed_batch_size,
                 "mb_batch_size": mb_batch_size,
                 **({"limit": int(max_queries)} if max_queries is not None else {}),
+                **({"dataset_label": dataset_label, "dataset_id": dataset_id} if dataset_id else {}),
             },
             description=description,
             num_clusters=n_clusters,
@@ -105,7 +122,10 @@ def run_kmeans_clustering(
             target = effective_total
             while offset < target:
                 remaining = target - offset
-                stmt = select(Query).offset(offset).limit(min(chunk_size, remaining))
+                stmt = select(Query)
+                if dataset_id:
+                    stmt = stmt.where(Query.dataset_id == dataset_id)
+                stmt = stmt.offset(offset).limit(min(chunk_size, remaining))
                 rows = session.exec(stmt).all()
                 if not rows:
                     break
