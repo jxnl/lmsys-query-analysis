@@ -136,8 +136,8 @@ Use the Explore subagent to compare KMeans vs HDBSCAN clustering quality.
 Commands to run:
 1. uv run lmsys inspect kmeans-200-20251027-032824 3  # KMeans largest cluster
 2. uv run lmsys inspect hdbscan-10-20251027-033510 4  # HDBSCAN cluster 4
-3. uv run lmsys list-clusters kmeans-200-20251027-032824 --limit 10
-4. uv run lmsys list-clusters hdbscan-10-20251027-033510 --limit 10
+3. uv run lmsys list-clusters kmeans-200-20251027-032824 --limit 10 --xml
+4. uv run lmsys list-clusters hdbscan-10-20251027-033510 --limit 10 --xml
 
 Analysis criteria:
 - Max cluster size percentage (>50% indicates catch-all problem)
@@ -290,7 +290,7 @@ uv run lmsys merge-clusters <RUN_ID>
 uv run lmsys show-hierarchy <RUN_ID>
 
 # List all clusters with sizes
-uv run lmsys list-clusters <RUN_ID> --limit 100
+uv run lmsys list-clusters <RUN_ID> --limit 100 --xml
 
 # Inspect largest/most interesting clusters
 uv run lmsys inspect <RUN_ID> 4 --show-queries 20
@@ -604,7 +604,7 @@ uv run lmsys cluster kmeans --n-clusters 200 --use-chroma # Run clustering
 uv run lmsys runs --latest                                # Show most recent run
 uv run lmsys summarize <RUN_ID> --alias "v1"              # Generate cluster summaries
 uv run lmsys merge-clusters <RUN_ID>                      # Build hierarchy (ALWAYS!)
-uv run lmsys list-clusters <RUN_ID>                       # View cluster titles
+uv run lmsys list-clusters <RUN_ID> --xml                 # View cluster titles
 uv run lmsys search "python" --run-id <RUN_ID>            # Semantic search
 uv run lmsys summarize-dataset <SOURCE> --output <NAME> \
   --prompt "..." --limit 10000                             # Row summarization (dataset derivation)
