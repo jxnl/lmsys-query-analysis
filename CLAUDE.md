@@ -311,6 +311,150 @@ for q in queries:
 - ~20 queries/second with gpt-4o-mini
 - Structured output parsing via instructor
 
+**Ready-to-Use Command Examples**:
+
+```bash
+# 1. INTENT EXTRACTION - Classify user intent and extract properties
+uv run lmsys summarize-dataset lmsys-chat-1m \
+  --output lmsys-intent \
+  --limit 10000 \
+  --prompt 'You are analyzing user queries to LLMs to extract structured information.
+
+TASK: Extract core user intent and classify the query.
+
+OUTPUT FORMAT:
+- summary: One clear sentence describing what user wants (10-20 words)
+- properties: Extract these specific fields:
+  * intent: One of [code_generation, debugging, explanation, creative_writing, question_answering, translation, data_analysis, brainstorming, comparison, tutoring, other]
+  * complexity: Integer 1-5 (1=simple, 5=expert-level)
+  * domain: Primary topic (e.g., "python", "javascript", "math", "creative", "general")
+  * requires_code: Boolean - expect code in response?
+  * requires_step_by_step: Boolean - need procedural guidance?
+  * is_homework: Boolean - appears to be educational assignment?
+
+NORMALIZATION GUIDELINES:
+- Strip greetings, filler words, meta-commentary
+- Translate non-English to English for summary
+- Infer intent from context clues
+- Code snippets suggest debugging/code_generation
+
+Query to analyze: {query}' \
+  --model openai/gpt-4o-mini
+
+# 2. FRUSTRATION DETECTION - Identify emotional state and urgency
+uv run lmsys summarize-dataset lmsys-chat-1m \
+  --output lmsys-frustration \
+  --limit 10000 \
+  --prompt 'Analyze user query for frustration and urgency indicators.
+
+TASK: Assess emotional state and extract frustration metrics.
+
+OUTPUT FORMAT:
+- summary: Neutral restatement of request (strip emotional language)
+- properties:
+  * frustration_level: Integer 0-5 (0=calm, 5=extreme distress)
+  * urgency_level: Integer 0-5 (0=no pressure, 5=crisis)
+  * has_tried_solutions: Boolean - mentioned trying other solutions?
+  * is_repeat_attempt: Boolean - indicates recurring problem?
+  * politeness_level: Integer 0-3 (0=rude, 3=very polite)
+  * emotional_tone: One of [neutral, confused, frustrated, desperate, angry, polite, apologetic]
+
+FRUSTRATION INDICATORS:
+- High (3+): "I'\''ve tried X/Y/Z", "still not working", "I give up", "???"
+- Moderate (2): "doesn'\''t work", "keeps failing"
+
+URGENCY INDICATORS: "urgent", "ASAP", "deadline", "emergency", "production down"
+
+Query: {query}' \
+  --model openai/gpt-4o-mini
+
+# 3. TASK CLASSIFICATION - Categorize by cognitive task type
+uv run lmsys summarize-dataset lmsys-chat-1m \
+  --output lmsys-tasks \
+  --limit 10000 \
+  --prompt 'Classify query by cognitive task type and characteristics.
+
+TASK: Extract task type and cognitive properties.
+
+OUTPUT FORMAT:
+- summary: Normalized task description (10-15 words)
+- properties:
+  * task_type: One of [creative, analytical, procedural, factual, conversational, transformation, generation]
+  * cognitive_load: Integer 1-5 (1=simple recall, 5=expert synthesis)
+  * output_type: One of [code, text, analysis, data, explanation, creative_content, step_by_step]
+  * requires_context: Boolean - needs background knowledge?
+  * requires_creativity: Boolean - needs original thinking?
+  * has_constraints: Boolean - specific requirements mentioned?
+  * domain_expertise_needed: Boolean - specialized knowledge required?
+  * is_multi_step: Boolean - requires multiple distinct steps?
+
+COGNITIVE LOAD EXAMPLES:
+- Level 1: "What is Python?"
+- Level 2: "How to print in Python?"
+- Level 3: "Write Python function to reverse string"
+- Level 4: "Design doubly-linked list class"
+- Level 5: "Architect distributed monitoring system"
+
+Query: {query}' \
+  --model openai/gpt-4o-mini
+
+# 4. CHAINED SUMMARIZATION - Multi-level refinement
+# First: Extract intent
+uv run lmsys summarize-dataset lmsys-chat-1m \
+  --output level1-intent \
+  --limit 5000 \
+  --prompt 'Extract user intent concisely. Output: summary (one sentence), properties: intent, domain. Query: {query}'
+
+# Then: Further classify by frustration (on derived dataset)
+uv run lmsys summarize-dataset level1-intent \
+  --output level2-frustration \
+  --limit 5000 \
+  --prompt 'Rate frustration level. Output: summary (task only), properties: frustration_level (0-5). Query: {query}'
+
+# Check lineage
+uv run python -c "
+from lmsys_query_analysis.db.connection import Database
+from lmsys_query_analysis.db.models import Dataset
+from sqlmodel import select
+
+db = Database()
+session = db.get_session()
+ds = session.exec(select(Dataset).where(Dataset.name == 'level2-frustration')).first()
+print(f'Source: {ds.source_dataset_id}, Root: {ds.root_dataset_id}')
+session.close()
+"
+
+# 5. QUERY EXTRACTED PROPERTIES via SQL
+uv run python -c "
+from lmsys_query_analysis.db.connection import Database
+from lmsys_query_analysis.db.models import Query
+from sqlmodel import select
+
+db = Database()
+session = db.get_session()
+
+# Find all frustrated code generation queries
+stmt = select(Query).where(
+    Query.dataset_id == 2  # Adjust to your output dataset ID
+).limit(100)
+
+frustration_3_plus = 0
+code_gen = 0
+
+for q in session.exec(stmt).all():
+    meta = q.extra_metadata or {}
+    if meta.get('frustration_level', 0) >= 3:
+        frustration_3_plus += 1
+    if meta.get('intent') == 'code_generation':
+        code_gen += 1
+        if meta.get('frustration_level', 0) >= 3:
+            print(f'Frustrated code query: {q.query_text[:80]}...')
+
+print(f'\nStats: {frustration_3_plus} frustrated, {code_gen} code generation')
+session.close()
+"
+```
+
 ### Extensibility
 
 If agents identify gaps in functionality or need additional tools to enhance their analysis capabilities, they should suggest these improvements to the user for potential implementation.
@@ -369,10 +513,12 @@ uv run lmsys --help                                        # Show all commands
 uv run lmsys load --limit 10000 --use-chroma              # Load LMSYS (default)
 uv run lmsys cluster kmeans --n-clusters 200 --use-chroma # Run clustering
 uv run lmsys runs --latest                                # Show most recent run
-uv run lmsys summarize <RUN_ID> --alias "v1"              # Generate LLM summaries
-uv run lmsys merge-clusters <RUN_ID>                      # Build hierarchy
+uv run lmsys summarize <RUN_ID> --alias "v1"              # Generate cluster summaries
+uv run lmsys merge-clusters <RUN_ID>                      # Build hierarchy (ALWAYS!)
 uv run lmsys list-clusters <RUN_ID>                       # View cluster titles
 uv run lmsys search "python" --run-id <RUN_ID>            # Semantic search
+uv run lmsys summarize-dataset <SOURCE> --output <NAME> \
+  --prompt "..." --limit 10000                             # Row summarization (dataset derivation)
 ```
 
 **Loading custom datasets with column mapping:**
