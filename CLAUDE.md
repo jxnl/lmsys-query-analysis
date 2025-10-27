@@ -28,12 +28,18 @@ The CLI implements specialized tools across multiple categories:
 - List and compare clustering runs with different parameters
 - Get detailed cluster statistics and metadata
 - Identify outliers and anomalies automatically
+- **ALWAYS run hierarchical merging after clustering** to organize clusters into navigable taxonomies
 
 **3. Summarization Tools**
-- Generate LLM-powered cluster summaries and descriptions
-- Create multiple summary runs to compare different models or prompts
-- Extract representative queries and key themes
-- Support contrastive analysis (what makes each cluster unique)
+- **Cluster Summarization**: Generate LLM-powered cluster summaries and descriptions
+  - Create multiple summary runs to compare different models or prompts
+  - Extract representative queries and key themes
+  - Support contrastive analysis (what makes each cluster unique)
+- **Row Summarization** (Dataset Derivation): Transform raw queries using LLM into structured, canonical representations
+  - Create derived datasets with normalized/classified queries
+  - Extract structured properties (intent, complexity, domain, emotional state, etc.)
+  - Support chained transformations (summarize a summary)
+  - Enable hypothesis-driven data exploration with custom prompts
 
 **4. Hierarchy Tools**
 - Build multi-level cluster taxonomies using Anthropic Clio methodology
@@ -81,7 +87,9 @@ Agents use these tools to autonomously explore data and discover insights:
 
 **Key Innovation**: Agents make autonomous decisions about what to investigate, which tools to compose, when to drill down vs. zoom out, and when they have found enough insights. No pre-defined workflow required.
 
-All capabilities are accessible through the `lmsys` CLI command in composable workflows: `load → cluster → summarize → merge-clusters → search → inspect → edit → export`
+All capabilities are accessible through the `lmsys` CLI command in composable workflows: `load → cluster → summarize → **merge-clusters** → search → inspect → edit → export`
+
+**CRITICAL**: Always run `merge-clusters` after clustering and summarization. This step is required to organize clusters into navigable hierarchies and should never be skipped.
 
 ### Using Subagents for Cluster Quality Validation
 
@@ -197,6 +205,111 @@ npm run dev  # Opens http://localhost:3000
 ```
 
 The viewer uses only SQLite (no ChromaDB server). All search uses SQL LIKE queries. See `web/README.md` for full documentation.
+
+### Row Summarization: LLM-Based Dataset Derivation
+
+**Purpose**: Transform raw queries using LLM into structured, canonical representations for hypothesis-driven analysis.
+
+**Key Use Cases**:
+- **Intent extraction**: Classify queries by intent (code_generation, debugging, explanation, etc.)
+- **Emotional analysis**: Detect frustration, urgency, politeness levels
+- **Task classification**: Categorize by cognitive task type and complexity
+- **Normalization**: Remove greetings, translate to English, extract core request
+- **Property extraction**: Pull out structured fields (domain, requires_code, is_homework, etc.)
+- **Chained transformations**: Summarize a summary to create multi-level data pipelines
+
+**Command**: `lmsys summarize-dataset`
+
+**CRITICAL PROMPT REQUIREMENTS**:
+- ⚠️ **Write DETAILED, COMPREHENSIVE prompts (200-500 words recommended)**
+- Short prompts produce low-quality, inconsistent results
+- Include: task description, output format, edge cases, property definitions, examples
+- Use instructor's structured output format with Pydantic models
+
+**Basic Usage**:
+```bash
+# Create a detailed prompt file
+cat > intent_prompt.txt << 'EOF'
+You are analyzing user queries to extract structured information.
+
+TASK: Extract core user intent and classify the query.
+
+OUTPUT FORMAT:
+- summary: One clear sentence describing what user wants (10-15 words)
+- properties: Extract these specific fields:
+  * intent: One of [code_generation, debugging, explanation, creative_writing, 
+    question_answering, translation, data_analysis, other]
+  * complexity: Integer 1-5 (1=simple, 5=expert-level)
+  * domain: Primary topic (e.g., "python", "javascript", "general")
+  * requires_code: Boolean - expect code in response?
+
+GUIDELINES:
+- Strip greetings and filler words
+- Translate non-English to English for summary
+- Infer intent from context clues
+- Code snippets suggest debugging/code_generation
+
+Now analyze: {query}
+EOF
+
+# Run summarization
+uv run lmsys summarize-dataset lmsys-chat-1m \
+  --output lmsys-intent \
+  --prompt "$(cat intent_prompt.txt)" \
+  --model openai/gpt-4o-mini \
+  --limit 10000
+```
+
+**Advanced: Chained Summarization**:
+```bash
+# Level 1: Extract intent
+uv run lmsys summarize-dataset lmsys-chat-1m \
+  --output level1-intent \
+  --prompt "$(cat intent_prompt.txt)" \
+  --limit 10000
+
+# Level 2: Further classify by frustration
+uv run lmsys summarize-dataset level1-intent \
+  --output level2-frustration \
+  --prompt "$(cat frustration_prompt.txt)" \
+  --limit 10000
+
+# Lineage tracking: level2-frustration.root_dataset_id → lmsys-chat-1m
+```
+
+**Querying Extracted Properties**:
+```bash
+# Properties are stored in extra_metadata JSON field
+uv run python -c "
+from lmsys_query_analysis.db.connection import Database
+from lmsys_query_analysis.db.models import Query
+from sqlmodel import select
+
+db = Database()
+session = db.get_session()
+
+# Find all code generation queries
+queries = session.exec(
+    select(Query).where(
+        Query.dataset_id == 2,
+        Query.extra_metadata['intent'].as_string() == 'code_generation'
+    ).limit(10)
+).all()
+
+for q in queries:
+    print(f'{q.query_text} | Complexity: {q.extra_metadata[\"complexity\"]}')
+"
+```
+
+**Example Prompts**:
+- Intent extraction: See test results above
+- Frustration detection: emotional_tone, urgency_level, frustration_level (0-5)
+- Task classification: task_type, cognitive_load, requires_creativity, is_multi_step
+
+**Performance**:
+- 100 concurrent requests by default
+- ~20 queries/second with gpt-4o-mini
+- Structured output parsing via instructor
 
 ### Extensibility
 
@@ -585,6 +698,46 @@ Generate **3-5 specific hypotheses** to investigate. Examples:
 - "Hypothesis: Cluster 47 contains failed code generation attempts that could be improved with better prompting"
 - "Hypothesis: 15% of queries are creative writing requests that could be served by a specialized model"
 - "Hypothesis: Multi-turn debugging conversations have 3x higher failure rates than single-turn queries"
+
+### Phase 2.5: Dataset Derivation for Hypothesis Testing (Optional)
+
+If hypotheses require custom classification or property extraction, **use row summarization** to create derived datasets:
+
+```bash
+# Example: Test hypothesis "20% of queries show user frustration"
+cat > frustration_prompt.txt << 'EOF'
+Analyze user query for frustration indicators.
+
+OUTPUT:
+- summary: Neutral restatement of request (strip emotional language)
+- properties:
+  * frustration_level: 0-5 (0=calm, 5=extreme distress)
+  * urgency_level: 0-5 (0=no pressure, 5=crisis)
+  * has_tried_solutions: Boolean
+  * emotional_tone: One of [neutral, frustrated, desperate, angry, polite]
+
+Frustration indicators: "still not working", "I've tried X/Y/Z", "???"
+Urgency indicators: "ASAP", "urgent", "deadline", "emergency"
+
+Query: {query}
+EOF
+
+uv run lmsys summarize-dataset lmsys-chat-1m \
+  --output lmsys-frustration \
+  --prompt "$(cat frustration_prompt.txt)" \
+  --limit 50000
+
+# Then cluster on the derived dataset to find frustration patterns
+uv run lmsys cluster kmeans --n-clusters 50 --use-chroma
+uv run lmsys summarize <RUN_ID> --alias "frustration-clusters"
+uv run lmsys merge-clusters <RUN_ID>  # ALWAYS run this!
+```
+
+**When to use row summarization**:
+- Testing specific hypotheses requiring custom classification
+- Extracting structured properties not in raw data (intent, emotion, task type)
+- Normalizing heterogeneous queries (remove greetings, translate languages)
+- Creating multi-level analytical pipelines (raw → intent → sub-classification)
 
 ### Phase 3: Parallel Investigation with Sub-Agents
 
