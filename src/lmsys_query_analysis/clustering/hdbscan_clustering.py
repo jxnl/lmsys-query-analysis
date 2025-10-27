@@ -3,6 +3,7 @@
 import hdbscan
 import numpy as np
 from rich.console import Console
+from sqlalchemy import func
 from sqlmodel import select
 
 from ..db.chroma import ChromaManager
@@ -135,6 +136,7 @@ def run_hdbscan_clustering(
     metric: str = "euclidean",
     chroma: ChromaManager | None = None,
     max_queries: int | None = None,
+    dataset_label: str | None = None,
 ) -> str:
     """Run HDBSCAN clustering on all queries in the database.
 
@@ -142,14 +144,35 @@ def run_hdbscan_clustering(
     """
     session = db.get_session()
     try:
-        total_ids = session.exec(select(Query.id)).all()
-        if not total_ids:
+        # Build query with optional dataset filtering
+        from ..db.models import Dataset
+
+        dataset_id = None
+        if dataset_label:
+            dataset_record = session.exec(
+                select(Dataset).where(Dataset.name == dataset_label)
+            ).first()
+            if not dataset_record:
+                console.print(f"[red]Dataset '{dataset_label}' not found in database.[/red]")
+                return None
+            dataset_id = dataset_record.id
+            console.print(f"[cyan]Filtering queries for dataset: {dataset_label} (ID: {dataset_id})[/cyan]")
+
+        console.print("Counting queries in database...")
+        query_filter = Query.dataset_id == dataset_id if dataset_id else True
+        count_result = session.exec(select(func.count()).select_from(Query).where(query_filter)).one()
+        total_queries = int(count_result[0] if isinstance(count_result, tuple) else count_result)
+
+        if total_queries == 0:
             console.print("[red]No queries found in database. Run 'lmsys load' first.[/red]")
             return None
-        total_queries = len(total_ids)
+
         effective_total = (
             total_queries if max_queries is None else min(total_queries, int(max_queries))
         )
+        console.print(f"[green]Found {total_queries} queries[/green]")
+        if max_queries is not None and effective_total < total_queries:
+            console.print(f"[yellow]Limiting to first {effective_total} queries[/yellow]")
 
         # Load texts and ids in chunks and embed
         def iter_query_chunks() -> list[Query]:
@@ -157,9 +180,11 @@ def run_hdbscan_clustering(
             target = effective_total
             while offset < target:
                 remaining = target - offset
-                rows = session.exec(
-                    select(Query).offset(offset).limit(min(chunk_size, remaining))
-                ).all()
+                stmt = select(Query)
+                if dataset_id:
+                    stmt = stmt.where(Query.dataset_id == dataset_id)
+                stmt = stmt.offset(offset).limit(min(chunk_size, remaining))
+                rows = session.exec(stmt).all()
                 if not rows:
                     break
                 yield rows
@@ -203,6 +228,7 @@ def run_hdbscan_clustering(
                 "cluster_selection_epsilon": cluster_selection_epsilon,
                 "metric": metric,
                 **({"limit": int(max_queries)} if max_queries is not None else {}),
+                **({" dataset_label": dataset_label, "dataset_id": dataset_id} if dataset_id else {}),
             },
             description=description,
             num_clusters=int(len(set(labels)) - (1 if -1 in labels else 0)),

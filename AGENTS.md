@@ -32,7 +32,11 @@ If agents identify gaps in functionality or need additional tools to enhance the
 - Load data: `uv run lmsys load --limit 10000 --use-chroma` — download HF dataset, write SQLite, add embeddings to Chroma.
 - Cluster: `uv run lmsys cluster kmeans --n-clusters 200 --use-chroma` — embed + KMeans + optional Chroma summaries.
 - View runs: `uv run lmsys runs --latest` — show the most recent clustering run.
+- Lint: `uv run ruff check .` — check code style; add `--fix` to auto-fix issues.
+- Format: `uv run ruff format .` — format code with Ruff formatter.
 - Tests: `uv run pytest -v` — run all tests; add `--cov=src/lmsys_query_analysis` for coverage.
+- Single test: `uv run pytest tests/path/test_file.py::test_function -v` — run one specific test.
+- Smoke tests: `uv run pytest -m smoke -v` — run smoke tests (requires API keys).
 
 ## Coding Style & Naming
 
@@ -58,6 +62,7 @@ If agents identify gaps in functionality or need additional tools to enhance the
 - API keys (LLM): set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `COHERE_API_KEY`, or `GROQ_API_KEY` in your shell, not in code.
 - On this machine, API keys are exported in `~/.zshrc`. The CLI inherits them if you run via your shell (e.g., `uv run lmsys ...`). If running via another environment that doesn’t source `~/.zshrc`, explicitly export the keys in that session.
 - Defaults: SQLite at `~/.lmsys-query-analysis/queries.db`; Chroma at `~/.lmsys-query-analysis/chroma`.
+- **ALWAYS clear database before loading new data**: Use `uv run lmsys clear --yes` to avoid duplicates and source conflicts. Use `--db-path` and `--chroma-path` flags for custom database locations or testing with temp databases.
 
 ## Command Naming
 

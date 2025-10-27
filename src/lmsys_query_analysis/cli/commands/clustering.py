@@ -65,6 +65,7 @@ def cluster_kmeans(
 def cluster_hdbscan(
     description: str = typer.Option("", help="Description of this clustering run"),
     db_path: str = db_path_option,
+    dataset: str = typer.Option(None, help="Filter queries by dataset label"),
     embedding_model: str = embedding_model_option,
     embed_batch_size: int = typer.Option(50, help="Embedding encode batch size"),
     chunk_size: int = typer.Option(5000, help="DB iteration chunk size"),
@@ -82,7 +83,7 @@ def cluster_hdbscan(
     chroma = create_chroma_client(chroma_path, model, provider) if use_chroma else None
 
     console.print(
-        f"[cyan]Running clustering: algo=hdbscan, model={model}, provider={provider}, use_chroma={use_chroma}, limit={limit}[/cyan]"
+        f"[cyan]Running clustering: algo=hdbscan, model={model}, provider={provider}, use_chroma={use_chroma}, dataset={dataset}, limit={limit}[/cyan]"
     )
 
     run_id = run_hdbscan_clustering(
@@ -98,6 +99,7 @@ def cluster_hdbscan(
         metric=metric,
         chroma=chroma,
         max_queries=limit,
+        dataset_label=dataset,
     )
 
     if run_id:

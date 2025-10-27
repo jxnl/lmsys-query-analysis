@@ -25,6 +25,7 @@ export function JobsTable({ runs }: JobsTableProps) {
           <TableRow>
             <TableHead>Run ID</TableHead>
             <TableHead>Algorithm</TableHead>
+            <TableHead>Dataset</TableHead>
             <TableHead className="text-right">Clusters</TableHead>
             <TableHead>Embedding Model</TableHead>
             <TableHead>Merge Params</TableHead>
@@ -35,7 +36,7 @@ export function JobsTable({ runs }: JobsTableProps) {
         <TableBody>
           {runs.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground">
+              <TableCell colSpan={8} className="text-center text-muted-foreground">
                 No clustering runs found. Run `lmsys cluster` to create one.
               </TableCell>
             </TableRow>
@@ -46,6 +47,7 @@ export function JobsTable({ runs }: JobsTableProps) {
               const embeddingProvider = params?.embedding_provider as string | undefined;
               const embeddingModel = params?.embedding_model as string | undefined;
               const embeddingDimension = params?.embedding_dimension as number | undefined;
+              const datasetLabel = params?.dataset_label as string | undefined;
 
               // Filter out embedding-related and redundant parameters
               const excludeKeys = new Set([
@@ -54,6 +56,8 @@ export function JobsTable({ runs }: JobsTableProps) {
                 "embedding_dimension",
                 "n_clusters",
                 "num_clusters",
+                "dataset_label",
+                "dataset_id",
               ]);
 
               const otherParams = params
@@ -75,6 +79,13 @@ export function JobsTable({ runs }: JobsTableProps) {
                   <TableCell className="font-mono text-sm">{run.run_id}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{run.algorithm}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    {datasetLabel ? (
+                      <Badge variant="secondary">{datasetLabel}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">{run.num_clusters || "N/A"}</TableCell>
                   <TableCell className="text-sm">
