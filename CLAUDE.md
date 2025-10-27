@@ -311,10 +311,178 @@ for q in queries:
 - ~20 queries/second with gpt-4o-mini
 - Structured output parsing via instructor
 
-**Ready-to-Use Command Examples**:
+**Complete End-to-End Analysis Workflow**:
 
 ```bash
-# 1. INTENT EXTRACTION - Classify user intent and extract properties
+# ============================================================================
+# STEP 1: LOAD DATA (Choose limit based on analysis scope)
+# ============================================================================
+# Small exploration (fast, good for testing): --limit 1000-5000
+# Medium analysis (balanced): --limit 10000-50000
+# Full analysis (comprehensive): --limit 100000+
+# ALWAYS use --use-chroma for semantic search capabilities
+
+uv run lmsys clear --yes  # Clear previous data
+
+uv run lmsys load --limit 10000 --use-chroma
+# What this does:
+# - Downloads LMSYS-1M dataset from HuggingFace
+# - Extracts first user query from each conversation
+# - Generates embeddings with OpenAI text-embedding-3-small (default)
+# - Stores in SQLite (~/.lmsys-query-analysis/queries.db)
+# - Stores embeddings in ChromaDB (~/.lmsys-query-analysis/chroma)
+# Time: ~2-3 min for 10k queries
+
+# ============================================================================
+# STEP 2: RUN CLUSTERING (Choose algorithm and parameters)
+# ============================================================================
+# KMeans: Good for forcing N clusters, faster, works on diverse data
+#   - n_clusters heuristic: sqrt(N) to N/50
+#   - For 10k queries: try 100-200 clusters
+#   - For 50k queries: try 200-500 clusters
+# HDBSCAN: Finds natural clusters, better coherence, can leave outliers
+#   - min_cluster_size: 10-50 (smaller = more clusters)
+#   - For 10k queries: try min_cluster_size=20-30
+
+# Option A: KMeans (recommended for first pass)
+uv run lmsys cluster kmeans --n-clusters 200 --use-chroma
+# Time: ~3-5 min for 10k queries with 200 clusters
+
+# Option B: HDBSCAN (for high-quality clusters)
+uv run lmsys cluster hdbscan --min-cluster-size 20 --use-chroma
+# Time: ~5-10 min for 10k queries
+
+# ============================================================================
+# STEP 3: CHECK RUN STATUS
+# ============================================================================
+uv run lmsys runs --latest
+# Shows: run_id, algorithm, num_clusters, parameters, created_at
+# Copy the run_id (e.g., "kmeans-200-20251027-123456")
+
+# ============================================================================
+# STEP 4: GENERATE CLUSTER SUMMARIES (REQUIRED)
+# ============================================================================
+# Model choices:
+# - openai/gpt-4o-mini: Fast, cheap, good quality (RECOMMENDED)
+# - openai/gpt-4o: Higher quality, slower, more expensive
+# - anthropic/claude-sonnet-4-5-20250929: Excellent quality, slower
+# - groq/llama-3.1-8b-instant: Very fast, lower quality
+
+uv run lmsys summarize <RUN_ID> --alias "analysis-v1" \
+  --model openai/gpt-4o-mini --concurrency 40
+# What this does:
+# - Generates title and description for each cluster
+# - Uses contrastive learning (compares to neighbor clusters)
+# - Stores in cluster_summaries table with summary_run_id
+# - --alias gives friendly name for this summary run
+# - --concurrency: 20-50 for gpt-4o-mini, 5-10 for Claude
+# Time: ~2-5 min for 200 clusters with gpt-4o-mini
+
+# ============================================================================
+# STEP 5: BUILD HIERARCHY (ALWAYS DO THIS!)
+# ============================================================================
+uv run lmsys merge-clusters <RUN_ID>
+# What this does:
+# - Groups related clusters into parent categories
+# - Creates 2-3 level hierarchy (leaf → mid-level → top-level)
+# - Uses Anthropic Clio methodology with LLM-driven merging
+# - Enables top-down navigation from themes to specific patterns
+# Time: ~5-10 min for 200 clusters
+# CRITICAL: Always run this - it's required for navigable results
+
+# ============================================================================
+# STEP 6: EXPLORE RESULTS
+# ============================================================================
+
+# 6a. View cluster list with hierarchical organization
+uv run lmsys list-clusters <RUN_ID> --limit 50
+# Shows: cluster_id, title, num_queries, hierarchy level
+# Use this to get overview of what was found
+
+# 6b. View hierarchy tree structure
+uv run lmsys show-hierarchy <RUN_ID>
+# Shows: tree view of parent-child relationships
+# Navigate from broad themes to specific patterns
+
+# 6c. Inspect specific clusters (deep-dive)
+uv run lmsys inspect <RUN_ID> 4 --show-queries 20
+# Replace "4" with interesting cluster_id from list-clusters
+# Shows: title, description, sample queries, statistics
+# Use this to validate cluster quality and understand contents
+
+# 6d. Semantic search across queries (find specific examples)
+uv run lmsys search "python debugging" --run-id <RUN_ID> --n-results 20 --xml
+# ALWAYS use --xml for full non-truncated output
+# ALWAYS use --run-id to ensure vector space consistency
+# Returns: matching queries with cluster assignments
+
+# 6e. Semantic search for clusters (find themes)
+uv run lmsys search "creative writing" --search-type clusters \
+  --run-id <RUN_ID> --n-results 10 --xml
+# Finds clusters whose titles/descriptions match the search
+
+# 6f. Two-stage search (contextual search within theme)
+uv run lmsys search "error handling" --run-id <RUN_ID> \
+  --within-clusters "python programming" --top-clusters 3 \
+  --n-results 20 --xml
+# First finds top 3 clusters about "python programming"
+# Then searches for "error handling" within those clusters
+# Most powerful search method for specific investigations
+
+# 6g. Faceted analysis (understand distribution)
+uv run lmsys search "debugging" --run-id <RUN_ID> \
+  --facets cluster,model,language --n-results 100 --xml
+# Shows which clusters, models, languages handle debugging queries
+# Use for quantifying patterns across dimensions
+
+# ============================================================================
+# STEP 7 (OPTIONAL): ROW SUMMARIZATION FOR HYPOTHESIS TESTING
+# ============================================================================
+# Only use if you need custom classification/property extraction
+# Example: Test hypothesis "15% of queries show frustration"
+
+# 7a. Create derived dataset with intent extraction
+uv run lmsys summarize-dataset lmsys-chat-1m \
+  --output lmsys-intent \
+  --limit 10000 \
+  --model openai/gpt-4o-mini \
+  --prompt '<FULL_DETAILED_PROMPT_HERE>'
+# See full prompt examples below
+# Time: ~8-10 min for 10k queries
+
+# 7b. Cluster the derived dataset
+uv run lmsys cluster kmeans --n-clusters 100 --use-chroma
+uv run lmsys summarize <NEW_RUN_ID> --alias "intent-clusters"
+uv run lmsys merge-clusters <NEW_RUN_ID>  # ALWAYS!
+
+# 7c. Query extracted properties via SQL
+uv run python -c "
+from lmsys_query_analysis.db.connection import Database
+from lmsys_query_analysis.db.models import Query
+from sqlmodel import select
+
+db = Database()
+session = db.get_session()
+
+# Find high-frustration queries
+high_frustration = session.exec(
+    select(Query).where(Query.dataset_id == 2)  # Adjust dataset_id
+).all()
+
+frustrated_count = sum(
+    1 for q in high_frustration 
+    if q.extra_metadata and q.extra_metadata.get('frustration_level', 0) >= 3
+)
+
+print(f'High frustration: {frustrated_count}/{len(high_frustration)} queries')
+session.close()
+"
+```
+
+**Row Summarization Prompt Examples** (Use for STEP 7):
+
+```bash
+# EXAMPLE 1: INTENT EXTRACTION - Classify user intent and extract properties
 uv run lmsys summarize-dataset lmsys-chat-1m \
   --output lmsys-intent \
   --limit 10000 \
@@ -503,63 +671,23 @@ EXAMPLES:
 Now classify this query by cognitive task type:
 {query}' \
   --model openai/gpt-4o-mini
-
-# 4. CHAINED SUMMARIZATION - Multi-level refinement
-# First: Extract intent
-uv run lmsys summarize-dataset lmsys-chat-1m \
-  --output level1-intent \
-  --limit 5000 \
-  --prompt 'Extract user intent concisely. Output: summary (one sentence), properties: intent, domain. Query: {query}'
-
-# Then: Further classify by frustration (on derived dataset)
-uv run lmsys summarize-dataset level1-intent \
-  --output level2-frustration \
-  --limit 5000 \
-  --prompt 'Rate frustration level. Output: summary (task only), properties: frustration_level (0-5). Query: {query}'
-
-# Check lineage
-uv run python -c "
-from lmsys_query_analysis.db.connection import Database
-from lmsys_query_analysis.db.models import Dataset
-from sqlmodel import select
-
-db = Database()
-session = db.get_session()
-ds = session.exec(select(Dataset).where(Dataset.name == 'level2-frustration')).first()
-print(f'Source: {ds.source_dataset_id}, Root: {ds.root_dataset_id}')
-session.close()
-"
-
-# 5. QUERY EXTRACTED PROPERTIES via SQL
-uv run python -c "
-from lmsys_query_analysis.db.connection import Database
-from lmsys_query_analysis.db.models import Query
-from sqlmodel import select
-
-db = Database()
-session = db.get_session()
-
-# Find all frustrated code generation queries
-stmt = select(Query).where(
-    Query.dataset_id == 2  # Adjust to your output dataset ID
-).limit(100)
-
-frustration_3_plus = 0
-code_gen = 0
-
-for q in session.exec(stmt).all():
-    meta = q.extra_metadata or {}
-    if meta.get('frustration_level', 0) >= 3:
-        frustration_3_plus += 1
-    if meta.get('intent') == 'code_generation':
-        code_gen += 1
-        if meta.get('frustration_level', 0) >= 3:
-            print(f'Frustrated code query: {q.query_text[:80]}...')
-
-print(f'\nStats: {frustration_3_plus} frustrated, {code_gen} code generation')
-session.close()
-"
 ```
+
+**Parameter Decision Guide**:
+
+| Parameter | Small Analysis | Medium Analysis | Large Analysis |
+|-----------|---------------|-----------------|----------------|
+| `--limit` (load) | 1,000-5,000 | 10,000-50,000 | 100,000+ |
+| `--n-clusters` (kmeans) | 50-100 | 100-300 | 300-1000 |
+| `--min-cluster-size` (hdbscan) | 20-30 | 10-20 | 5-15 |
+| `--concurrency` (summarize) | 20-40 | 40-60 | 40-80 |
+| Row summarization `--limit` | 5,000-10,000 | 10,000-50,000 | 50,000+ |
+
+**Heuristics**:
+- **n_clusters**: Start with `sqrt(num_queries)`, adjust based on cluster sizes
+- **min_cluster_size**: Smaller values = more clusters, but risk noise
+- **concurrency**: Higher for fast models (gpt-4o-mini), lower for Claude
+- **Row summarization**: Only use when you need custom properties not in raw data
 
 ### Extensibility
 
