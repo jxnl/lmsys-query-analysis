@@ -223,3 +223,58 @@ def test_load_command_defaults_to_lmsys_dataset(
     mock_load_dataset.assert_called_once()
     call_kwargs = mock_load_dataset.call_args[1]
     assert call_kwargs["dataset_name"] == "lmsys/lmsys-chat-1m"
+
+
+@patch("lmsys_query_analysis.cli.commands.data.load_dataset")
+@patch("lmsys_query_analysis.cli.commands.data.get_db")
+@patch("lmsys_query_analysis.cli.commands.data.create_chroma_client")
+@patch("lmsys_query_analysis.cli.commands.data.parse_embedding_model")
+def test_load_command_with_custom_column_mapping(
+    mock_parse, mock_chroma_client, mock_get_db, mock_load_dataset
+):
+    """Test load command with custom column mapping options."""
+    from lmsys_query_analysis.cli.commands.data import load
+
+    # Setup mocks
+    mock_parse.return_value = ("test-model", "test-provider")
+    mock_db = Mock()
+    mock_db.db_path = Path("/tmp/test.db")
+    mock_get_db.return_value = mock_db
+    mock_load_dataset.return_value = {
+        "total_processed": 10,
+        "loaded": 10,
+        "skipped": 0,
+        "errors": 0,
+    }
+
+    # Execute command with custom column mappings
+    load(
+        limit=10,
+        db_path="/tmp/test.db",
+        use_chroma=False,
+        hf="custom/dataset",
+        chroma_path="/tmp/chroma",
+        embedding_model="test-model",
+        db_batch_size=1000,
+        streaming=False,
+        no_pragmas=False,
+        force_reload=False,
+        text_column="prompt",
+        text_format=True,
+        model_column="llm_name",
+        language_column="lang_code",
+        timestamp_column="created_at",
+        conversation_id_column="chat_id",
+        model_default="unknown-model",
+    )
+
+    # Verify load_dataset was called with custom mappings
+    mock_load_dataset.assert_called_once()
+    call_kwargs = mock_load_dataset.call_args[1]
+    assert call_kwargs["text_column"] == "prompt"
+    assert call_kwargs["is_conversation_format"] is False  # text_format=True means not conversation
+    assert call_kwargs["model_column"] == "llm_name"
+    assert call_kwargs["language_column"] == "lang_code"
+    assert call_kwargs["timestamp_column"] == "created_at"
+    assert call_kwargs["conversation_id_column"] == "chat_id"
+    assert call_kwargs["model_default"] == "unknown-model"

@@ -38,6 +38,13 @@ def load_dataset(
     use_streaming: bool = False,
     apply_pragmas: bool = True,
     dataset_name: str = "lmsys/lmsys-chat-1m",
+    text_column: str = "conversation",
+    is_conversation_format: bool = True,
+    model_column: str = "model",
+    language_column: str = "language",
+    timestamp_column: str = "timestamp",
+    conversation_id_column: str = "conversation_id",
+    model_default: str = "unknown",
 ) -> dict:
     """Load dataset from HuggingFace (or other sources in future).
 
@@ -52,6 +59,13 @@ def load_dataset(
         use_streaming: Use streaming dataset iteration
         apply_pragmas: Apply SQLite PRAGMA speedups during load
         dataset_name: HuggingFace dataset identifier (default: lmsys/lmsys-chat-1m)
+        text_column: Column name for query text (default: "conversation")
+        is_conversation_format: Whether to parse as conversation JSON (default: True)
+        model_column: Column name for model field (default: "model")
+        language_column: Column name for language field (default: "language")
+        timestamp_column: Column name for timestamp field (default: "timestamp")
+        conversation_id_column: Column name for conversation_id field (default: "conversation_id")
+        model_default: Default value for model if column missing (default: "unknown")
 
     Returns:
         Dictionary with loading statistics
@@ -81,6 +95,13 @@ def load_dataset(
             split="train",
             limit=limit,
             use_streaming=use_streaming,
+            query_column=text_column,
+            is_conversation_format=is_conversation_format,
+            model_column=model_column,
+            language_column=language_column,
+            timestamp_column=timestamp_column,
+            conversation_id_column=conversation_id_column,
+            model_default=model_default,
         )
 
         progress.update(task, completed=True, description="[green]Dataset downloaded")

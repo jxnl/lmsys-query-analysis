@@ -39,6 +39,29 @@ def load(
     force_reload: bool = typer.Option(
         False, "--force-reload", help="Reload existing queries (skip duplicate check)"
     ),
+    text_column: str = typer.Option(
+        "conversation", "--text-column", help="Dataset column name for query text"
+    ),
+    text_format: bool = typer.Option(
+        False, "--text-format", help="Read text directly (not JSON conversation format)"
+    ),
+    model_column: str = typer.Option(
+        "model", "--model-column", help="Dataset column name for model field"
+    ),
+    language_column: str = typer.Option(
+        "language", "--language-column", help="Dataset column name for language field"
+    ),
+    timestamp_column: str = typer.Option(
+        "timestamp", "--timestamp-column", help="Dataset column name for timestamp field"
+    ),
+    conversation_id_column: str = typer.Option(
+        "conversation_id",
+        "--conversation-id-column",
+        help="Dataset column name for conversation_id field",
+    ),
+    model_default: str = typer.Option(
+        "unknown", "--model-default", help="Default value for model field if column missing"
+    ),
 ):
     """Download and load HuggingFace dataset into SQLite."""
     model, provider = parse_embedding_model(embedding_model)
@@ -61,6 +84,13 @@ def load(
         use_streaming=streaming,
         apply_pragmas=not no_pragmas,
         dataset_name=hf,
+        text_column=text_column,
+        is_conversation_format=not text_format,
+        model_column=model_column,
+        language_column=language_column,
+        timestamp_column=timestamp_column,
+        conversation_id_column=conversation_id_column,
+        model_default=model_default,
     )
 
     # Display results

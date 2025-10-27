@@ -146,6 +146,11 @@ class HuggingFaceAdapter:
         use_streaming: bool = False,
         query_column: str = "conversation",
         is_conversation_format: bool = True,
+        model_column: str = "model",
+        language_column: str = "language",
+        timestamp_column: str = "timestamp",
+        conversation_id_column: str = "conversation_id",
+        model_default: str = "unknown",
     ):
         """Initialize the HuggingFace adapter.
 
@@ -156,6 +161,11 @@ class HuggingFaceAdapter:
             use_streaming: Whether to use streaming mode
             query_column: Column name for query text (default: "conversation")
             is_conversation_format: Whether to parse as conversation JSON (default: True)
+            model_column: Column name for model field (default: "model")
+            language_column: Column name for language field (default: "language")
+            timestamp_column: Column name for timestamp field (default: "timestamp")
+            conversation_id_column: Column name for conversation_id field (default: "conversation_id")
+            model_default: Default value for model if column missing (default: "unknown")
         """
         self.dataset_name = dataset_name
         self.split = split
@@ -163,6 +173,11 @@ class HuggingFaceAdapter:
         self.use_streaming = use_streaming
         self.query_column = query_column
         self.is_conversation_format = is_conversation_format
+        self.model_column = model_column
+        self.language_column = language_column
+        self.timestamp_column = timestamp_column
+        self.conversation_id_column = conversation_id_column
+        self.model_default = model_default
 
         # Load the dataset
         if use_streaming:
@@ -238,20 +253,21 @@ class HuggingFaceAdapter:
                 extra_metadata = {}
 
                 # Include any additional fields from row as metadata
+                # Exclude all mapped column names (configurable)
                 for key, value in row.items():
                     if key not in [
                         self.query_column,
-                        "conversation_id",
-                        "model",
-                        "language",
-                        "timestamp",
+                        self.conversation_id_column,
+                        self.model_column,
+                        self.language_column,
+                        self.timestamp_column,
                     ]:
                         extra_metadata[key] = value
 
-            # Extract common metadata
-            model = row.get("model", "unknown")
-            language = row.get("language") or None
-            timestamp = row.get("timestamp")
+            # Extract common metadata using configurable column names
+            model = row.get(self.model_column, self.model_default)
+            language = row.get(self.language_column) or None
+            timestamp = row.get(self.timestamp_column)
 
             # Yield normalized record
             yield {
@@ -275,8 +291,7 @@ class HuggingFaceAdapter:
         # For non-streaming with limit applied
         return len(self._dataset)
 
-    @staticmethod
-    def _get_or_generate_conversation_id(row: dict) -> str:
+    def _get_or_generate_conversation_id(self, row: dict) -> str:
         """Get conversation_id from row or generate a new UUID.
 
         For datasets with conversation_id field, use the existing value.
@@ -289,9 +304,9 @@ class HuggingFaceAdapter:
         Returns:
             Conversation ID string (from row or newly generated UUID)
         """
-        # Check if row has conversation_id field
-        if "conversation_id" in row and row["conversation_id"]:
-            return str(row["conversation_id"])
+        # Check if row has conversation_id field using configurable column name
+        if self.conversation_id_column in row and row[self.conversation_id_column]:
+            return str(row[self.conversation_id_column])
 
         # Generate random UUID for datasets without conversation_id
         return str(uuid.uuid4())

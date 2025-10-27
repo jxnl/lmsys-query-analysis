@@ -191,4 +191,42 @@ if [ "${SMOKE_HDBSCAN:-0}" = "1" ]; then
   fi
 fi
 
+log "Test custom column mapping with non-LMSYS dataset"
+# Create a separate test database for custom dataset
+CUSTOM_DB_PATH="$TMP_DIR/custom_queries.db"
+CUSTOM_CHROMA_PATH="$TMP_DIR/custom_chroma"
+export CUSTOM_DB_PATH
+
+if $UV_CMD run lmsys load \
+  --limit 50 \
+  --hf "fka/awesome-chatgpt-prompts" \
+  --text-column "prompt" \
+  --text-format \
+  --model-default "chatgpt-3.5" \
+  --db-path "$CUSTOM_DB_PATH" \
+  --use-chroma \
+  --chroma-path "$CUSTOM_CHROMA_PATH"; then
+  ok "Custom dataset loaded with column mapping"
+
+  # Verify data was loaded
+  CUSTOM_COUNT=$($UV_CMD run python - <<'PY'
+from sqlmodel import select, func
+from lmsys_query_analysis.db.connection import Database
+from lmsys_query_analysis.db.models import Query
+import os
+db = Database(os.environ['CUSTOM_DB_PATH'])
+with db.get_session() as s:
+    count = s.exec(select(func.count()).select_from(Query)).one()
+    print(count)
+PY
+)
+  if [ "$CUSTOM_COUNT" -gt 0 ]; then
+    ok "Custom dataset has $CUSTOM_COUNT queries loaded"
+  else
+    warn "No queries found in custom dataset"
+  fi
+else
+  warn "Custom dataset load failed (likely network issue, skipping)"
+fi
+
 ok "Smoke test completed successfully"

@@ -859,3 +859,112 @@ def test_hf_adapter_with_text_column():
         records = list(adapter)
         assert len(records) == 1
         assert records[0]["query_text"] == "Generic text content"
+
+
+# ============================================================================
+# Tests for Custom Column Mapping (New Feature)
+# ============================================================================
+
+
+def test_hf_adapter_custom_column_mapping_all_fields():
+    """Test HuggingFaceAdapter with custom mapping for all metadata fields."""
+    mock_data = [
+        {
+            "custom_id": "user-123",
+            "query_col": [{"role": "user", "content": "Test query"}],
+            "llm_name": "gpt-3.5",
+            "lang": "en",
+            "created": "2024-01-01T00:00:00",
+        },
+    ]
+
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    mock_dataset.__len__ = Mock(return_value=1)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    mock_dataset.column_names = ["custom_id", "query_col", "llm_name", "lang", "created"]
+
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(
+            dataset_name="test/dataset",
+            query_column="query_col",
+            is_conversation_format=True,
+            model_column="llm_name",
+            language_column="lang",
+            timestamp_column="created",
+            conversation_id_column="custom_id",
+        )
+
+        records = list(adapter)
+        assert len(records) == 1
+        assert records[0]["conversation_id"] == "user-123"
+        assert records[0]["query_text"] == "Test query"
+        assert records[0]["model"] == "gpt-3.5"
+        assert records[0]["language"] == "en"
+        assert records[0]["timestamp"] == "2024-01-01T00:00:00"
+
+
+def test_hf_adapter_missing_mapped_columns_with_defaults():
+    """Test that missing mapped columns use defaults."""
+    mock_data = [
+        {
+            "prompt": "Test prompt",
+            # Missing: custom_id, llm_name, lang, created
+        },
+    ]
+
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    mock_dataset.__len__ = Mock(return_value=1)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    mock_dataset.column_names = ["prompt"]
+
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(
+            dataset_name="test/dataset",
+            query_column="prompt",
+            is_conversation_format=False,
+            model_column="llm_name",
+            language_column="lang",
+            timestamp_column="created",
+            conversation_id_column="custom_id",
+            model_default="claude-3",
+        )
+
+        records = list(adapter)
+        assert len(records) == 1
+        assert records[0]["model"] == "claude-3"  # Uses custom default
+        assert records[0]["language"] is None
+        assert records[0]["timestamp"] is None
+        # conversation_id should be UUID (generated)
+        import uuid
+
+        assert uuid.UUID(records[0]["conversation_id"])
+
+
+def test_hf_adapter_custom_model_default():
+    """Test custom model_default parameter."""
+    mock_data = [
+        {
+            "prompt": "Test query",
+            # No model field
+        },
+    ]
+
+    mock_dataset = Mock()
+    mock_dataset.__iter__ = Mock(return_value=iter(mock_data))
+    mock_dataset.__len__ = Mock(return_value=1)
+    mock_dataset.select = Mock(return_value=mock_dataset)
+    mock_dataset.column_names = ["prompt"]
+
+    with patch("lmsys_query_analysis.db.adapters.load_dataset", return_value=mock_dataset):
+        adapter = HuggingFaceAdapter(
+            dataset_name="test/dataset",
+            query_column="prompt",
+            is_conversation_format=False,
+            model_default="custom-default-model",
+        )
+
+        records = list(adapter)
+        assert len(records) == 1
+        assert records[0]["model"] == "custom-default-model"
