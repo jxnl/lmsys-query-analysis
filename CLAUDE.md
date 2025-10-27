@@ -17,9 +17,11 @@ This repository provides **terminal-based CLI tools for agents to perform compre
 The CLI implements specialized tools across multiple categories:
 
 **1. Data Loading Tools**
-- Load datasets from Hugging Face or custom sources
+- Load datasets from Hugging Face with configurable column mapping
+- Support for multiple dataset formats (LMSYS, WildChat, custom schemas)
 - Generate and backfill embeddings for semantic analysis
 - Manage dataset lifecycle (status checks, clearing)
+- Per-dataset database isolation (separate DBs recommended)
 
 **2. Clustering Tools**
 - Run unsupervised clustering (KMeans, HDBSCAN) to discover behavioral patterns
@@ -122,6 +124,34 @@ If agents identify gaps in functionality or need additional tools to enhance the
 
 The hierarchical merge step is essential for organizing clusters into a navigable structure and should never be skipped.
 
+**Multi-Dataset Workflow**: The system supports loading multiple datasets using **separate databases per dataset** (recommended):
+
+```bash
+# Load WildChat into its own database
+uv run lmsys load --limit 1000 --hf "allenai/WildChat-1M" \
+  --conversation-id-column "conversation_hash" \
+  --db-path ~/.lmsys-query-analysis/wildchat.db \
+  --use-chroma --chroma-path ~/.lmsys-query-analysis/wildchat_chroma
+
+# Run full pipeline on WildChat
+uv run lmsys cluster kmeans --n-clusters 20 \
+  --db-path ~/.lmsys-query-analysis/wildchat.db \
+  --chroma-path ~/.lmsys-query-analysis/wildchat_chroma --use-chroma
+
+uv run lmsys summarize <RUN_ID> --db-path ~/.lmsys-query-analysis/wildchat.db
+uv run lmsys merge-clusters <RUN_ID> --db-path ~/.lmsys-query-analysis/wildchat.db
+
+# Load LMSYS into separate database (default paths)
+uv run lmsys load --limit 1000 --use-chroma
+# ... run pipeline on LMSYS
+```
+
+**Note**: While technically possible to load multiple datasets into the same database, this is NOT recommended because:
+- No `dataset_id` field exists to distinguish query sources
+- Queries from different datasets will mix in clustering
+- Cannot filter or analyze by dataset origin
+- Use separate databases for dataset isolation
+
 ## Build, Test, and Dev Commands
 
 **Installation and setup:**
@@ -134,13 +164,36 @@ export ANTHROPIC_API_KEY="..."   # Or OPENAI_API_KEY, COHERE_API_KEY, GROQ_API_K
 **CLI commands:**
 ```bash
 uv run lmsys --help                                        # Show all commands
-uv run lmsys load --limit 10000 --use-chroma              # Load data with embeddings
+uv run lmsys load --limit 10000 --use-chroma              # Load LMSYS (default)
 uv run lmsys cluster kmeans --n-clusters 200 --use-chroma # Run clustering
 uv run lmsys runs --latest                                # Show most recent run
 uv run lmsys summarize <RUN_ID> --alias "v1"              # Generate LLM summaries
 uv run lmsys merge-clusters <RUN_ID>                      # Build hierarchy
 uv run lmsys list-clusters <RUN_ID>                       # View cluster titles
 uv run lmsys search "python" --run-id <RUN_ID>            # Semantic search
+```
+
+**Loading custom datasets with column mapping:**
+```bash
+# Load WildChat-1M dataset
+uv run lmsys load --limit 1000 --hf "allenai/WildChat-1M" \
+  --conversation-id-column "conversation_hash" \
+  --db-path ~/.lmsys-query-analysis/wildchat.db \
+  --use-chroma --chroma-path ~/.lmsys-query-analysis/wildchat_chroma
+
+# Load dataset with custom text column and model default
+uv run lmsys load --hf "fka/awesome-chatgpt-prompts" \
+  --text-column "prompt" --text-format \
+  --model-default "chatgpt-3.5" --limit 5000 --use-chroma
+
+# Available column mapping options:
+# --text-column: column with query text (default: "conversation")
+# --text-format: read text directly, not JSON conversation format
+# --model-column: model field (default: "model")
+# --language-column: language field (default: "language")
+# --timestamp-column: timestamp field (default: "timestamp")
+# --conversation-id-column: ID field (default: "conversation_id")
+# --model-default: default model value (default: "unknown")
 ```
 
 **Cluster Curation Commands (`lmsys edit`):**
