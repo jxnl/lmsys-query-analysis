@@ -1,9 +1,30 @@
 """Database models for LMSYS query analysis using SQLModel."""
 
+import hashlib
 from datetime import datetime
 
 from sqlalchemy import ForeignKey, Index, UniqueConstraint
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
+
+
+def compute_prompt_hash(prompt_text: str) -> str:
+    """Compute SHA256 hash of prompt text."""
+    return hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+
+
+class Prompt(SQLModel, table=True):
+    """Stores LLM prompt templates for query summarization."""
+
+    __tablename__ = "prompts"
+
+    prompt_hash: str = Field(primary_key=True)
+    prompt_text: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    generated_from: str | None = Field(default=None, foreign_key="prompts.prompt_hash")
+    generation_context: str | None = None
+
+    usage_count: int = Field(default=0)
 
 
 class Dataset(SQLModel, table=True):
@@ -23,6 +44,18 @@ class Dataset(SQLModel, table=True):
     # Statistics
     query_count: int = Field(default=0)
 
+    # Summarization lineage tracking
+    source_dataset_id: int | None = Field(
+        default=None,
+        sa_column=Column("source_dataset_id", ForeignKey("datasets.id", ondelete="CASCADE")),
+    )
+    root_dataset_id: int | None = Field(
+        default=None,
+        sa_column=Column("root_dataset_id", ForeignKey("datasets.id", ondelete="CASCADE")),
+    )
+    prompt_hash: str | None = Field(default=None, foreign_key="prompts.prompt_hash")
+    summarization_model: str | None = None
+
     # Relationships
     queries: list["Query"] = Relationship(back_populates="dataset")
 
@@ -31,7 +64,11 @@ class Query(SQLModel, table=True):
     """Table storing extracted first prompts from datasets."""
 
     __tablename__ = "queries"
-    __table_args__ = (Index("ix_queries_dataset_id", "dataset_id"),)
+    __table_args__ = (
+        UniqueConstraint("dataset_id", "conversation_id", name="uq_query_dataset_conversation"),
+        Index("ix_queries_dataset_id", "dataset_id"),
+        Index("ix_queries_conversation_id", "conversation_id"),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     dataset_id: int = Field(
@@ -40,7 +77,7 @@ class Query(SQLModel, table=True):
             ForeignKey("datasets.id", ondelete="CASCADE"),
         ),
     )
-    conversation_id: str = Field(unique=True, index=True)
+    conversation_id: str
     model: str = Field(index=True)
     query_text: str
     language: str | None = Field(default=None, index=True)

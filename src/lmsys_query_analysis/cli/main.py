@@ -9,6 +9,7 @@ from .commands import (
     chroma,
     clustering,
     data,
+    dataset_summary,
     edit,
     hierarchy,
     search,
@@ -52,8 +53,9 @@ app.command()(analysis.export)
 app.command()(search.search)
 app.command("search-cluster")(search.search_cluster)
 
-# Register summarization command
+# Register summarization commands
 app.command()(summarization.summarize)
+app.command("summarize-dataset")(dataset_summary.summarize)
 
 # Register hierarchy commands
 app.command("merge-clusters")(hierarchy.merge_clusters_cmd)
