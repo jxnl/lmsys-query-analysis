@@ -318,84 +318,190 @@ for q in queries:
 uv run lmsys summarize-dataset lmsys-chat-1m \
   --output lmsys-intent \
   --limit 10000 \
-  --prompt 'You are analyzing user queries to LLMs to extract structured information.
+  --prompt 'You are analyzing user queries to LLMs to extract structured information about user intent.
 
-TASK: Extract core user intent and classify the query.
+TASK: Extract the core user intent and classify the query comprehensively.
 
 OUTPUT FORMAT:
-- summary: One clear sentence describing what user wants (10-20 words)
-- properties: Extract these specific fields:
+- summary: One clear, concise sentence describing what the user wants (10-20 words max). Write in simple, normalized English.
+- properties: Extract these specific fields as structured data:
   * intent: One of [code_generation, debugging, explanation, creative_writing, question_answering, translation, data_analysis, brainstorming, comparison, tutoring, other]
-  * complexity: Integer 1-5 (1=simple, 5=expert-level)
-  * domain: Primary topic (e.g., "python", "javascript", "math", "creative", "general")
-  * requires_code: Boolean - expect code in response?
-  * requires_step_by_step: Boolean - need procedural guidance?
-  * is_homework: Boolean - appears to be educational assignment?
+  * complexity: Integer 1-5 where:
+    1 = Simple factual question or trivial request
+    2 = Requires basic explanation or simple code snippet
+    3 = Multi-step reasoning or moderate coding task
+    4 = Complex analysis, non-trivial implementation, or research
+    5 = Highly specialized expertise or novel problem-solving
+  * domain: Primary topic area in lowercase (e.g., "python", "javascript", "math", "creative", "legal", "general", "history")
+  * requires_code: Boolean - does user explicitly or implicitly expect code in response?
+  * requires_step_by_step: Boolean - does user need detailed procedural guidance?
+  * is_homework: Boolean - does this appear to be homework or educational assignment?
 
 NORMALIZATION GUIDELINES:
-- Strip greetings, filler words, meta-commentary
-- Translate non-English to English for summary
-- Infer intent from context clues
-- Code snippets suggest debugging/code_generation
+- Strip all greetings ("hello", "hi", "please", "thanks", "appreciate it")
+- Remove meta-commentary ("this is urgent", "I'\''ve been stuck for hours")
+- Remove filler words and unnecessary context
+- If query is in non-English language, translate the INTENT to English for the summary
+- For vague queries, infer the most likely specific intent from context
+- Code snippets in query strongly suggest debugging or code_generation intent
+- Questions starting with "why/how/what/explain" typically indicate explanation intent
+- Requests for "write/create/generate/make" indicate code_generation or creative_writing intent
+- If user says "help me", infer what KIND of help from the rest of the query
 
-Query to analyze: {query}' \
+CLASSIFICATION RULES:
+- code_generation: User wants code written (functions, scripts, programs)
+- debugging: User has broken code and needs help fixing it
+- explanation: User wants to understand a concept, how something works
+- creative_writing: Stories, poems, dialogue, creative content
+- question_answering: Factual questions, definitions, seeking information
+- translation: Converting between languages
+- data_analysis: Working with data, statistics, interpreting results
+- brainstorming: Generating ideas, exploring possibilities
+- comparison: Comparing options, pros/cons, which is better
+- tutoring: Step-by-step learning, teaching a skill
+- other: Anything that doesn'\''t fit above categories
+
+EXAMPLES:
+{examples}
+
+Now analyze this query and return structured output:
+{query}' \
   --model openai/gpt-4o-mini
 
 # 2. FRUSTRATION DETECTION - Identify emotional state and urgency
 uv run lmsys summarize-dataset lmsys-chat-1m \
   --output lmsys-frustration \
   --limit 10000 \
-  --prompt 'Analyze user query for frustration and urgency indicators.
+  --prompt 'You are analyzing user queries to LLMs to detect frustration, emotional state, and urgency.
 
-TASK: Assess emotional state and extract frustration metrics.
+TASK: Assess the user'\''s emotional state and extract frustration indicators.
 
 OUTPUT FORMAT:
-- summary: Neutral restatement of request (strip emotional language)
-- properties:
-  * frustration_level: Integer 0-5 (0=calm, 5=extreme distress)
-  * urgency_level: Integer 0-5 (0=no pressure, 5=crisis)
-  * has_tried_solutions: Boolean - mentioned trying other solutions?
-  * is_repeat_attempt: Boolean - indicates recurring problem?
-  * politeness_level: Integer 0-3 (0=rude, 3=very polite)
-  * emotional_tone: One of [neutral, confused, frustrated, desperate, angry, polite, apologetic]
+- summary: A brief neutral restatement of what the user is trying to do, stripped of emotional language (10-20 words)
+- properties: Extract these specific psychological/emotional indicators:
+  * frustration_level: Integer 0-5 where:
+    0 = Neutral, calm, no frustration indicators
+    1 = Mild impatience or minor annoyance
+    2 = Clear frustration, using words like "still doesn'\''t work", "keep getting"
+    3 = Significant frustration, repetition, desperation ("I'\''ve tried everything")
+    4 = High frustration, anger indicators, strong language
+    5 = Extreme distress, giving up, existential crisis about the problem
+  * urgency_level: Integer 0-5 where:
+    0 = No time pressure mentioned
+    1 = Casual mention of preference ("would be nice")
+    2 = Some time pressure ("need this soon")
+    3 = Clear deadline ("due tomorrow", "urgent")
+    4 = Critical deadline ("emergency", "ASAP", "right now")
+    5 = Crisis situation ("production is down", "emergency")
+  * has_tried_solutions: Boolean - did user mention trying other solutions already?
+  * is_repeat_attempt: Boolean - does user indicate they'\''ve asked this before or it'\''s a recurring problem?
+  * politeness_level: Integer 0-3 where:
+    0 = Rude, demanding, or aggressive
+    1 = Direct but not hostile
+    2 = Neutral tone
+    3 = Very polite, uses please/thank you
+  * emotional_tone: One of [neutral, confused, frustrated, desperate, angry, polite, apologetic, excited]
 
-FRUSTRATION INDICATORS:
-- High (3+): "I'\''ve tried X/Y/Z", "still not working", "I give up", "???"
-- Moderate (2): "doesn'\''t work", "keeps failing"
+FRUSTRATION INDICATORS TO DETECT:
+Strong indicators (frustration_level 3+):
+- "I'\''ve tried X, Y, Z and nothing works"
+- "still not working", "keeps failing"
+- "I don'\''t understand why..."
+- Multiple question marks "???"
+- All caps: "PLEASE HELP"
+- Repetition or restating same question
+- "I'\''m stuck", "I'\''m lost", "I give up"
+- Time investment: "been working on this for hours"
 
-URGENCY INDICATORS: "urgent", "ASAP", "deadline", "emergency", "production down"
+Moderate indicators (frustration_level 2):
+- "doesn'\''t work", "not working"
+- "I keep getting [error]"
+- "I tried X but..."
+- Simple statement of repeated failure
 
-Query: {query}' \
+Urgency indicators:
+- "urgent", "ASAP", "emergency"
+- "due [soon]", "deadline"
+- "production", "client waiting"
+- "immediately", "right now"
+
+NORMALIZATION GUIDELINES:
+- For the summary, remove ALL emotional language and urgency markers
+- Extract factual task only: "Debug Python script" not "URGENT: Please help debug Python"
+- Translate non-English emotional expressions appropriately
+- If query is pure greeting/frustration with no ask, summary should reflect that
+
+EXAMPLES:
+{examples}
+
+Now analyze this query for emotional indicators:
+{query}' \
   --model openai/gpt-4o-mini
 
 # 3. TASK CLASSIFICATION - Categorize by cognitive task type
 uv run lmsys summarize-dataset lmsys-chat-1m \
   --output lmsys-tasks \
   --limit 10000 \
-  --prompt 'Classify query by cognitive task type and characteristics.
+  --prompt 'You are analyzing user queries to LLMs to classify the type of cognitive task being requested.
 
-TASK: Extract task type and cognitive properties.
+TASK: Classify the query by cognitive task type, complexity, and characteristics.
 
 OUTPUT FORMAT:
-- summary: Normalized task description (10-15 words)
-- properties:
+- summary: A normalized, concise description of the task (10-15 words, remove greetings and filler)
+- properties: Extract cognitive task characteristics:
   * task_type: One of [creative, analytical, procedural, factual, conversational, transformation, generation]
-  * cognitive_load: Integer 1-5 (1=simple recall, 5=expert synthesis)
-  * output_type: One of [code, text, analysis, data, explanation, creative_content, step_by_step]
-  * requires_context: Boolean - needs background knowledge?
-  * requires_creativity: Boolean - needs original thinking?
-  * has_constraints: Boolean - specific requirements mentioned?
-  * domain_expertise_needed: Boolean - specialized knowledge required?
-  * is_multi_step: Boolean - requires multiple distinct steps?
+  * cognitive_load: Integer 1-5 measuring mental effort required:
+    1 = Simple recall or lookup
+    2 = Basic understanding or simple manipulation  
+    3 = Moderate analysis or synthesis
+    4 = Complex reasoning or multi-step problem solving
+    5 = Expert-level synthesis or novel creation
+  * output_type: One of [code, text, analysis, data, explanation, creative_content, step_by_step, comparison]
+  * requires_context: Boolean - does task need significant background knowledge beyond the query?
+  * requires_creativity: Boolean - does task need creative/original thinking vs deterministic answer?
+  * has_constraints: Boolean - are there specific constraints or requirements mentioned?
+  * domain_expertise_needed: Boolean - does this require specialized domain knowledge?
+  * is_multi_step: Boolean - does completing this require multiple distinct steps?
+
+TASK TYPE DEFINITIONS:
+- creative: Writing stories, poems, creative content, brainstorming novel ideas
+- analytical: Analyzing data, comparing options, evaluating tradeoffs, critique
+- procedural: Step-by-step instructions, how-to guides, process explanation
+- factual: Looking up facts, definitions, specific information
+- conversational: Chitchat, greetings, casual conversation
+- transformation: Converting format, translating, reformatting, summarizing
+- generation: Creating code, generating structured data, producing artifacts
+
+OUTPUT TYPE DEFINITIONS:
+- code: Programming code or scripts
+- text: Natural language text (essays, summaries, etc.)
+- analysis: Analytical breakdowns, comparisons, evaluations
+- data: Structured data, tables, JSON, etc.
+- explanation: Explanations of concepts or how things work
+- creative_content: Stories, poems, creative writing
+- step_by_step: Procedural guides and instructions
+- comparison: Side-by-side comparisons
 
 COGNITIVE LOAD EXAMPLES:
-- Level 1: "What is Python?"
-- Level 2: "How to print in Python?"
-- Level 3: "Write Python function to reverse string"
-- Level 4: "Design doubly-linked list class"
-- Level 5: "Architect distributed monitoring system"
+Level 1: "What is Python?", "Define photosynthesis"
+Level 2: "How do I print hello world in Python?", "Explain photosynthesis simply"
+Level 3: "Write a Python function to reverse a string", "Compare photosynthesis in C3 vs C4 plants"
+Level 4: "Design a Python class for a doubly-linked list with O(1) insertion", "Analyze climate impact on photosynthesis evolution"
+Level 5: "Architect a distributed system for real-time photosynthesis monitoring", "Propose novel applications of photosynthesis principles"
 
-Query: {query}' \
+ANALYSIS GUIDELINES:
+- Distinguish between simple requests and complex tasks
+- "Explain" can be level 2-4 depending on depth requested
+- "Write code" ranges from level 2 (basic) to level 5 (complex architecture)
+- Multiple requirements or constraints indicate higher cognitive load
+- Vague requests typically need more context
+- Homework problems usually procedural or analytical
+
+EXAMPLES:
+{examples}
+
+Now classify this query by cognitive task type:
+{query}' \
   --model openai/gpt-4o-mini
 
 # 4. CHAINED SUMMARIZATION - Multi-level refinement
