@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Query analysis and clustering for LMSYS-1M dataset"
 readme = "README.md"
 authors = [
-    { name = "jxnl", email = "jason@jxnl.co" }
+    { name = "jxnl" }
 ]
 requires-python = ">=3.10"
 dependencies = [
